@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Rastreia - Pedido</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+<nav class="nav">
+  <div class="nav-logo">🔍 RASTREIA<span>.</span></div>
+  <div class="nav-links">
+    <a href="/dashboard.html">Dashboard</a>
+    <a href="/novo-pedido.html">+ Novo Pedido</a>
+    <a href="#" onclick="logout()">Sair</a>
+  </div>
+  <div class="nav-user" id="nav-user"></div>
+</nav>
+
+<div class="container" style="max-width:800px">
+  <div id="conteudo">
+    <div class="loading"><div class="spinner"></div>Carregando pedido...</div>
+  </div>
+</div>
+
+<script>
+  const token = localStorage.getItem('rastreia_token');
+  if (!token) window.location.href = '/';
+  const usuario = JSON.parse(localStorage.getItem('rastreia_usuario') || '{}');
+  document.getElementById('nav-user').textContent = usuario.nome || '';
+
+  const id = new URLSearchParams(window.location.search).get('id');
+  if (!id) window.location.href = '/dashboard.html';
+
+  const TIPOS = {
+    dossie_pf: 'Dossiê Pessoa Física', dossie_pj: 'Dossiê Pessoa Jurídica',
+    due_diligence: 'Due Diligence Empresarial', analise_devedor: 'Análise de Devedor',
+    investigacao_patrimonial: 'Investigação Patrimonial'
+  };
+
+  const STATUS_LABEL = {
+    aguardando_pagamento: 'Aguardando Pagamento', pago: 'Pago',
+    em_andamento: 'Em Andamento', concluido: 'Concluído', cancelado: 'Cancelado'
+  };
+
+  async function api(url, opts = {}) {
+    const res = await fetch(url, { headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }, ...opts });
+    if (res.status === 401) { logout(); return null; }
+    return res.json();
+  }
+
+  let pedidoAtual;
+
+  async function carregar() {
+    const data = await api(`/api/pedidos/${id}`);
+    if (!data || data.erro) { document.getElementById('conteudo').innerHTML = '<div class="alert alert-error">Pedido não encontrado</div>'; return; }
+    pedidoAtual = data;
+    renderizar(data);
+  }
+
+  function renderizar(p) {
+    const prazoOk = p.prazo_entrega ? new Date(p.prazo_entrega) > new Date() : true;
+    const prazoLabel = p.prazo_entrega ? new Date(p.prazo_entrega).toLocaleString('pt-BR') : '-';
+    const dados = p.dados || [];
+
+    const receitaFederal = dados.find(d => d.fonte === 'receita_federal')?.dados;
+    const escavador = dados.find(d => d.fonte === 'escavador')?.dados;
+    const serasa = dados.find(d => d.fonte === 'serasa')?.dados;
+
+    document.getElementById('conteudo').innerHTML = `
+      <div style="display:flex;align-items:center;gap:12px;margin-bottom:20px">
+        <a href="/dashboard.html" class="btn btn-outline btn-sm">← Voltar</a>
+        <h1 class="page-title" style="margin:0">Pedido #${p.numero}</h1>
+        <span class="badge badge-${p.status === 'concluido' ? 'concluido' : p.status === 'em_andamento' ? 'andamento' : p.status === 'pago' ? 'pago' : 'aguardando'}">${STATUS_LABEL[p.status]}</span>
+      </div>
+
+      <div id="alerta"></div>
+
+      <!-- AÇÕES -->
+      <div class="acoes-bar">
+        ${p.status === 'aguardando_pagamento' ? `<button class="btn btn-success" onclick="marcarPago()">✅ Confirmar Pagamento</button>` : ''}
+        ${p.status === 'pago' ? `<button class="btn btn-primary" onclick="iniciar()">▶ Iniciar Análise</button>` : ''}
+        ${p.status === 'em_andamento' ? `
+          <button class="btn btn-warning" onclick="executarConsultas()" id="btn-consultar">🔍 Executar Consultas Automáticas</button>
+          <button class="btn btn-success" onclick="mostrarFinalizacao()">📄 Gerar Relatório e Concluir</button>
+        ` : ''}
+        ${p.status === 'concluido' && p.relatorio_url ? `<a href="${p.relatorio_url}" target="_blank" class="btn btn-primary">📄 Baixar Relatório PDF</a>` : ''}
+      </div>
+
+      <!-- DADOS DO PEDIDO -->
+      <div class="pedido-section">
+        <div class="section-title">Dados do Pedido</div>
+        <div class="info-row"><span class="info-label">Tipo</span><span class="info-valor">${TIPOS[p.tipo] || p.tipo}</span></div>
+        <div class="info-row"><span class="info-label">Valor</span><span class="info-valor" style="color:#16a34a;font-weight:700">R$ ${Number(p.valor).toLocaleString('pt-BR', {minimumFractionDigits:2})}</span></div>
+        <div class="info-row"><span class="info-label">Prazo</span><span class="info-valor" style="color:${prazoOk ? '#111' : '#dc2626'}">${prazoLabel}</span></div>
+        <div class="info-row"><span class="info-label">Criado em</span><span class="info-valor">${new Date(p.criado_em).toLocaleString('pt-BR')}</span></div>
+        ${p.operador_nome ? `<div class="info-row"><span class="info-label">Operador</span><span class="info-valor">${p.operador_nome}</span></div>` : ''}
+      </div>
+
+      <!-- ALVO -->
+      <div class="pedido-section">
+        <div class="section-title">Alvo da Consulta</div>
+        <div class="info-row"><span class="info-label">Nome</span><span class="info-valor"><strong>${p.alvo_nome}</strong></span></div>
+        <div class="info-row"><span class="info-label">Documento</span><span class="info-valor"><code style="font-size:15px">${p.alvo_documento}</code></span></div>
+        <div class="info-row"><span class="info-label">Tipo</span><span class="info-valor">${p.alvo_tipo === 'PF' ? 'Pessoa Física' : 'Pessoa Jurídica'}</span></div>
+      </div>
+
+      <!-- CLIENTE -->
+      <div class="pedido-section">
+        <div class="section-title">Solicitante</div>
+        <div class="info-row"><span class="info-label">Nome</span><span class="info-valor">${p.cliente_nome}</span></div>
+        <div class="info-row"><span class="info-label">WhatsApp</span><span class="info-valor">${p.cliente_whatsapp || '-'}</span></div>
+        <div class="info-row"><span class="info-label">Email</span><span class="info-valor">${p.cliente_email || '-'}</span></div>
+      </div>
+
+      <!-- RECEITA FEDERAL -->
+      ${receitaFederal ? `
+        <div class="pedido-section">
+          <div class="section-title">🏛 Receita Federal</div>
+          ${receitaFederal.erro ? `<div class="alert alert-error">${receitaFederal.erro}</div>` : `
+            ${receitaFederal.razao_social ? `<div class="info-row"><span class="info-label">Razão Social</span><span class="info-valor">${receitaFederal.razao_social}</span></div>` : ''}
+            ${receitaFederal.situacao ? `<div class="info-row"><span class="info-label">Situação</span><span class="info-valor">${receitaFederal.situacao}</span></div>` : ''}
+            ${receitaFederal.data_abertura ? `<div class="info-row"><span class="info-label">Abertura</span><span class="info-valor">${receitaFederal.data_abertura}</span></div>` : ''}
+            ${receitaFederal.porte ? `<div class="info-row"><span class="info-label">Porte</span><span class="info-valor">${receitaFederal.porte}</span></div>` : ''}
+            ${receitaFederal.atividade_principal ? `<div class="info-row"><span class="info-label">Atividade</span><span class="info-valor">${receitaFederal.atividade_principal}</span></div>` : ''}
+            ${receitaFederal.endereco ? `<div class="info-row"><span class="info-label">Endereço</span><span class="info-valor">${receitaFederal.endereco}</span></div>` : ''}
+            ${receitaFederal.socios?.length ? `
+              <div style="margin-top:10px"><strong style="font-size:12px;color:#6b7280;text-transform:uppercase">Sócios</strong>
+              ${receitaFederal.socios.map(s => `<div style="padding:6px 0;font-size:13px;border-bottom:1px solid #f3f4f6">• ${s.nome} — ${s.qualificacao}</div>`).join('')}
+              </div>` : ''}
+          `}
+        </div>` : ''}
+
+      <!-- ESCAVADOR / PROCESSOS -->
+      ${escavador ? `
+        <div class="pedido-section">
+          <div class="section-title">⚖️ Processos Judiciais</div>
+          ${escavador.erro ? `
+            <div class="alert alert-info">${escavador.erro}</div>
+            ${escavador.link_jusbrasil ? `<a href="${escavador.link_jusbrasil}" target="_blank" class="btn btn-outline btn-sm">🔗 Verificar no JusBrasil</a>` : ''}
+          ` : `
+            <div style="margin-bottom:12px">
+              <strong style="font-size:20px;color:${escavador.total === 0 ? '#16a34a' : escavador.total < 5 ? '#ea580c' : '#dc2626'}">${escavador.total}</strong>
+              <span style="color:#6b7280;font-size:13px"> processos encontrados</span>
+            </div>
+            ${escavador.processos?.map(p => `
+              <div style="background:#f9fafb;border-radius:8px;padding:12px;margin-bottom:8px;border-left:3px solid #2563eb">
+                <div style="font-weight:700;font-size:13px">${p.numero}</div>
+                <div style="font-size:12px;color:#6b7280;margin-top:4px">${p.tribunal} | ${p.tipo} | ${p.ultima_movimentacao}</div>
+                <div style="font-size:12px;margin-top:2px">${p.assunto}</div>
+              </div>`).join('') || ''}
+            <a href="${escavador.link_jusbrasil || '#'}" target="_blank" class="btn btn-outline btn-sm" style="margin-top:8px">🔗 Ver no JusBrasil</a>
+          `}
+        </div>` : ''}
+
+      <!-- SERASA -->
+      ${serasa ? `
+        <div class="pedido-section">
+          <div class="section-title">📊 Serasa / Protestos</div>
+          <div class="alert alert-info">${serasa.nota || 'Verificação manual necessária'}</div>
+        </div>` : ''}
+
+      <!-- FINALIZAÇÃO -->
+      <div id="finalizacao" style="display:none">
+        <div class="pedido-section">
+          <div class="section-title">📝 Observações do Analista</div>
+          <div class="form-group">
+            <label>Adicione comentários ao relatório (opcional)</label>
+            <textarea id="observacoes" placeholder="Ex: Empresa com 2 ações trabalhistas ativas. CNPJ em situação regular. Recomenda-se cautela...">${p.observacoes || ''}</textarea>
+          </div>
+          <div style="margin-top:16px;display:flex;gap:10px">
+            <button class="btn btn-success" onclick="concluir()" style="flex:1;justify-content:center">
+              ✅ Gerar PDF e Concluir Pedido
+            </button>
+            <button class="btn btn-outline" onclick="document.getElementById('finalizacao').style.display='none'">
+              Cancelar
+            </button>
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
+  async function marcarPago() {
+    await api(`/api/pedidos/${id}/pago`, { method: 'PATCH', body: JSON.stringify({ mp_payment_id: 'manual' }) });
+    mostrarAlerta('Pagamento confirmado!', 'success');
+    setTimeout(carregar, 1000);
+  }
+
+  async function iniciar() {
+    await api(`/api/pedidos/${id}/iniciar`, { method: 'PATCH', body: '{}' });
+    mostrarAlerta('Análise iniciada!', 'success');
+    setTimeout(carregar, 1000);
+  }
+
+  async function executarConsultas() {
+    document.getElementById('btn-consultar').textContent = '⏳ Consultando... aguarde';
+    document.getElementById('btn-consultar').disabled = true;
+    mostrarAlerta('Executando consultas automáticas nas bases de dados...', 'info');
+    const data = await api(`/api/pedidos/${id}/consultar`, { method: 'POST', body: '{}' });
+    if (data?.ok) {
+      mostrarAlerta('Consultas concluídas! Verifique os dados abaixo.', 'success');
+      setTimeout(carregar, 1500);
+    } else {
+      mostrarAlerta('Erro nas consultas: ' + (data?.erro || 'Desconhecido'), 'error');
+    }
+  }
+
+  function mostrarFinalizacao() {
+    document.getElementById('finalizacao').style.display = 'block';
+    document.getElementById('finalizacao').scrollIntoView({ behavior: 'smooth' });
+  }
+
+  async function concluir() {
+    const observacoes = document.getElementById('observacoes').value;
+    mostrarAlerta('Gerando PDF...', 'info');
+    const data = await api(`/api/pedidos/${id}/concluir`, { method: 'POST', body: JSON.stringify({ observacoes }) });
+    if (data?.ok) {
+      mostrarAlerta('✅ Relatório gerado e cliente notificado!', 'success');
+      setTimeout(carregar, 1500);
+    } else {
+      mostrarAlerta('Erro: ' + (data?.erro || 'Desconhecido'), 'error');
+    }
+  }
+
+  function mostrarAlerta(msg, tipo) {
+    const el = document.getElementById('alerta');
+    if (el) el.innerHTML = `<div class="alert alert-${tipo}">${msg}</div>`;
+    window.scrollTo(0, 0);
+  }
+
+  function logout() { localStorage.clear(); window.location.href = '/'; }
+
+  carregar();
+</script>
+</body>
+</html>

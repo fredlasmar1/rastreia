@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Rastreia - Login</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+<div class="login-wrap">
+  <div class="login-card">
+    <div class="login-logo">
+      <h1>🔍 RASTREIA</h1>
+      <p>Recobro Recuperação de Crédito</p>
+    </div>
+    <div id="alerta"></div>
+    <div class="form-group" style="margin-bottom:14px">
+      <label>Email</label>
+      <input type="email" id="email" placeholder="seu@email.com" autocomplete="email">
+    </div>
+    <div class="form-group" style="margin-bottom:22px">
+      <label>Senha</label>
+      <input type="password" id="senha" placeholder="••••••••" autocomplete="current-password">
+    </div>
+    <button class="btn btn-primary" style="width:100%;justify-content:center;padding:12px" onclick="login()">
+      Entrar no Sistema
+    </button>
+  </div>
+</div>
+<script>
+  // Se já logado, redirecionar
+  if (localStorage.getItem('rastreia_token')) window.location.href = '/dashboard.html';
+
+  document.getElementById('senha').addEventListener('keydown', e => { if (e.key === 'Enter') login(); });
+
+  async function login() {
+    const email = document.getElementById('email').value;
+    const senha = document.getElementById('senha').value;
+    if (!email || !senha) return alerta('Preencha todos os campos', 'error');
+    try {
+      const res = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, senha })
+      });
+      const data = await res.json();
+      if (!res.ok) return alerta(data.erro || 'Credenciais inválidas', 'error');
+      localStorage.setItem('rastreia_token', data.token);
+      localStorage.setItem('rastreia_usuario', JSON.stringify(data.usuario));
+      window.location.href = '/dashboard.html';
+    } catch (e) {
+      alerta('Erro de conexão com o servidor', 'error');
+    }
+  }
+
+  function alerta(msg, tipo) {
+    document.getElementById('alerta').innerHTML = `<div class="alert alert-${tipo === 'error' ? 'error' : 'success'}" style="margin-bottom:16px">${msg}</div>`;
+  }
+</script>
+</body>
+</html>

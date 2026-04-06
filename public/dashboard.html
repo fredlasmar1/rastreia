@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Rastreia - Dashboard</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+<nav class="nav">
+  <div class="nav-logo">🔍 RASTREIA<span>.</span></div>
+  <div class="nav-links">
+    <a href="/dashboard.html" class="ativo">Dashboard</a>
+    <a href="/novo-pedido.html">+ Novo Pedido</a>
+    <a href="#" onclick="logout()">Sair</a>
+  </div>
+  <div class="nav-user" id="nav-user"></div>
+</nav>
+
+<div class="container">
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px">
+    <h1 class="page-title" style="margin:0">Painel de Controle</h1>
+    <a href="/novo-pedido.html" class="btn btn-primary">+ Novo Pedido</a>
+  </div>
+
+  <!-- Stats -->
+  <div class="stats-grid" id="stats">
+    <div class="stat-card"><div class="stat-label">Total de Pedidos</div><div class="stat-valor" id="s-total">...</div></div>
+    <div class="stat-card laranja"><div class="stat-label">Hoje</div><div class="stat-valor" id="s-hoje">...</div></div>
+    <div class="stat-card"><div class="stat-label">Em Andamento</div><div class="stat-valor" id="s-andamento">...</div></div>
+    <div class="stat-card verde"><div class="stat-label">Receita do Mês</div><div class="stat-valor" id="s-receita">...</div></div>
+  </div>
+
+  <!-- Filtros -->
+  <div style="display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap">
+    <button class="btn btn-sm btn-primary" onclick="filtrar('')">Todos</button>
+    <button class="btn btn-sm btn-outline" onclick="filtrar('aguardando_pagamento')">Aguardando Pgto</button>
+    <button class="btn btn-sm btn-outline" onclick="filtrar('pago')">Pagos</button>
+    <button class="btn btn-sm btn-outline" onclick="filtrar('em_andamento')">Em Andamento</button>
+    <button class="btn btn-sm btn-outline" onclick="filtrar('concluido')">Concluídos</button>
+  </div>
+
+  <!-- Tabela -->
+  <div class="card">
+    <div class="card-header">
+      <span class="card-title">Pedidos</span>
+      <button class="btn btn-sm btn-outline" onclick="carregarPedidos()">↻ Atualizar</button>
+    </div>
+    <div id="tabela-content">
+      <div class="loading"><div class="spinner"></div>Carregando...</div>
+    </div>
+  </div>
+</div>
+
+<script>
+  const token = localStorage.getItem('rastreia_token');
+  if (!token) window.location.href = '/';
+  const usuario = JSON.parse(localStorage.getItem('rastreia_usuario') || '{}');
+  document.getElementById('nav-user').textContent = usuario.nome || '';
+
+  const TIPOS = {
+    dossie_pf: 'Dossiê PF', dossie_pj: 'Dossiê PJ',
+    due_diligence: 'Due Diligence', analise_devedor: 'Análise Devedor',
+    investigacao_patrimonial: 'Inv. Patrimonial'
+  };
+
+  const BADGES = {
+    aguardando_pagamento: 'badge-aguardando',
+    pago: 'badge-pago',
+    em_andamento: 'badge-andamento',
+    concluido: 'badge-concluido',
+    cancelado: 'badge-cancelado'
+  };
+
+  const STATUS_LABEL = {
+    aguardando_pagamento: 'Aguardando Pgto',
+    pago: 'Pago',
+    em_andamento: 'Em Andamento',
+    concluido: 'Concluído',
+    cancelado: 'Cancelado'
+  };
+
+  let filtroAtual = '';
+
+  async function api(url) {
+    const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+    if (res.status === 401) { logout(); return null; }
+    return res.json();
+  }
+
+  async function carregarStats() {
+    const data = await api('/api/pedidos/dashboard/stats');
+    if (!data) return;
+    document.getElementById('s-total').textContent = data.total;
+    document.getElementById('s-hoje').textContent = data.hoje;
+    document.getElementById('s-andamento').textContent = data.em_andamento;
+    document.getElementById('s-receita').textContent = 'R$ ' + data.receita_mes.toLocaleString('pt-BR', { minimumFractionDigits: 2 });
+  }
+
+  async function carregarPedidos() {
+    const url = `/api/pedidos${filtroAtual ? '?status=' + filtroAtual : ''}`;
+    const data = await api(url);
+    if (!data) return;
+    const el = document.getElementById('tabela-content');
+    if (!data.pedidos.length) {
+      el.innerHTML = '<div class="loading">Nenhum pedido encontrado</div>';
+      return;
+    }
+    el.innerHTML = `
+      <table>
+        <thead><tr>
+          <th>#</th><th>Tipo</th><th>Alvo</th><th>Documento</th>
+          <th>Cliente</th><th>Valor</th><th>Status</th><th>Data</th><th>Ação</th>
+        </tr></thead>
+        <tbody>
+          ${data.pedidos.map(p => `
+            <tr>
+              <td><strong>#${p.numero}</strong></td>
+              <td>${TIPOS[p.tipo] || p.tipo}</td>
+              <td>${p.alvo_nome}</td>
+              <td><code>${p.alvo_documento}</code></td>
+              <td>${p.cliente_nome}</td>
+              <td><strong>R$ ${Number(p.valor).toLocaleString('pt-BR')}</strong></td>
+              <td><span class="badge ${BADGES[p.status] || ''}">${STATUS_LABEL[p.status] || p.status}</span></td>
+              <td>${new Date(p.criado_em).toLocaleDateString('pt-BR')}</td>
+              <td><a href="/pedido.html?id=${p.id}" class="btn btn-sm btn-outline">Abrir</a></td>
+            </tr>
+          `).join('')}
+        </tbody>
+      </table>`;
+  }
+
+  function filtrar(status) {
+    filtroAtual = status;
+    carregarPedidos();
+  }
+
+  function logout() {
+    localStorage.clear();
+    window.location.href = '/';
+  }
+
+  carregarStats();
+  carregarPedidos();
+  setInterval(() => { carregarStats(); carregarPedidos(); }, 30000);
+</script>
+</body>
+</html>

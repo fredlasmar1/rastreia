@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Rastreia - Novo Pedido</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+<nav class="nav">
+  <div class="nav-logo">🔍 RASTREIA<span>.</span></div>
+  <div class="nav-links">
+    <a href="/dashboard.html">Dashboard</a>
+    <a href="/novo-pedido.html" class="ativo">+ Novo Pedido</a>
+    <a href="#" onclick="logout()">Sair</a>
+  </div>
+  <div class="nav-user" id="nav-user"></div>
+</nav>
+
+<div class="container" style="max-width:700px">
+  <h1 class="page-title">Novo Pedido de Consulta</h1>
+  <div id="alerta"></div>
+
+  <!-- PASSO 1: Produto -->
+  <div class="pedido-section">
+    <div class="section-title">1. Selecione o Produto</div>
+    <div class="produtos-grid" id="produtos-grid"></div>
+    <div id="produto-detalhe" style="display:none;background:#eff6ff;border:1.5px solid #2563eb;border-radius:10px;padding:16px;margin-top:8px">
+      <div style="font-weight:700;font-size:13px;color:#1a3a5c;margin-bottom:6px" id="detalhe-nome"></div>
+      <div style="font-size:12px;color:#374151;margin-bottom:10px;font-style:italic" id="detalhe-argumento"></div>
+      <div style="font-size:11px;color:#6b7280;font-weight:700;margin-bottom:4px">📦 O QUE ESTE RELATÓRIO ENTREGA:</div>
+      <div id="detalhe-dados" style="font-size:11px;color:#374151;line-height:1.7"></div>
+      <div style="font-size:11px;color:#6b7280;font-weight:700;margin-top:10px;margin-bottom:4px">🎯 PARA QUEM VENDER:</div>
+      <div id="detalhe-publico" style="font-size:11px;color:#374151;line-height:1.7"></div>
+    </div>
+    <input type="hidden" id="tipo">
+  </div>
+
+  <!-- PASSO 2: Dados do Alvo -->
+  <div class="pedido-section">
+    <div class="section-title">2. Dados do Alvo da Consulta</div>
+    <div class="form-grid">
+      <div class="form-group full">
+        <label>Nome Completo / Razão Social *</label>
+        <input type="text" id="alvo_nome" placeholder="Nome ou Razão Social">
+      </div>
+      <div class="form-group">
+        <label>CPF ou CNPJ *</label>
+        <input type="text" id="alvo_documento" placeholder="000.000.000-00 ou 00.000.000/0000-00" oninput="detectarTipo(this.value)">
+      </div>
+      <div class="form-group">
+        <label>Tipo</label>
+        <select id="alvo_tipo">
+          <option value="PF">Pessoa Física</option>
+          <option value="PJ">Pessoa Jurídica</option>
+        </select>
+      </div>
+    </div>
+  </div>
+
+  <!-- PASSO 3: Dados do Cliente -->
+  <div class="pedido-section">
+    <div class="section-title">3. Dados de Quem Solicitou</div>
+    <div class="form-grid">
+      <div class="form-group full">
+        <label>Nome do Cliente *</label>
+        <input type="text" id="cliente_nome" placeholder="Nome de quem está comprando">
+      </div>
+      <div class="form-group">
+        <label>WhatsApp</label>
+        <input type="tel" id="cliente_whatsapp" placeholder="(62) 99999-9999">
+      </div>
+      <div class="form-group">
+        <label>Email</label>
+        <input type="email" id="cliente_email" placeholder="email@cliente.com">
+      </div>
+    </div>
+  </div>
+
+  <!-- RESUMO E ENVIO -->
+  <div class="pedido-section" id="resumo" style="display:none">
+    <div class="section-title">Resumo do Pedido</div>
+    <div class="info-row"><span class="info-label">Produto</span><span id="r-produto" class="info-valor"></span></div>
+    <div class="info-row"><span class="info-label">Valor</span><span id="r-valor" class="info-valor" style="color:#16a34a;font-weight:800"></span></div>
+    <div class="info-row"><span class="info-label">Prazo de Entrega</span><span id="r-prazo" class="info-valor"></span></div>
+    <div style="margin-top:20px;display:flex;gap:10px">
+      <button class="btn btn-primary" onclick="criarPedido(false)" style="flex:1;justify-content:center">
+        📋 Criar Pedido (Pgto Pendente)
+      </button>
+      <button class="btn btn-success" onclick="criarPedido(true)" style="flex:1;justify-content:center">
+        ✅ Criar + Marcar como Pago
+      </button>
+    </div>
+  </div>
+</div>
+
+<script>
+  const token = localStorage.getItem('rastreia_token');
+  if (!token) window.location.href = '/';
+  const usuario = JSON.parse(localStorage.getItem('rastreia_usuario') || '{}');
+  document.getElementById('nav-user').textContent = usuario.nome || '';
+
+  const PRODUTOS = {
+    dossie_pf: { nome: 'Dossiê Pessoa Física', preco: 197, prazo: '2 horas', icone: '👤',
+      argumento: 'Antes de assinar qualquer contrato com uma pessoa física, você precisa saber: ela tem processos como réu? Nome sujo? Patrimônio que garanta a dívida? Em 2 horas você tem a resposta.',
+      dados: ['Dados pessoais completos (nome, CPF, data nasc., filiação)', 'Endereços e telefones atuais com flag WhatsApp', 'Classe social e renda estimada', 'Processos judiciais como réu (trabalhista, cível, criminal)', 'Negativações e protestos', 'Listas negras federais (CEIS/CNEP)', 'Score de risco + recomendação do analista'],
+      publico: ['Empresário que vai vender a prazo para PF', 'Proprietário que vai alugar imóvel', 'Quem vai firmar sociedade', 'Quem vai emprestar dinheiro']
+    },
+    dossie_pj: { nome: 'Dossiê Pessoa Jurídica', preco: 397, prazo: '2 horas', icone: '🏢',
+      argumento: 'CNPJ ativo não significa empresa saudável. Antes de vender fiado ou assinar contrato, descubra: a empresa tem dívidas trabalhistas, execuções fiscais, sócios problemáticos?',
+      dados: ['Dados completos da empresa (situação RF, porte, abertura, regime tributário)', 'Quadro societário com histórico de alterações', 'Simples Nacional e regime tributário', 'Processos judiciais: trabalhistas, cíveis, execuções fiscais', 'Listas negras federais CEIS e CNEP', 'Situação fiscal e protestos', 'Score de risco empresarial + recomendação'],
+      publico: ['Fornecedor que vai conceder crédito a cliente PJ', 'Quem vai fechar contrato de prestação de serviços', 'Empresa buscando parceiro ou representante', 'Quem vai aceitar boleto de empresa desconhecida']
+    },
+    due_diligence: { nome: 'Due Diligence Empresarial', preco: 997, prazo: '24 horas', icone: '🔎',
+      argumento: 'Comprar empresa sem due diligence é assinar cheque em branco. Passivos trabalhistas ocultos, sócios com histórico problemático, dívidas fiscais não declaradas — você herda tudo.',
+      dados: ['Tudo do Dossiê PJ + análise aprofundada', 'Dossiê PF de cada sócio individualmente', 'Passivo judicial detalhado com valor de causa', 'Certidões (Federal, Estadual, Municipal, Trabalhista)', 'Patrimônio da empresa (imóveis, veículos, marcas)', 'Histórico completo de alterações societárias', 'Análise de risco por categoria (trabalhista, fiscal, societário)', 'Parecer técnico com recomendação: PROSSEGUIR / COM RESSALVAS / NÃO PROSSEGUIR'],
+      publico: ['Quem vai comprar uma empresa ou ponto comercial', 'Investidor que vai aportar capital', 'Quem vai virar sócio de empresa existente', 'Advogado fazendo due diligence para cliente']
+    },
+    analise_devedor: { nome: 'Análise de Devedor', preco: 250, prazo: '2 horas', icone: '⚖️',
+      argumento: 'Antes de gastar com advogado e processo, descubra se o devedor tem patrimônio para pagar. Cobrar devedor "laranja" é jogar dinheiro fora.',
+      dados: ['Identificação e endereços atuais para citação', 'Telefones ativos para contato de cobrança', 'Patrimônio identificado: imóveis, veículos, empresas', 'Histórico como devedor: execuções, protestos, negativações', 'Capacidade de pagamento estimada', 'Estratégia de cobrança recomendada', 'Score de recuperabilidade: RECUPERÁVEL / PARCIAL / IRRECUPERÁVEL'],
+      publico: ['Empresa com cliente inadimplente', 'Escritório de advocacia antes de aceitar causa de êxito', 'Credor com título vencido avaliando ajuizar execução', 'Recobro analisando viabilidade de carteira']
+    },
+    investigacao_patrimonial: { nome: 'Investigação Patrimonial', preco: 497, prazo: '4 horas', icone: '🏦',
+      argumento: 'Ganhar a ação é só metade do caminho. Se não localizar os bens, não recebe. Mapeamos imóveis, veículos, empresas e participações societárias para você entrar na execução com alvo certo.',
+      dados: ['Imóveis registrados (próprios e via empresas vinculadas)', 'Veículos (DETRAN)', 'Todas as empresas abertas em nome do investigado', 'Participações societárias em outras empresas', 'Vínculos com interpostas pessoas (possíveis laranjas)', 'Execuções e penhoras já existentes', 'Estratégia de penhora recomendada (imóvel / veículo / quota / conta)', 'Estimativa de patrimônio localizável'],
+      publico: ['Advogado com título judicial para executar', 'Credor com sentença favorável', 'Empresa que ganhou ação e quer receber', 'Quem suspeita que devedor ocultou patrimônio']
+    }
+  };
+  const PRODUTOS_ORIG = {
+    dossie_pf: { nome: 'Dossiê Pessoa Física', preco: 197, prazo: '2 horas' },
+    dossie_pj: { nome: 'Dossiê Pessoa Jurídica', preco: 397, prazo: '2 horas' },
+    due_diligence: { nome: 'Due Diligence Empresarial', preco: 997, prazo: '24 horas' },
+    analise_devedor: { nome: 'Análise de Devedor', preco: 250, prazo: '2 horas' },
+    investigacao_patrimonial: { nome: 'Investigação Patrimonial', preco: 497, prazo: '4 horas' }
+  };
+
+  let tipoSelecionado = '';
+
+  // Renderizar cards de produto dinamicamente
+  function renderProdutos() {
+    const grid = document.getElementById('produtos-grid');
+    grid.innerHTML = Object.entries(PRODUTOS).map(([tipo, p]) => `
+      <div class="produto-card" id="card-${tipo}" onclick="selecionarProduto('${tipo}')">
+        <div class="produto-icon">${p.icone}</div>
+        <div class="produto-nome">${p.nome}</div>
+        <div class="produto-preco">R$ ${p.preco.toLocaleString('pt-BR')}</div>
+        <div class="produto-prazo">⏱ Entrega em ${p.prazo}</div>
+      </div>`).join('');
+  }
+
+  function selecionarProduto(tipo) {
+    tipoSelecionado = tipo;
+    document.getElementById('tipo').value = tipo;
+    document.querySelectorAll('.produto-card').forEach(c => c.classList.remove('selecionado'));
+    document.getElementById('card-' + tipo).classList.add('selecionado');
+    const p = PRODUTOS[tipo];
+
+    // Mostrar detalhe do produto
+    document.getElementById('detalhe-nome').textContent = p.icone + ' ' + p.nome + ' — R$ ' + p.preco.toLocaleString('pt-BR');
+    document.getElementById('detalhe-argumento').textContent = p.argumento;
+    document.getElementById('detalhe-dados').innerHTML = p.dados.map(d => '✓ ' + d).join('<br>');
+    document.getElementById('detalhe-publico').innerHTML = p.publico.map(d => '• ' + d).join('<br>');
+    document.getElementById('produto-detalhe').style.display = 'block';
+
+    document.getElementById('r-produto').textContent = p.nome;
+    document.getElementById('r-valor').textContent = 'R$ ' + p.preco.toLocaleString('pt-BR');
+    document.getElementById('r-prazo').textContent = p.prazo;
+    document.getElementById('resumo').style.display = 'block';
+    document.getElementById('resumo').scrollIntoView({ behavior: 'smooth' });
+  }
+
+  function detectarTipo(val) {
+    const limpo = val.replace(/\D/g, '');
+    document.getElementById('alvo_tipo').value = limpo.length > 11 ? 'PJ' : 'PF';
+  }
+
+  async function criarPedido(marcadoPago) {
+    const tipo = document.getElementById('tipo').value;
+    const alvo_nome = document.getElementById('alvo_nome').value.trim();
+    const alvo_documento = document.getElementById('alvo_documento').value.replace(/\D/g, '');
+    const alvo_tipo = document.getElementById('alvo_tipo').value;
+    const cliente_nome = document.getElementById('cliente_nome').value.trim();
+    const cliente_whatsapp = document.getElementById('cliente_whatsapp').value.trim();
+    const cliente_email = document.getElementById('cliente_email').value.trim();
+
+    if (!tipo) return alerta('Selecione um produto', 'error');
+    if (!alvo_nome) return alerta('Informe o nome do alvo', 'error');
+    if (!alvo_documento) return alerta('Informe o CPF ou CNPJ', 'error');
+    if (!cliente_nome) return alerta('Informe o nome do cliente', 'error');
+
+    try {
+      const res = await fetch('/api/pedidos', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ tipo, alvo_nome, alvo_documento, alvo_tipo, cliente_nome, cliente_whatsapp, cliente_email })
+      });
+      const data = await res.json();
+      if (!res.ok) return alerta(data.erro || 'Erro ao criar pedido', 'error');
+
+      if (marcadoPago) {
+        await fetch(`/api/pedidos/${data.id}/pago`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+          body: JSON.stringify({ mp_payment_id: 'manual' })
+        });
+      }
+
+      window.location.href = `/pedido.html?id=${data.id}`;
+    } catch (e) {
+      alerta('Erro de conexão', 'error');
+    }
+  }
+
+  function alerta(msg, tipo) {
+    document.getElementById('alerta').innerHTML = `<div class="alert alert-${tipo === 'error' ? 'error' : 'success'}">${msg}</div>`;
+    window.scrollTo(0, 0);
+  }
+
+  function logout() { localStorage.clear(); window.location.href = '/'; }
+</script>
+</body>
+</html>
