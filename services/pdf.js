@@ -22,6 +22,7 @@ function corScore(classificacao) {
 
 function gerarDossie(pedido, dadosDB) {
   return new Promise((resolve, reject) => {
+    try {
     const doc = new PDFDocument({ margin: MARGEM, size: 'A4' });
     const filename = `rastreia_${pedido.tipo}_${pedido.id.substring(0,8)}_${Date.now()}.pdf`;
     const dirRelatorios = path.join(__dirname, '../public/relatorios');
@@ -316,6 +317,10 @@ function gerarDossie(pedido, dadosDB) {
     doc.end();
     stream.on('finish', () => resolve({ filename, filepath, url: `/relatorios/${filename}` }));
     stream.on('error', reject);
+    } catch (e) {
+      console.error('[PDF] Erro ao gerar PDF:', e.message, e.stack);
+      reject(e);
+    }
   });
 }
 
