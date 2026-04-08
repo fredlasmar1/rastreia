@@ -22,7 +22,7 @@ function corScore(classificacao) {
 
 function gerarDossie(pedido, dadosDB) {
   return new Promise((resolve, reject) => {
-    const doc = new PDFDocument({ margin: MARGEM, size: 'A4', bufferPages: true });
+    const doc = new PDFDocument({ margin: MARGEM, size: 'A4' });
     const filename = `rastreia_${pedido.tipo}_${pedido.id.substring(0,8)}_${Date.now()}.pdf`;
     const dirRelatorios = path.join(__dirname, '../public/relatorios');
     if (!fs.existsSync(dirRelatorios)) fs.mkdirSync(dirRelatorios, { recursive: true });
@@ -310,19 +310,8 @@ function gerarDossie(pedido, dadosDB) {
       y += doc.heightOfString(pedido.observacoes, { width: LARGURA }) + 10;
     }
 
-    // ════════════════════════════════════════════
-    // RODAPÉ em todas as páginas
-    // ════════════════════════════════════════════
-    const range = doc.bufferedPageRange();
-    for (let i = range.start; i < range.start + range.count; i++) {
-      doc.switchToPage(i);
-      const altPag = doc.page.height;
-      doc.rect(0, altPag - RODAPE_ALTURA, 595, RODAPE_ALTURA).fill('#f3f4f6');
-      doc.fillColor(COR.cinza).fontSize(6.5).font('Helvetica')
-        .text('Documento informativo gerado pelo sistema Rastreia com base em fontes publicas oficiais. Nao substitui consulta juridica especializada.', MARGEM, altPag - 50, { align: 'center', width: LARGURA })
-        .text('Fontes: Receita Federal, Datajud CNJ, Escavador, Direct Data, Portal da Transparencia, CPF.CNPJ', MARGEM, altPag - 36, { align: 'center', width: LARGURA })
-        .text(`Recobro Recuperacao de Credito  |  Anapolis - GO  |  Pagina ${i + 1} de ${range.count}`, MARGEM, altPag - 22, { align: 'center', width: LARGURA });
-    }
+    // Rodapé na última página
+    rodape(doc);
 
     doc.end();
     stream.on('finish', () => resolve({ filename, filepath, url: `/relatorios/${filename}` }));
@@ -349,9 +338,18 @@ function avisoSemDados(doc, y, msg) {
   doc.fillColor('#92400e').fontSize(8).font('Helvetica').text(msg, MARGEM + 8, y + 5, { width: LARGURA - 16 });
 }
 
+function rodape(doc) {
+  const altPag = doc.page.height;
+  doc.rect(0, altPag - RODAPE_ALTURA, 595, RODAPE_ALTURA).fill('#f3f4f6');
+  doc.fillColor(COR.cinza).fontSize(6.5).font('Helvetica')
+    .text('Documento informativo gerado pelo sistema Rastreia. Nao substitui consulta juridica especializada.', MARGEM, altPag - 48, { align: 'center', width: LARGURA })
+    .text('Recobro Recuperacao de Credito  |  Anapolis - GO', MARGEM, altPag - 34, { align: 'center', width: LARGURA });
+}
+
 function verificarPagina(doc, y, espacoNecessario) {
   const espaco = espacoNecessario || 20;
   if (y + espaco > doc.page.height - RODAPE_ALTURA - 20) {
+    rodape(doc);
     doc.addPage();
     return MARGEM;
   }
