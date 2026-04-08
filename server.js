@@ -68,6 +68,7 @@ async function iniciar() {
   app.listen(PORT, () => {
     console.log(`🔍 RASTREIA rodando na porta ${PORT}`);
     console.log(`📊 Ambiente: ${process.env.NODE_ENV || 'development'}`);
+    console.log(`📡 APIs: DIRECTD_TOKEN=${!!process.env.DIRECTD_TOKEN} | CPFCNPJ_API_KEY=${!!process.env.CPFCNPJ_API_KEY} | CNPJA_API_KEY=${!!process.env.CNPJA_API_KEY} | ESCAVADOR_API_KEY=${!!process.env.ESCAVADOR_API_KEY} | TRANSPARENCIA_TOKEN=${!!process.env.TRANSPARENCIA_TOKEN}`);
   });
 }
 
