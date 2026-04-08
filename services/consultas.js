@@ -193,11 +193,13 @@ async function consultarCPFviaCpfCnpj(doc) {
     };
   }
   try {
+    console.log(`[CPF.CNPJ] Consultando CPF ${doc.substring(0,3)}***`);
     const res = await axios.get(
       `https://api.cpfcnpj.com.br/${process.env.CPFCNPJ_API_KEY}/9/${doc}`,
       { timeout: 60000 }
     );
     const d = res.data;
+    console.log(`[CPF.CNPJ] Resposta status=${d.status}, keys=${Object.keys(d).join(',')}`);
     if (d.status === 0) {
       return { cpf: doc, cpf_formatado: formatarCPF(doc), erro: d.mensagem || 'CPF não encontrado', fonte: 'CPF.CNPJ' };
     }
@@ -228,11 +230,12 @@ async function consultarCPFviaCpfCnpj(doc) {
       consultado_em: new Date().toISOString()
     };
   } catch (e) {
+    console.error(`[CPF.CNPJ] Erro: ${e.response?.status} - ${JSON.stringify(e.response?.data) || e.message}`);
     return {
       cpf: doc,
       cpf_formatado: formatarCPF(doc),
       erro: 'Falha na consulta CPF.CNPJ',
-      detalhes: e.response?.data?.mensagem || e.message,
+      detalhes: e.response?.data?.mensagem || e.response?.data?.message || e.message,
       fonte: 'CPF.CNPJ',
       consultado_em: new Date().toISOString()
     };
