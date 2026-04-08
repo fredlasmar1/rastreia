@@ -12,6 +12,7 @@ const COR = {
 function corScore(classificacao) {
   if (classificacao === 'BAIXO RISCO') return COR.verde;
   if (classificacao === 'RISCO MÉDIO') return COR.laranja;
+  if (classificacao === 'INDISPONÍVEL') return COR.cinza;
   return COR.vermelho;
 }
 

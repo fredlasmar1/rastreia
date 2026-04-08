@@ -213,12 +213,40 @@ const PRODUTOS = {
 // ─────────────────────────────────────────────────────────
 
 function calcularScore(tipo, dados) {
-  let score = 100; // começa no máximo (melhor)
   const alertas = [];
 
   const processos = dados.processos || {};
   const cadastral = dados.receita_federal || {};
   const transparencia = dados.transparencia || {};
+
+  // Verificar se temos dados suficientes para calcular score
+  const temDadosCadastrais = cadastral.nome || cadastral.razao_social;
+  const temDadosProcessos = processos.fonte && !processos.erro;
+  const fontesConsultadas = (temDadosCadastrais ? 1 : 0) + (temDadosProcessos ? 1 : 0) + (transparencia.em_lista_negra !== undefined ? 1 : 0);
+
+  if (fontesConsultadas === 0) {
+    alertas.push('Nenhuma fonte de dados retornou informações — score não calculado');
+    alertas.push('Verifique se as APIs estão configuradas (CPFCNPJ_API_KEY, DIRECTD_TOKEN, ESCAVADOR_API_KEY)');
+    return {
+      score: '-',
+      classificacao: 'INDISPONÍVEL',
+      cor: 'cinza',
+      recomendacao: 'Não foi possível calcular o score de risco porque nenhuma fonte de dados retornou informações. Configure as APIs necessárias e refaça a consulta.',
+      alertas
+    };
+  }
+
+  let score = 100;
+
+  // Penalidade por dados incompletos
+  if (!temDadosCadastrais) {
+    score -= 15;
+    alertas.push('Dados cadastrais indisponíveis — score parcial');
+  }
+  if (cadastral.aviso || cadastral.erro) {
+    score -= 10;
+    alertas.push('API de dados cadastrais não retornou informações completas');
+  }
 
   // Penalidades por processos judiciais
   const totalProcessos = processos.total || 0;
@@ -231,7 +259,7 @@ function calcularScore(tipo, dados) {
   // Penalidade por lista negra federal
   if (transparencia.em_lista_negra) {
     score -= 40;
-    alertas.push('⚠️ CRÍTICO: Empresa/Pessoa consta em lista negra federal (CEIS/CNEP)');
+    alertas.push('CRÍTICO: Empresa/Pessoa consta em lista negra federal (CEIS/CNEP)');
   }
 
   // Penalidade por situação irregular na RF
@@ -244,7 +272,7 @@ function calcularScore(tipo, dados) {
   // Penalidade por óbito (PF)
   if (cadastral.obito === true) {
     score -= 50;
-    alertas.push('⚠️ CRÍTICO: Registro de óbito encontrado para este CPF');
+    alertas.push('CRÍTICO: Registro de óbito encontrado para este CPF');
   }
 
   // Bônus por empresa antiga (PJ)
@@ -272,7 +300,7 @@ function calcularScore(tipo, dados) {
   } else {
     classificacao = 'RISCO CRÍTICO';
     cor = 'vermelho';
-    recomendacao = '⚠️ Não recomendamos prosseguir com esta negociação sem análise jurídica especializada.';
+    recomendacao = 'Não recomendamos prosseguir com esta negociação sem análise jurídica especializada.';
   }
 
   return { score, classificacao, cor, recomendacao, alertas };
