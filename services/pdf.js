@@ -289,13 +289,12 @@ function gerarDossie(pedido, dadosDB) {
       y = verificarPagina(doc, y, 50);
       y = secao(doc, 'VERIFICACOES COMPLEMENTARES', y);
       checklist.forEach(c => {
-        y = verificarPagina(doc, y, 16);
-        const prefixo = c.obrigatorio ? '[OBRIGATORIO]' : '[Opcional]';
+        y = verificarPagina(doc, y, 14);
+        const prefixo = c.obrigatorio ? '[OBRIG.]' : '[Opc.]';
         const cor_item = c.obrigatorio ? COR.vermelho : COR.cinza;
-        doc.fillColor(cor_item).fontSize(7).font('Helvetica-Bold').text(prefixo, MARGEM, y, { continued: true });
-        doc.fillColor('#111827').font('Helvetica').text(`  ${c.item}`, { continued: !!c.link });
-        if (c.link) doc.fillColor(COR.azul_claro).text(`  ${c.link}`);
-        y += 13;
+        const textoCompleto = `${prefixo} ${c.item}${c.link ? ' — ' + c.link : ''}`;
+        doc.fillColor(cor_item).fontSize(6.5).font('Helvetica').text(textoCompleto, MARGEM, y, { width: LARGURA });
+        y += 11;
       });
       y += 6;
     }
