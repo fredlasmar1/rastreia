@@ -93,7 +93,7 @@ ON CONFLICT (chave) DO NOTHING;
 INSERT INTO usuarios (nome, email, senha_hash, perfil) VALUES (
   'Administrador',
   'admin@recobro.com.br',
-  '$2a$10$rqTgTqv9K5K5K5K5K5K5KO1234567890abcdefghijklmnop',
+  '$2a$10$zfhKv9KGXg2jyfwX1w8dkeE2tjjTuPm0WklVSVa2F0vWzAVjDcuaW',
   'admin'
 ) ON CONFLICT (email) DO NOTHING;
 

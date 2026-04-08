@@ -15,6 +15,9 @@ app.use(express.static(path.join(__dirname, 'public')));
 // Rate limiting
 app.use('/api/', rateLimit({ windowMs: 15 * 60 * 1000, max: 100, message: { erro: 'Muitas requisições' } }));
 
+// Health check
+app.get('/api/health', (req, res) => res.json({ status: 'ok' }));
+
 // Rotas API
 app.use('/api/auth', require('./routes/auth'));
 app.use('/api/pedidos', require('./routes/pedidos'));
@@ -47,7 +50,22 @@ app.get('*', (req, res) => {
   }
 });
 
-app.listen(PORT, () => {
-  console.log(`🔍 RASTREIA rodando na porta ${PORT}`);
-  console.log(`📊 Ambiente: ${process.env.NODE_ENV || 'development'}`);
-});
+// Inicializar banco e subir servidor
+const fs = require('fs');
+const { pool } = require('./db');
+
+async function iniciar() {
+  try {
+    const schema = fs.readFileSync(path.join(__dirname, 'db', 'schema.sql'), 'utf8');
+    await pool.query(schema);
+    console.log('✅ Banco de dados inicializado');
+  } catch (e) {
+    console.error('⚠️ Erro ao inicializar banco:', e.message);
+  }
+  app.listen(PORT, () => {
+    console.log(`🔍 RASTREIA rodando na porta ${PORT}`);
+    console.log(`📊 Ambiente: ${process.env.NODE_ENV || 'development'}`);
+  });
+}
+
+iniciar();
