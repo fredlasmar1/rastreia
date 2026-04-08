@@ -56,11 +56,14 @@ const { pool } = require('./db');
 
 async function iniciar() {
   try {
+    await pool.query('SELECT 1');
+    console.log('✅ Conexão com banco OK');
     const schema = fs.readFileSync(path.join(__dirname, 'db', 'schema.sql'), 'utf8');
     await pool.query(schema);
-    console.log('✅ Banco de dados inicializado');
+    console.log('✅ Tabelas criadas/verificadas');
   } catch (e) {
-    console.error('⚠️ Erro ao inicializar banco:', e.message);
+    console.error('❌ Erro ao inicializar banco:', e.message);
+    console.error('DATABASE_URL definida:', !!process.env.DATABASE_URL);
   }
   app.listen(PORT, () => {
     console.log(`🔍 RASTREIA rodando na porta ${PORT}`);
