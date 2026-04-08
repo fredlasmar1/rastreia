@@ -132,12 +132,15 @@ async function consultarCNPJFallback(doc) {
 
 async function consultarCPF(cpf) {
   const doc = limparDoc(cpf);
+  console.log(`[CPF] Iniciando consulta. DIRECTD_TOKEN: ${!!process.env.DIRECTD_TOKEN}, CPFCNPJ_API_KEY: ${!!process.env.CPFCNPJ_API_KEY}`);
   if (process.env.DIRECTD_TOKEN) {
     try {
+      console.log(`[Direct Data] Consultando CPF ${doc.substring(0,3)}***`);
       const res = await axios.get('https://apiv3.directd.com.br/api/CadastroPessoaFisicaPlus', {
         params: { Cpf: doc, Token: process.env.DIRECTD_TOKEN },
         timeout: 15000
       });
+      console.log(`[Direct Data] Resposta: status=${res.status}, retorno=${!!res.data?.retorno}`);
       const r = res.data?.retorno || {};
       return {
         cpf: doc,
@@ -172,6 +175,7 @@ async function consultarCPF(cpf) {
         consultado_em: new Date().toISOString()
       };
     } catch (e) {
+      console.error(`[Direct Data] Erro: ${e.response?.status} - ${JSON.stringify(e.response?.data) || e.message}`);
       // Direct Data falhou, tenta fallback CPF.CNPJ
       const fallback = await consultarCPFviaCpfCnpj(doc);
       if (!fallback.erro) return fallback;
