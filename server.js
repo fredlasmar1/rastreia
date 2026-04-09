@@ -8,6 +8,9 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 
 // Validar variáveis de ambiente obrigatórias
+console.log('🔄 Iniciando Rastreia...');
+console.log(`DATABASE_URL definida: ${!!process.env.DATABASE_URL}`);
+console.log(`JWT_SECRET definida: ${!!process.env.JWT_SECRET}`);
 const REQUIRED_ENV = ['DATABASE_URL', 'JWT_SECRET'];
 const missing = REQUIRED_ENV.filter(v => !process.env[v]);
 if (missing.length > 0) {
