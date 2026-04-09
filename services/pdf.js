@@ -9,10 +9,6 @@ const COR = {
   fundo: '#f9fafb', borda: '#e5e7eb', branco: '#ffffff'
 };
 
-const MARGEM = 50;
-const LARGURA = 495;
-const RODAPE_ALTURA = 60;
-
 function corScore(classificacao) {
   if (classificacao === 'BAIXO RISCO') return COR.verde;
   if (classificacao === 'RISCO MÉDIO') return COR.laranja;
@@ -23,7 +19,7 @@ function corScore(classificacao) {
 function gerarDossie(pedido, dadosDB) {
   return new Promise((resolve, reject) => {
     try {
-    const doc = new PDFDocument({ margin: MARGEM, size: 'A4' });
+    const doc = new PDFDocument({ margin: 50, size: 'A4' });
     const filename = `rastreia_${pedido.tipo}_${pedido.id.substring(0,8)}_${Date.now()}.pdf`;
     const dirRelatorios = path.join(__dirname, '../public/relatorios');
     if (!fs.existsSync(dirRelatorios)) fs.mkdirSync(dirRelatorios, { recursive: true });
@@ -31,8 +27,15 @@ function gerarDossie(pedido, dadosDB) {
     const stream = fs.createWriteStream(filepath);
     doc.pipe(stream);
 
+    // Montar objeto de dados por fonte (com proteção JSON parse)
     const dados = {};
-    dadosDB.forEach(d => { dados[d.fonte] = typeof d.dados === 'string' ? JSON.parse(d.dados) : d.dados; });
+    dadosDB.forEach(d => {
+      try {
+        dados[d.fonte] = typeof d.dados === 'string' ? JSON.parse(d.dados) : d.dados;
+      } catch {
+        dados[d.fonte] = d.dados || {};
+      }
+    });
 
     const produto = PRODUTOS[pedido.tipo] || {};
     const score = calcularScore(pedido.tipo, dados);
@@ -42,229 +45,213 @@ function gerarDossie(pedido, dadosDB) {
     const transparencia = dados.transparencia || {};
     const serasa = dados.serasa || {};
 
-    // ════════════════════════════════════════════
-    // CABEÇALHO
-    // ════════════════════════════════════════════
-    doc.rect(0, 0, 595, 85).fill(COR.azul);
-    doc.fillColor('#ffffff').fontSize(22).font('Helvetica-Bold').text('RASTREIA', MARGEM, 18);
-    doc.fontSize(9).font('Helvetica').text('Sistema de Consultas e Dossiês | Recobro Recuperacao de Credito', MARGEM, 44);
-    doc.fontSize(8).text(`Emitido em: ${new Date().toLocaleString('pt-BR')}  |  Protocolo: #${pedido.numero || pedido.id.substring(0,8).toUpperCase()}`, MARGEM, 58);
+    // ── CABEÇALHO ──
+    doc.rect(0, 0, 595, 95).fill(COR.azul);
+    doc.fillColor('#ffffff').fontSize(24).font('Helvetica-Bold').text('RASTREIA', 50, 22);
+    doc.fontSize(10).font('Helvetica').text('Sistema de Consultas e Dossiês | Recobro Recuperação de Crédito', 50, 52);
+    doc.fontSize(9).text(`Emitido em: ${new Date().toLocaleString('pt-BR')}   |   Protocolo: #${pedido.numero || pedido.id.substring(0,8).toUpperCase()}`, 50, 68);
 
-    // Tipo do relatório
-    doc.rect(0, 85, 595, 30).fill('#e8eef5');
-    doc.fillColor(COR.azul).fontSize(12).font('Helvetica-Bold')
-      .text(`${(produto.nome || pedido.tipo).toUpperCase()}`, MARGEM, 93);
+    // ── TIPO DO RELATÓRIO ──
+    doc.rect(0, 95, 595, 38).fill('#f0f4f8');
+    doc.fillColor(COR.azul).fontSize(15).font('Helvetica-Bold')
+      .text(`${(produto.nome || pedido.tipo).toUpperCase()}`, 50, 107);
 
-    let y = 128;
+    let y = 148;
 
-    // ════════════════════════════════════════════
-    // ALVO DA CONSULTA (compacto)
-    // ════════════════════════════════════════════
-    y = secao(doc, 'DADOS DO PEDIDO', y);
-    const docFormatado = pedido.alvo_documento.length === 11
-      ? pedido.alvo_documento.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, '$1.$2.$3-$4')
-      : pedido.alvo_documento.replace(/(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})/, '$1.$2.$3/$4-$5');
-    linha(doc, 'Alvo', `${pedido.alvo_nome}  |  ${docFormatado}  |  ${pedido.alvo_tipo === 'PF' ? 'Pessoa Fisica' : 'Pessoa Juridica'}`, y); y += 16;
-    linha(doc, 'Solicitante', pedido.cliente_nome, y); y += 20;
+    // ── ALVO DA CONSULTA ──
+    y = secao(doc, 'ALVO DA CONSULTA', y);
+    linha(doc, 'Nome / Razão Social', pedido.alvo_nome, y); y += 18;
+    linha(doc, 'CPF / CNPJ', pedido.alvo_documento, y); y += 18;
+    linha(doc, 'Tipo', pedido.alvo_tipo === 'PF' ? 'Pessoa Fisica' : 'Pessoa Juridica', y); y += 18;
+    linha(doc, 'Solicitante', pedido.cliente_nome, y); y += 18;
+    y += 8; doc.moveTo(50, y).lineTo(545, y).strokeColor(COR.borda).lineWidth(1).stroke(); y += 14;
 
-    // ════════════════════════════════════════════
-    // SCORE DE RISCO
-    // ════════════════════════════════════════════
+    // ── SCORE DE RISCO ──
     y = secao(doc, 'SCORE DE RISCO', y);
     const corS = corScore(score.classificacao);
-    doc.rect(MARGEM, y, LARGURA, 55).fill('#f8fafc').stroke(COR.borda);
-
-    // Círculo do score
-    doc.circle(95, y + 27, 22).fill(corS);
+    doc.rect(50, y, 495, 70).fill('#f8fafc').stroke(COR.borda);
     const scoreText = score.score === '-' ? '?' : `${score.score}`;
-    doc.fillColor('#ffffff').fontSize(scoreText.length > 2 ? 14 : 18).font('Helvetica-Bold').text(scoreText, 73, y + 17, { width: 44, align: 'center' });
+    doc.fillColor(corS).fontSize(32).font('Helvetica-Bold').text(scoreText, 70, y + 10, { width: 60, align: 'center' });
+    doc.fontSize(10).font('Helvetica').fillColor(COR.cinza).text('/100', 130, y + 22);
+    doc.fillColor(corS).fontSize(14).font('Helvetica-Bold').text(score.classificacao, 180, y + 14);
+    doc.fillColor('#111827').fontSize(9).font('Helvetica').text(score.recomendacao, 180, y + 34, { width: 350 });
+    y += 82;
 
-    // Classificação e recomendação
-    doc.fillColor(corS).fontSize(13).font('Helvetica-Bold').text(score.classificacao, 130, y + 8);
-    doc.fillColor('#374151').fontSize(8).font('Helvetica').text(score.recomendacao, 130, y + 26, { width: 400 });
-    y += 62;
-
-    // Alertas (compactos)
     if (score.alertas.length > 0) {
       score.alertas.forEach(a => {
-        y = verificarPagina(doc, y);
-        doc.rect(MARGEM, y, LARGURA, 15).fill('#fef3c7');
-        doc.fillColor('#92400e').fontSize(7.5).font('Helvetica').text(`! ${a}`, MARGEM + 6, y + 3, { width: LARGURA - 12 });
-        y += 18;
+        y = verificarPagina(doc, y, 22);
+        doc.rect(50, y, 495, 18).fill('#fef3c7');
+        doc.fillColor('#92400e').fontSize(9).font('Helvetica').text(`! ${a}`, 58, y + 4);
+        y += 22;
       });
-      y += 4;
+      y += 6;
     }
 
-    // ════════════════════════════════════════════
-    // DADOS CADASTRAIS — PJ
-    // ════════════════════════════════════════════
-    if (pedido.alvo_tipo === 'PJ') {
-      y = verificarPagina(doc, y, 120);
+    // ── DADOS CADASTRAIS — PJ ──
+    if (pedido.alvo_tipo === 'PJ' && cadastral.razao_social) {
+      y = verificarPagina(doc, y, 200);
       y = secao(doc, 'DADOS CADASTRAIS — RECEITA FEDERAL', y);
+      linha(doc, 'Razao Social', cadastral.razao_social, y); y += 18;
+      if (cadastral.nome_fantasia) { linha(doc, 'Nome Fantasia', cadastral.nome_fantasia, y); y += 18; }
+      linha(doc, 'CNPJ', cadastral.cnpj_formatado || cadastral.cnpj, y); y += 18;
+      linha(doc, 'Situacao na RF', cadastral.situacao, y); y += 18;
+      linha(doc, 'Data de Abertura', cadastral.data_abertura, y); y += 18;
+      linha(doc, 'Tempo de Existencia', cadastral.data_abertura ? `${new Date().getFullYear() - new Date(cadastral.data_abertura).getFullYear()} anos` : '-', y); y += 18;
+      linha(doc, 'Porte', cadastral.porte, y); y += 18;
+      linha(doc, 'Natureza Juridica', cadastral.natureza_juridica, y); y += 18;
+      linha(doc, 'Capital Social', cadastral.capital_social ? `R$ ${Number(cadastral.capital_social).toLocaleString('pt-BR')}` : '-', y); y += 18;
+      linha(doc, 'Atividade Principal', cadastral.atividade_principal, y); y += 18;
+      if (cadastral.simples_nacional) { linha(doc, 'Simples Nacional', cadastral.simples_nacional, y); y += 18; }
+      if (cadastral.regime_tributario) { linha(doc, 'Regime Tributario', cadastral.regime_tributario, y); y += 18; }
+      linha(doc, 'Endereco', cadastral.endereco, y); y += 18;
+      if (cadastral.email) { linha(doc, 'Email', cadastral.email, y); y += 18; }
+      if (cadastral.telefone) { linha(doc, 'Telefone', cadastral.telefone, y); y += 18; }
 
-      if (cadastral.razao_social) {
-        linha(doc, 'Razao Social', cadastral.razao_social, y); y += 15;
-        if (cadastral.nome_fantasia) { linha(doc, 'Nome Fantasia', cadastral.nome_fantasia, y); y += 15; }
-        linha(doc, 'CNPJ', cadastral.cnpj_formatado || cadastral.cnpj, y); y += 15;
-        linha(doc, 'Situacao RF', cadastral.situacao || 'Nao informado', y); y += 15;
-        linha(doc, 'Abertura', cadastral.data_abertura ? `${cadastral.data_abertura} (${new Date().getFullYear() - new Date(cadastral.data_abertura).getFullYear()} anos)` : '-', y); y += 15;
-        linha(doc, 'Porte', cadastral.porte || '-', y); y += 15;
-        linha(doc, 'Natureza Juridica', cadastral.natureza_juridica || '-', y); y += 15;
-        linha(doc, 'Capital Social', cadastral.capital_social ? `R$ ${Number(cadastral.capital_social).toLocaleString('pt-BR')}` : '-', y); y += 15;
-        linha(doc, 'Atividade', cadastral.atividade_principal || '-', y); y += 15;
-        if (cadastral.simples_nacional) { linha(doc, 'Simples Nacional', cadastral.simples_nacional, y); y += 15; }
-        linha(doc, 'Endereco', cadastral.endereco || 'Nao informado', y); y += 15;
-        if (cadastral.email) { linha(doc, 'Email', cadastral.email, y); y += 15; }
-        if (cadastral.telefone) { linha(doc, 'Telefone', cadastral.telefone, y); y += 15; }
+      if (cadastral.socios?.length > 0) {
+        y += 6;
+        doc.fillColor(COR.azul).fontSize(10).font('Helvetica-Bold').text('QUADRO SOCIETARIO', 50, y); y += 16;
+        cadastral.socios.forEach((s, i) => {
+          y = verificarPagina(doc, y, 30);
+          doc.rect(50, y, 495, 24).fill(i % 2 === 0 ? '#f9fafb' : '#ffffff').stroke(COR.borda);
+          doc.fillColor('#111827').fontSize(9).font('Helvetica-Bold').text(s.nome, 58, y + 4);
+          doc.font('Helvetica').fillColor(COR.cinza).text(`${s.qualificacao}  |  Desde: ${s.desde || 'N/D'}`, 58, y + 14);
+          y += 28;
+        });
+      }
+      y += 10;
+    } else if (pedido.alvo_tipo === 'PJ') {
+      y = verificarPagina(doc, y, 40);
+      y = secao(doc, 'DADOS CADASTRAIS — RECEITA FEDERAL', y);
+      avisoSemDados(doc, y, 'Dados cadastrais nao disponiveis. Configure CNPJA_API_KEY.');
+      y += 30;
+    }
 
-        if (cadastral.socios?.length > 0) {
+    // ── DADOS CADASTRAIS — PF ──
+    if (pedido.alvo_tipo === 'PF') {
+      y = verificarPagina(doc, y, 180);
+      y = secao(doc, 'DADOS CADASTRAIS — PESSOA FISICA', y);
+
+      if (cadastral.aviso) {
+        doc.rect(50, y, 495, 36).fill('#fef3c7');
+        doc.fillColor('#92400e').fontSize(9).font('Helvetica').text(`! ${cadastral.aviso}`, 58, y + 6);
+        doc.fillColor(COR.azul_claro).text(`-> ${cadastral.instrucao || ''}`, 58, y + 20);
+        y += 46;
+      } else if (cadastral.nome) {
+        linha(doc, 'Nome', cadastral.nome, y); y += 18;
+        linha(doc, 'CPF', cadastral.cpf_formatado || cadastral.cpf, y); y += 18;
+        if (cadastral.data_nascimento) { linha(doc, 'Data de Nascimento', cadastral.data_nascimento, y); y += 18; }
+        if (cadastral.idade) { linha(doc, 'Idade', `${cadastral.idade} anos`, y); y += 18; }
+        if (cadastral.sexo) { linha(doc, 'Sexo', cadastral.sexo, y); y += 18; }
+        if (cadastral.nome_mae) { linha(doc, 'Nome da Mae', cadastral.nome_mae, y); y += 18; }
+        if (cadastral.nome_pai) { linha(doc, 'Nome do Pai', cadastral.nome_pai, y); y += 18; }
+        linha(doc, 'Situacao na RF', cadastral.situacao_rf || '-', y); y += 18;
+        if (cadastral.obito) {
+          y = verificarPagina(doc, y, 22);
+          doc.rect(50, y, 495, 20).fill('#fee2e2');
+          doc.fillColor(COR.vermelho).fontSize(10).font('Helvetica-Bold').text('REGISTRO DE OBITO ENCONTRADO', 58, y + 4);
+          y += 24;
+        }
+        if (cadastral.classe_social) { linha(doc, 'Classe Social', cadastral.classe_social, y); y += 18; }
+        if (cadastral.renda_estimada) { linha(doc, 'Renda Estimada', cadastral.renda_estimada, y); y += 18; }
+
+        if (cadastral.enderecos?.length > 0) {
+          y += 6;
+          doc.fillColor(COR.azul).fontSize(10).font('Helvetica-Bold').text('ENDERECOS', 50, y); y += 14;
+          cadastral.enderecos.forEach((e, i) => {
+            y = verificarPagina(doc, y, 16);
+            const end = [e.logradouro, e.numero, e.bairro, e.cidade, e.uf, e.cep].filter(Boolean).join(', ');
+            doc.fillColor('#111827').fontSize(9).font('Helvetica').text(`${i + 1}. ${end}`, 58, y, { width: 480 }); y += 16;
+          });
+        }
+
+        if (cadastral.telefones?.length > 0) {
+          y += 6;
+          doc.fillColor(COR.azul).fontSize(10).font('Helvetica-Bold').text('TELEFONES', 50, y); y += 14;
+          cadastral.telefones.forEach(t => {
+            y = verificarPagina(doc, y, 14);
+            const wpp = t.whatsapp ? ' [WhatsApp]' : '';
+            const info = [t.numero, t.tipo, t.operadora].filter(Boolean).join(' - ');
+            doc.fillColor('#111827').fontSize(9).font('Helvetica').text(`* ${info}${wpp}`, 58, y); y += 14;
+          });
+        }
+
+        if (cadastral.emails?.length > 0) {
           y += 4;
-          doc.fillColor(COR.azul).fontSize(9).font('Helvetica-Bold').text('QUADRO SOCIETARIO', MARGEM, y); y += 14;
-          cadastral.socios.forEach((s, i) => {
-            y = verificarPagina(doc, y, 22);
-            doc.rect(MARGEM, y, LARGURA, 20).fill(i % 2 === 0 ? '#f9fafb' : '#ffffff');
-            doc.fillColor('#111827').fontSize(8).font('Helvetica-Bold').text(s.nome, MARGEM + 6, y + 3);
-            doc.font('Helvetica').fillColor(COR.cinza).text(`${s.qualificacao || ''}  |  Desde: ${s.desde || 'N/D'}`, MARGEM + 6, y + 12);
-            y += 22;
+          doc.fillColor(COR.azul).fontSize(10).font('Helvetica-Bold').text('EMAILS', 50, y); y += 14;
+          cadastral.emails.forEach(e => {
+            doc.fillColor('#111827').fontSize(9).font('Helvetica').text(`* ${e}`, 58, y); y += 14;
           });
         }
         y += 8;
-      } else {
-        avisoSemDados(doc, y, 'Dados cadastrais nao disponiveis. Configure CNPJA_API_KEY ou CPFCNPJ_API_KEY.');
-        y += 30;
-      }
-    }
-
-    // ════════════════════════════════════════════
-    // DADOS CADASTRAIS — PF
-    // ════════════════════════════════════════════
-    if (pedido.alvo_tipo === 'PF') {
-      y = verificarPagina(doc, y, 120);
-      y = secao(doc, 'DADOS CADASTRAIS — PESSOA FISICA', y);
-
-      if (cadastral.nome) {
-        linha(doc, 'Nome', cadastral.nome, y); y += 15;
-        linha(doc, 'CPF', cadastral.cpf_formatado || cadastral.cpf, y); y += 15;
-        if (cadastral.data_nascimento) { linha(doc, 'Nascimento', cadastral.data_nascimento, y); y += 15; }
-        if (cadastral.idade) { linha(doc, 'Idade', `${cadastral.idade} anos`, y); y += 15; }
-        if (cadastral.sexo) { linha(doc, 'Sexo', cadastral.sexo, y); y += 15; }
-        if (cadastral.nome_mae) { linha(doc, 'Mae', cadastral.nome_mae, y); y += 15; }
-        if (cadastral.nome_pai) { linha(doc, 'Pai', cadastral.nome_pai, y); y += 15; }
-        linha(doc, 'Situacao RF', cadastral.situacao_rf || '-', y); y += 15;
-
-        if (cadastral.obito) {
-          y = verificarPagina(doc, y);
-          doc.rect(MARGEM, y, LARGURA, 18).fill('#fee2e2');
-          doc.fillColor(COR.vermelho).fontSize(9).font('Helvetica-Bold').text('REGISTRO DE OBITO ENCONTRADO', MARGEM + 6, y + 4);
-          y += 22;
-        }
-
-        if (cadastral.classe_social) { linha(doc, 'Classe Social', cadastral.classe_social, y); y += 15; }
-        if (cadastral.renda_estimada) { linha(doc, 'Renda Estimada', cadastral.renda_estimada, y); y += 15; }
-
-        // Endereços
-        if (cadastral.enderecos?.length > 0) {
-          y += 4;
-          doc.fillColor(COR.azul).fontSize(9).font('Helvetica-Bold').text('ENDERECOS', MARGEM, y); y += 12;
-          cadastral.enderecos.forEach((e, i) => {
-            y = verificarPagina(doc, y);
-            const end = [e.logradouro, e.numero, e.bairro, e.cidade, e.uf, e.cep].filter(Boolean).join(', ');
-            doc.fillColor('#111827').fontSize(8).font('Helvetica').text(`${i + 1}. ${end}`, MARGEM + 6, y, { width: LARGURA - 12 });
-            y += 13;
-          });
-        }
-
-        // Telefones
-        if (cadastral.telefones?.length > 0) {
-          y += 4;
-          doc.fillColor(COR.azul).fontSize(9).font('Helvetica-Bold').text('TELEFONES', MARGEM, y); y += 12;
-          cadastral.telefones.forEach(t => {
-            y = verificarPagina(doc, y);
-            const wpp = t.whatsapp ? ' [WhatsApp]' : '';
-            const info = [t.numero, t.tipo, t.operadora].filter(Boolean).join(' - ');
-            doc.fillColor('#111827').fontSize(8).font('Helvetica').text(`• ${info}${wpp}`, MARGEM + 6, y);
-            y += 12;
-          });
-        }
-
-        // Emails
-        if (cadastral.emails?.length > 0) {
-          y += 4;
-          doc.fillColor(COR.azul).fontSize(9).font('Helvetica-Bold').text('EMAILS', MARGEM, y); y += 12;
-          cadastral.emails.forEach(e => {
-            doc.fillColor('#111827').fontSize(8).font('Helvetica').text(`• ${e}`, MARGEM + 6, y);
-            y += 12;
-          });
-        }
-        y += 6;
-
       } else if (cadastral.erro) {
         avisoSemDados(doc, y, `Falha na consulta: ${cadastral.detalhes || cadastral.erro}`);
         y += 30;
-      } else if (cadastral.aviso) {
-        avisoSemDados(doc, y, `${cadastral.aviso} ${cadastral.instrucao || ''}`);
-        y += 30;
       } else {
-        avisoSemDados(doc, y, 'Dados cadastrais nao disponiveis. Configure DIRECTD_TOKEN ou CPFCNPJ_API_KEY.');
+        avisoSemDados(doc, y, 'Dados cadastrais nao disponiveis. Configure DIRECTD_TOKEN.');
         y += 30;
       }
     }
 
-    // ════════════════════════════════════════════
-    // PROCESSOS JUDICIAIS
-    // ════════════════════════════════════════════
-    y = verificarPagina(doc, y, 60);
+    // ── PROCESSOS JUDICIAIS ──
+    y = verificarPagina(doc, y, 100);
     y = secao(doc, 'PROCESSOS JUDICIAIS', y);
     const totalP = processos.total || 0;
     const corP = totalP === 0 ? COR.verde : totalP < 5 ? COR.laranja : COR.vermelho;
-
-    // Resumo em uma linha
-    doc.rect(MARGEM, y, LARGURA, 24).fill(totalP === 0 ? '#dcfce7' : '#fef3c7');
-    doc.fillColor(totalP === 0 ? '#14532d' : '#92400e').fontSize(10).font('Helvetica-Bold')
-      .text(totalP === 0 ? 'Nenhum processo encontrado' : `${totalP} processo(s) encontrado(s)`, MARGEM + 8, y + 6);
-    doc.fillColor(COR.cinza).fontSize(7).font('Helvetica').text(`Fonte: ${processos.fonte || 'Datajud CNJ'}`, MARGEM + LARGURA - 150, y + 8);
-    y += 30;
+    doc.fillColor(corP).fontSize(18).font('Helvetica-Bold').text(`${totalP}`, 50, y);
+    doc.fillColor(COR.cinza).fontSize(10).font('Helvetica').text(' processos encontrados', 50 + (totalP > 9 ? 26 : 18), y + 4);
+    doc.fillColor(COR.cinza).fontSize(9).text(`Fonte: ${processos.fonte || 'Datajud CNJ'}`, 50, y + 18);
+    y += 36;
 
     if (processos.processos?.length > 0) {
-      processos.processos.slice(0, 15).forEach((p, i) => {
-        y = verificarPagina(doc, y, 45);
-        doc.rect(MARGEM, y, LARGURA, 40).fill(i % 2 === 0 ? '#f9fafb' : '#fff').stroke(COR.borda);
-        doc.fillColor(COR.azul).fontSize(8).font('Helvetica-Bold').text(p.numero || 'S/N', MARGEM + 6, y + 4);
-        doc.fillColor(COR.cinza).font('Helvetica').fontSize(7)
-          .text(`${p.tribunal || ''}  |  ${p.classe || ''}  |  Inicio: ${p.data_inicio || 'N/D'}${p.valor_causa ? '  |  ' + p.valor_causa : ''}`, MARGEM + 6, y + 16);
-        if (p.assunto) doc.fillColor('#111827').text(`Assunto: ${p.assunto}`, MARGEM + 6, y + 27, { width: LARGURA - 12 });
-        y += 44;
+      processos.processos.slice(0, 20).forEach((proc, i) => {
+        y = verificarPagina(doc, y, 65);
+        doc.rect(50, y, 495, 58).fill(i % 2 === 0 ? '#f9fafb' : '#fff').stroke(COR.borda);
+        doc.fillColor(COR.azul).fontSize(9).font('Helvetica-Bold').text(`${proc.numero}`, 58, y + 5);
+        doc.fillColor(COR.cinza).font('Helvetica').text(`${proc.tribunal}  |  ${proc.classe || ''}  |  Inicio: ${proc.data_inicio || 'N/D'}`, 58, y + 18);
+        if (proc.assunto) doc.fillColor('#111827').text(`Assunto: ${proc.assunto}`, 58, y + 30);
+        if (proc.valor_causa) doc.fillColor(COR.verde).font('Helvetica-Bold').text(`Valor: ${proc.valor_causa}`, 380, y + 30);
+        if (proc.polo_ativo) doc.fillColor('#111827').font('Helvetica').fontSize(8).text(`Polo ativo: ${proc.polo_ativo.substring(0, 60)}`, 58, y + 42);
+        y += 62;
       });
+    } else {
+      doc.rect(50, y, 495, 28).fill('#dcfce7');
+      doc.fillColor('#14532d').fontSize(10).font('Helvetica').text('Nenhum processo encontrado nas bases consultadas.', 58, y + 8);
+      y += 36;
     }
 
     if (processos.link_jusbrasil) {
-      doc.fillColor(COR.azul_claro).fontSize(7).font('Helvetica').text(`Verificar tambem: ${processos.link_jusbrasil}`, MARGEM, y);
-      y += 12;
+      doc.fillColor(COR.azul_claro).fontSize(9).font('Helvetica').text(`Verificar tambem no JusBrasil: ${processos.link_jusbrasil}`, 50, y);
+      y += 18;
     }
-    y += 6;
+    if (processos.nota) {
+      doc.fillColor(COR.cinza).fontSize(8).font('Helvetica').text(`${processos.nota}`, 50, y); y += 14;
+    }
+    y += 8;
 
-    // ════════════════════════════════════════════
-    // LISTAS NEGRAS FEDERAIS
-    // ════════════════════════════════════════════
-    if (transparencia && transparencia.em_lista_negra !== undefined) {
-      y = verificarPagina(doc, y, 40);
+    // ── PORTAL DA TRANSPARÊNCIA / LISTAS NEGRAS ──
+    if (transparencia && (transparencia.em_lista_negra !== undefined)) {
+      y = verificarPagina(doc, y, 80);
       y = secao(doc, 'LISTAS NEGRAS FEDERAIS (CGU)', y);
       if (transparencia.em_lista_negra) {
-        doc.rect(MARGEM, y, LARGURA, 22).fill('#fee2e2');
-        doc.fillColor(COR.vermelho).fontSize(9).font('Helvetica-Bold').text('CONSTA EM LISTA NEGRA FEDERAL', MARGEM + 8, y + 5);
-        y += 28;
+        doc.rect(50, y, 495, 28).fill('#fee2e2');
+        doc.fillColor(COR.vermelho).fontSize(11).font('Helvetica-Bold').text('CONSTA EM LISTA NEGRA FEDERAL', 58, y + 8);
+        y += 36;
         const todos = [...(transparencia.ceis || []), ...(transparencia.cnep || [])];
         todos.forEach(r => {
-          y = verificarPagina(doc, y, 18);
-          doc.fillColor(COR.vermelho).fontSize(7).font('Helvetica-Bold').text(`${r.tipo}: ${r.sancao}`, MARGEM + 6, y);
-          doc.fillColor(COR.cinza).font('Helvetica').text(`Orgao: ${r.orgao}`, MARGEM + 6, y + 9);
-          y += 20;
+          y = verificarPagina(doc, y, 40);
+          doc.rect(50, y, 495, 34).fill('#fff5f5').stroke(COR.borda);
+          doc.fillColor(COR.vermelho).fontSize(9).font('Helvetica-Bold').text(r.tipo, 58, y + 5);
+          doc.fillColor('#111827').font('Helvetica').text(`Orgao: ${r.orgao}  |  Sancao: ${r.sancao}`, 58, y + 18);
+          y += 38;
         });
+      } else if (transparencia.disponivel === false) {
+        doc.fillColor(COR.cinza).fontSize(9).font('Helvetica').text(`${transparencia.nota || 'Nao configurado.'}`, 50, y); y += 18;
       } else {
-        doc.rect(MARGEM, y, LARGURA, 22).fill('#dcfce7');
-        doc.fillColor('#14532d').fontSize(9).font('Helvetica').text('Nao consta em lista negra federal (CEIS/CNEP)', MARGEM + 8, y + 5);
-        y += 28;
+        doc.rect(50, y, 495, 24).fill('#dcfce7');
+        doc.fillColor('#14532d').fontSize(10).font('Helvetica').text('Nao consta em nenhuma lista negra federal (CEIS/CNEP).', 58, y + 6);
+        y += 30;
       }
+      y += 8;
     } else if (pedido.alvo_tipo === 'PJ') {
       y = verificarPagina(doc, y, 40);
       y = secao(doc, 'LISTAS NEGRAS FEDERAIS (CGU)', y);
@@ -272,46 +259,56 @@ function gerarDossie(pedido, dadosDB) {
       y += 30;
     }
 
-    // ════════════════════════════════════════════
-    // SERASA / NEGATIVAÇÕES
-    // ════════════════════════════════════════════
-    y = verificarPagina(doc, y, 40);
-    y = secao(doc, 'RESTRICOES FINANCEIRAS', y);
+    // ── SERASA ──
+    y = verificarPagina(doc, y, 60);
+    y = secao(doc, 'SERASA / PROTESTOS / NEGATIVACOES', y);
     if (serasa?.disponivel === false) {
-      doc.rect(MARGEM, y, LARGURA, 20).fill('#f3f4f6');
-      doc.fillColor(COR.cinza).fontSize(8).font('Helvetica').text(serasa.nota || 'Consulta Serasa requer contrato empresarial.', MARGEM + 8, y + 5);
-      y += 24;
+      doc.fillColor(COR.cinza).fontSize(9).font('Helvetica').text(serasa.nota || 'Consulta manual necessaria.', 50, y); y += 14;
+      if (serasa.instrucao) { doc.fillColor(COR.azul_claro).text(`-> ${serasa.instrucao}`, 50, y); y += 14; }
     }
+    y += 10;
 
-    // ════════════════════════════════════════════
-    // CHECKLIST DO ANALISTA (compacto)
-    // ════════════════════════════════════════════
+    // ── CHECKLIST DO ANALISTA ──
     if (checklist.length > 0) {
-      y = verificarPagina(doc, y, 50);
-      y = secao(doc, 'VERIFICACOES COMPLEMENTARES', y);
+      y = verificarPagina(doc, y, 100);
+      y = secao(doc, 'CHECKLIST — VERIFICACOES COMPLEMENTARES', y);
+      doc.fillColor(COR.cinza).fontSize(8).font('Helvetica').text('Itens a serem verificados manualmente pelo analista para complementar este relatorio:', 50, y); y += 14;
       checklist.forEach(c => {
-        y = verificarPagina(doc, y, 14);
-        const prefixo = c.obrigatorio ? '[OBRIG.]' : '[Opc.]';
+        y = verificarPagina(doc, y, 30);
         const cor_item = c.obrigatorio ? COR.vermelho : COR.cinza;
-        const textoCompleto = `${prefixo} ${c.item}${c.link ? ' — ' + c.link : ''}`;
-        doc.fillColor(cor_item).fontSize(6.5).font('Helvetica').text(textoCompleto, MARGEM, y, { width: LARGURA });
-        y += 11;
+        const prefixo = c.obrigatorio ? 'OBRIGATORIO' : 'Opcional';
+        doc.fillColor(cor_item).fontSize(8).font('Helvetica-Bold').text(prefixo, 50, y);
+        doc.fillColor('#111827').font('Helvetica').text(c.item, 130, y);
+        if (c.link) { doc.fillColor(COR.azul_claro).text(c.link, 130, y + 10, { width: 400 }); y += 10; }
+        y += 18;
       });
-      y += 6;
+      y += 8;
     }
 
-    // ════════════════════════════════════════════
-    // PARECER DO ANALISTA
-    // ════════════════════════════════════════════
+    // ── OBSERVAÇÕES DO ANALISTA ──
     if (pedido.observacoes) {
-      y = verificarPagina(doc, y, 50);
+      y = verificarPagina(doc, y, 80);
       y = secao(doc, 'PARECER DO ANALISTA', y);
-      doc.rect(MARGEM, y, LARGURA, 3).fill(COR.azul); y += 8;
-      doc.fillColor('#111827').fontSize(9).font('Helvetica').text(pedido.observacoes, MARGEM, y, { width: LARGURA });
-      y += doc.heightOfString(pedido.observacoes, { width: LARGURA }) + 10;
+      doc.rect(50, y, 495, 4).fill(COR.azul);
+      y += 10;
+      doc.fillColor('#111827').fontSize(10).font('Helvetica').text(pedido.observacoes, 50, y, { width: 495 });
+      y += doc.heightOfString(pedido.observacoes, { width: 495 }) + 16;
     }
 
-    // Rodapé na última página
+    // ── DADOS DO PRODUTO (o que está incluso) ──
+    if (produto.dados_entregues) {
+      y = verificarPagina(doc, y, 80);
+      y = secao(doc, 'O QUE ESTA INCLUSO NESTE PRODUTO', y);
+      produto.dados_entregues.forEach(secItem => {
+        y = verificarPagina(doc, y, 40);
+        doc.fillColor(COR.azul).fontSize(9).font('Helvetica-Bold').text(`> ${secItem.secao}`, 50, y); y += 14;
+        doc.fillColor(COR.cinza).font('Helvetica').fontSize(8)
+          .text(secItem.campos.join('  |  '), 58, y, { width: 480 });
+        y += doc.heightOfString(secItem.campos.join('  |  '), { width: 480 }) + 10;
+      });
+    }
+
+    // ── RODAPÉ ──
     rodape(doc);
 
     doc.end();
@@ -326,37 +323,38 @@ function gerarDossie(pedido, dadosDB) {
 
 // ── HELPERS ──
 function secao(doc, titulo, y) {
-  doc.moveTo(MARGEM, y).lineTo(MARGEM + LARGURA, y).strokeColor(COR.azul_claro).lineWidth(1).stroke();
-  y += 4;
-  doc.fillColor(COR.azul).fontSize(10).font('Helvetica-Bold').text(titulo, MARGEM, y);
+  doc.fillColor('#1a3a5c').fontSize(11).font('Helvetica-Bold').text(titulo, 50, y);
   y += 16;
-  return y;
+  doc.moveTo(50, y).lineTo(545, y).strokeColor('#2563eb').lineWidth(1.5).stroke();
+  return y + 10;
 }
 
 function linha(doc, label, valor, y) {
-  doc.font('Helvetica-Bold').fontSize(8).fillColor(COR.cinza).text(label + ':', MARGEM, y, { width: 120 });
-  doc.font('Helvetica').fillColor('#111827').text(valor || '-', MARGEM + 125, y, { width: LARGURA - 125 });
+  doc.font('Helvetica-Bold').fontSize(9).fillColor('#6b7280').text(label + ':', 50, y, { width: 140 });
+  doc.font('Helvetica').fillColor('#111827').text(valor || 'Nao informado', 195, y, { width: 350 });
 }
 
 function avisoSemDados(doc, y, msg) {
-  doc.rect(MARGEM, y, LARGURA, 22).fill('#fef3c7');
-  doc.fillColor('#92400e').fontSize(8).font('Helvetica').text(msg, MARGEM + 8, y + 5, { width: LARGURA - 16 });
+  doc.rect(50, y, 495, 22).fill('#fef3c7');
+  doc.fillColor('#92400e').fontSize(8).font('Helvetica').text(msg, 58, y + 5, { width: 480 });
 }
 
 function rodape(doc) {
   const altPag = doc.page.height;
-  doc.rect(0, altPag - RODAPE_ALTURA, 595, RODAPE_ALTURA).fill('#f3f4f6');
-  doc.fillColor(COR.cinza).fontSize(6.5).font('Helvetica')
-    .text('Documento informativo gerado pelo sistema Rastreia. Nao substitui consulta juridica especializada.', MARGEM, altPag - 48, { align: 'center', width: LARGURA })
-    .text('Recobro Recuperacao de Credito  |  Anapolis - GO', MARGEM, altPag - 34, { align: 'center', width: LARGURA });
+  doc.rect(0, altPag - 70, 595, 70).fill('#f3f4f6');
+  doc.fillColor('#6b7280').fontSize(7.5).font('Helvetica')
+    .text('Este documento possui carater informativo e foi gerado automaticamente pelo sistema Rastreia com base em fontes publicas oficiais.', 50, altPag - 60, { align: 'center', width: 495 })
+    .text('As informacoes sao obtidas de fontes como Receita Federal, Datajud CNJ, Escavador, Direct Data e Portal da Transparencia.', 50, altPag - 48, { align: 'center', width: 495 })
+    .text('Este relatorio nao substitui consulta juridica especializada. Decisoes comerciais sao de exclusiva responsabilidade do contratante.', 50, altPag - 36, { align: 'center', width: 495 })
+    .text('Recobro Recuperacao de Credito  |  Anapolis - GO', 50, altPag - 20, { align: 'center', width: 495 });
 }
 
 function verificarPagina(doc, y, espacoNecessario) {
   const espaco = espacoNecessario || 20;
-  if (y + espaco > doc.page.height - RODAPE_ALTURA - 20) {
+  if (y + espaco > doc.page.height - 90) {
     rodape(doc);
     doc.addPage();
-    return MARGEM;
+    return 50;
   }
   return y;
 }

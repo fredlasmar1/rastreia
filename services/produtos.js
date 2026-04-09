@@ -1,23 +1,17 @@
 /**
  * RASTREIA — Definição dos Produtos
- * 
+ *
  * Para cada produto: o que entrega, para quem, por que compra,
  * quais dados são críticos, e como calcular o score de risco.
  */
 
 const PRODUTOS = {
 
-  // ─────────────────────────────────────────────────────────
-  // DOSSIÊ PF — R$ 197 | Entrega em 2h
-  // "Saiba com quem você está negociando antes de assinar"
-  // ─────────────────────────────────────────────────────────
   dossie_pf: {
     nome: 'Dossiê Pessoa Física',
     preco: 197,
     prazo_horas: 2,
     icone: '👤',
-
-    // Para quem vender:
     publico_alvo: [
       'Empresário que vai vender a prazo para pessoa física',
       'Proprietário que vai alugar imóvel para inquilino',
@@ -25,11 +19,7 @@ const PRODUTOS = {
       'Quem vai firmar sociedade com pessoa física',
       'Quem vai emprestar dinheiro para alguém',
     ],
-
-    // Argumento de venda:
     argumento: 'Antes de assinar qualquer contrato com uma pessoa física, você precisa saber: ela tem processos como réu? Está com nome sujo? Existe patrimônio que garanta a dívida? Em 2 horas você tem a resposta.',
-
-    // Dados que o relatório entrega:
     dados_entregues: [
       { secao: 'IDENTIFICAÇÃO', campos: ['Nome completo', 'CPF', 'Data de nascimento', 'Idade', 'Sexo', 'Nome da mãe', 'Nome do pai', 'Situação cadastral na Receita Federal', 'Flag de óbito'] },
       { secao: 'CONTATOS E LOCALIZAÇÃO', campos: ['Endereços (até 3 mais recentes)', 'Telefones com operadora e flag WhatsApp', 'Emails cadastrados', 'CEP e bairro'] },
@@ -39,8 +29,6 @@ const PRODUTOS = {
       { secao: 'LISTAS NEGRAS', campos: ['CEIS - Lista de inidôneos federais', 'CNEP - Empresas punidas (se tiver PJ vinculada)'] },
       { secao: 'SCORE E PARECER', campos: ['Score de risco (0-100)', 'Classificação: BAIXO / MÉDIO / ALTO / CRÍTICO', 'Recomendação do analista', 'Pontos de atenção'] },
     ],
-
-    // Campos críticos para o score
     fatores_score: [
       { fator: 'processos_como_reu', peso: 30 },
       { fator: 'execucoes_ativas', peso: 25 },
@@ -50,16 +38,11 @@ const PRODUTOS = {
     ],
   },
 
-  // ─────────────────────────────────────────────────────────
-  // DOSSIÊ PJ — R$ 397 | Entrega em 2h
-  // "Saiba com quem sua empresa está negociando"
-  // ─────────────────────────────────────────────────────────
   dossie_pj: {
     nome: 'Dossiê Pessoa Jurídica',
     preco: 397,
     prazo_horas: 2,
     icone: '🏢',
-
     publico_alvo: [
       'Empresa que vai vender a prazo para outra empresa',
       'Fornecedor que vai conceder crédito a cliente PJ',
@@ -67,9 +50,7 @@ const PRODUTOS = {
       'Empresa que vai firmar parceria ou representação comercial',
       'Quem vai aceitar cheque ou boleto de empresa desconhecida',
     ],
-
     argumento: 'Empresa com CNPJ ativo não significa empresa saudável. Antes de vender fiado ou assinar contrato, descubra: a empresa tem dívidas trabalhistas, execuções fiscais, sócios problemáticos? Em 2 horas você sabe.',
-
     dados_entregues: [
       { secao: 'IDENTIFICAÇÃO EMPRESARIAL', campos: ['Razão social e nome fantasia', 'CNPJ formatado', 'Data de abertura', 'Tempo de existência', 'Porte (ME, EPP, Grande)', 'Natureza jurídica', 'Capital social', 'Situação cadastral na RF'] },
       { secao: 'ATIVIDADE E LOCALIZAÇÃO', campos: ['Atividade principal (CNAE)', 'Atividades secundárias', 'Endereço completo com CEP', 'Telefones e email cadastrados', 'Filiais (quantidade)'] },
@@ -80,7 +61,6 @@ const PRODUTOS = {
       { secao: 'LISTAS NEGRAS FEDERAIS', campos: ['CEIS - Empresa inidônea ou suspensa', 'CNEP - Empresa punida com multa', 'Tipo de sanção e órgão sancionador', 'Período da sanção'] },
       { secao: 'SCORE E PARECER', campos: ['Score de risco empresarial (0-100)', 'Classificação: BAIXO / MÉDIO / ALTO / CRÍTICO', 'Recomendação: liberar crédito / exigir garantias / não negociar', 'Pontos de atenção'] },
     ],
-
     fatores_score: [
       { fator: 'situacao_rf', peso: 25 },
       { fator: 'processos_trabalhistas', peso: 20 },
@@ -90,16 +70,11 @@ const PRODUTOS = {
     ],
   },
 
-  // ─────────────────────────────────────────────────────────
-  // DUE DILIGENCE EMPRESARIAL — R$ 997 | Entrega em 24h
-  // "Antes de comprar, investir ou virar sócio"
-  // ─────────────────────────────────────────────────────────
   due_diligence: {
     nome: 'Due Diligence Empresarial',
     preco: 997,
     prazo_horas: 24,
     icone: '🔎',
-
     publico_alvo: [
       'Quem vai comprar uma empresa ou ponto comercial',
       'Investidor que vai aportar capital numa empresa',
@@ -108,9 +83,7 @@ const PRODUTOS = {
       'Advogado que precisa de due diligence para cliente',
       'Banco ou fundo que vai conceder crédito empresarial alto',
     ],
-
     argumento: 'Comprar uma empresa sem due diligence é assinar um cheque em branco. Passivos trabalhistas ocultos, sócios com histórico criminal, dívidas fiscais não declaradas — você herda tudo. Em 24h entregamos um laudo completo para sua decisão.',
-
     dados_entregues: [
       { secao: 'IDENTIFICAÇÃO COMPLETA', campos: ['Todos os dados do Dossiê PJ', 'Histórico completo de alterações no CNPJ', 'Razões sociais anteriores', 'Histórico de endereços'] },
       { secao: 'ANÁLISE DOS SÓCIOS', campos: ['Dossiê PF de cada sócio atual', 'Histórico de sócios anteriores', 'Outras empresas vinculadas a cada sócio', 'Processos individuais dos sócios como réu', 'Situação financeira pessoal estimada dos sócios'] },
@@ -121,7 +94,6 @@ const PRODUTOS = {
       { secao: 'ANÁLISE DE RISCO CONSOLIDADA', campos: ['Score de risco 0-100', 'Risco trabalhista (baixo/médio/alto)', 'Risco fiscal (baixo/médio/alto)', 'Risco societário (baixo/médio/alto)', 'Risco judicial (baixo/médio/alto)'] },
       { secao: 'PARECER TÉCNICO FINAL', campos: ['Resumo executivo', 'Pontos críticos identificados', 'Cláusulas contratuais recomendadas (representações e garantias)', 'Recomendação: PROSSEGUIR / PROSSEGUIR COM RESSALVAS / NÃO PROSSEGUIR', 'Sugestão de ajuste no preço baseado nos riscos identificados'] },
     ],
-
     fatores_score: [
       { fator: 'passivo_trabalhista', peso: 25 },
       { fator: 'divida_fiscal', peso: 25 },
@@ -131,16 +103,11 @@ const PRODUTOS = {
     ],
   },
 
-  // ─────────────────────────────────────────────────────────
-  // ANÁLISE DE DEVEDOR — R$ 250 | Entrega em 2h
-  // "Vale a pena cobrar? Descubra antes de gastar com advogado"
-  // ─────────────────────────────────────────────────────────
   analise_devedor: {
     nome: 'Análise de Devedor',
     preco: 250,
     prazo_horas: 2,
     icone: '⚖️',
-
     publico_alvo: [
       'Empresa com cliente inadimplente que não sabe se vale cobrar',
       'Escritório de advocacia antes de aceitar causa de êxito',
@@ -148,9 +115,7 @@ const PRODUTOS = {
       'Clínica médica, escola, loja com devedores antigos',
       'Recobro analisando viabilidade de carteira',
     ],
-
     argumento: 'Antes de gastar com advogado, cartório e processo, descubra se o devedor tem patrimônio para pagar. Cobrar devedor "laranja" é jogar dinheiro fora. Em 2h você sabe se vale a pena ir atrás.',
-
     dados_entregues: [
       { secao: 'IDENTIFICAÇÃO DO DEVEDOR', campos: ['Nome/Razão Social', 'CPF/CNPJ', 'Endereços atuais (para citação)', 'Telefones ativos (para contato de cobrança)', 'Emails'] },
       { secao: 'SITUAÇÃO PATRIMONIAL', campos: ['Imóveis identificados (quando disponível)', 'Veículos registrados (quando disponível)', 'Empresas abertas em nome do devedor', 'Participação societária em outras empresas', 'Estimativa de patrimônio'] },
@@ -159,7 +124,6 @@ const PRODUTOS = {
       { secao: 'ESTRATÉGIA DE COBRANÇA RECOMENDADA', campos: ['Abordagem recomendada: amigável / judicial / mista', 'Bens sugeridos para penhora', 'Probabilidade de recebimento: ALTA / MÉDIA / BAIXA / IRRECUPERÁVEL', 'Prazo estimado para recuperação'] },
       { secao: 'SCORE DE RECUPERABILIDADE', campos: ['Score 0-100', 'Classificação: RECUPERÁVEL / PARCIALMENTE RECUPERÁVEL / IRRECUPERÁVEL', 'Recomendação: COBRAR / NEGOCIAR DESCONTO / BAIXAR'] },
     ],
-
     fatores_score: [
       { fator: 'patrimonio_identificado', peso: 40 },
       { fator: 'renda_estimada', peso: 25 },
@@ -168,16 +132,11 @@ const PRODUTOS = {
     ],
   },
 
-  // ─────────────────────────────────────────────────────────
-  // INVESTIGAÇÃO PATRIMONIAL — R$ 497 | Entrega em 4h
-  // "Localize os bens antes de entrar com a execução"
-  // ─────────────────────────────────────────────────────────
   investigacao_patrimonial: {
     nome: 'Investigação Patrimonial',
     preco: 497,
     prazo_horas: 4,
     icone: '🏦',
-
     publico_alvo: [
       'Advogado com título judicial para executar',
       'Credor com sentença favorável mas devedor "sem bens"',
@@ -185,9 +144,7 @@ const PRODUTOS = {
       'Escritório de advocacia para instrução de execução',
       'Quem suspeita que devedor ocultou patrimônio',
     ],
-
     argumento: 'Ganhar a ação é só metade do caminho. Se não localizar os bens, não recebe. Mapeamos imóveis, veículos, empresas e participações societárias do devedor — tudo para você entrar na execução com alvo certo.',
-
     dados_entregues: [
       { secao: 'IDENTIFICAÇÃO E LOCALIZAÇÃO ATUAL', campos: ['Dados completos do investigado', 'Todos os endereços identificados', 'Telefones para localização', 'CPF/CNPJ de todos os vínculos'] },
       { secao: 'IMÓVEIS E BENS RAÍZES', campos: ['Imóveis registrados em nome próprio', 'Imóveis em nome de empresas vinculadas', 'Participação em condomínios', 'Matrícula e cartório de registro (quando disponível)', 'Estimativa de valor de mercado'] },
@@ -198,7 +155,6 @@ const PRODUTOS = {
       { secao: 'ESTRATÉGIA DE EXECUÇÃO', campos: ['Bens recomendados para penhora (ordem de preferência)', 'Estimativa do valor total localizável', 'Alertas de possível fraude à execução', 'Recomendação: penhora de imóvel / veículo / conta / quota societária'] },
       { secao: 'CONCLUSÃO', campos: ['Patrimônio total estimado localizado', 'Viabilidade da execução: VIÁVEL / PARCIALMENTE VIÁVEL / INVIÁVEL', 'Próximos passos recomendados'] },
     ],
-
     fatores_score: [
       { fator: 'imoveis_encontrados', peso: 35 },
       { fator: 'veiculos_encontrados', peso: 25 },
@@ -213,6 +169,7 @@ const PRODUTOS = {
 // ─────────────────────────────────────────────────────────
 
 function calcularScore(tipo, dados) {
+  if (!dados) dados = {};
   const alertas = [];
 
   const processos = dados.processos || {};
@@ -226,7 +183,7 @@ function calcularScore(tipo, dados) {
 
   if (fontesConsultadas === 0) {
     alertas.push('Nenhuma fonte de dados retornou informações — score não calculado');
-    alertas.push('Verifique se as APIs estão configuradas (CPFCNPJ_API_KEY, DIRECTD_TOKEN, ESCAVADOR_API_KEY)');
+    alertas.push('Verifique se as APIs estão configuradas (DIRECTD_TOKEN, ESCAVADOR_API_KEY)');
     return {
       score: '-',
       classificacao: 'INDISPONÍVEL',
@@ -259,7 +216,7 @@ function calcularScore(tipo, dados) {
   // Penalidade por lista negra federal
   if (transparencia.em_lista_negra) {
     score -= 40;
-    alertas.push('CRÍTICO: Empresa/Pessoa consta em lista negra federal (CEIS/CNEP)');
+    alertas.push('CRITICO: Empresa/Pessoa consta em lista negra federal (CEIS/CNEP)');
   }
 
   // Penalidade por situação irregular na RF
@@ -272,7 +229,7 @@ function calcularScore(tipo, dados) {
   // Penalidade por óbito (PF)
   if (cadastral.obito === true) {
     score -= 50;
-    alertas.push('CRÍTICO: Registro de óbito encontrado para este CPF');
+    alertas.push('CRITICO: Registro de óbito encontrado para este CPF');
   }
 
   // Bônus por empresa antiga (PJ)
@@ -308,7 +265,6 @@ function calcularScore(tipo, dados) {
 
 // ─────────────────────────────────────────────────────────
 // GERADOR DE CHECKLIST POR PRODUTO
-// Entrega ao operador o que ainda precisa verificar manualmente
 // ─────────────────────────────────────────────────────────
 
 function gerarChecklist(tipo, dadosAutomaticos) {

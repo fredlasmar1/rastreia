@@ -46,55 +46,10 @@ async function consultarCNPJ(cnpj) {
       consultado_em: new Date().toISOString()
     };
   } catch (e) {
-    return await consultarCNPJviaCpfCnpj(doc);
-  }
-}
-
-// Fallback 1: CPF.CNPJ (pacote 6 — dados completos com sócios, tempo real)
-async function consultarCNPJviaCpfCnpj(doc) {
-  if (!process.env.CPFCNPJ_API_KEY) return await consultarCNPJFallback(doc);
-  try {
-    const res = await axios.get(
-      `https://api.cpfcnpj.com.br/${process.env.CPFCNPJ_API_KEY}/6/${doc}`,
-      { timeout: 60000 }
-    );
-    const d = res.data;
-    if (d.status === 0) return await consultarCNPJFallback(doc);
-    const addr = d.matrizEndereco || {};
-    const sit = (d.situacao || [])[0] || {};
-    const nat = (d.naturezaJuridica || [])[0] || {};
-    const cnae = (d.cnae || [])[0] || {};
-    const porte = (d.porte || [])[0] || {};
-    const simples = (d.simplesNacional || [])[0] || {};
-    return {
-      cnpj: doc,
-      cnpj_formatado: d.cnpj || formatarCNPJ(doc),
-      razao_social: d.razao || '',
-      nome_fantasia: d.fantasia || '',
-      situacao: sit.nome || '',
-      data_abertura: d.inicioAtividade || '',
-      porte: porte.descricao || '',
-      natureza_juridica: nat.descricao || '',
-      capital_social: 0,
-      atividade_principal: cnae.descricao || '',
-      simples_nacional: simples.optante === 'Sim' ? 'Optante' : 'Não optante',
-      endereco: addr.logradouro ? `${addr.tipo || ''} ${addr.logradouro}, ${addr.numero || 'S/N'} ${addr.complemento || ''} - ${addr.bairro || ''}, ${addr.cidade || ''} / ${addr.uf || ''} - CEP: ${addr.cep || ''}` : 'Não informado',
-      email: d.email || '',
-      telefone: (d.telefones || [])[0] ? `(${d.telefones[0].ddd}) ${d.telefones[0].numero}` : '',
-      socios: (d.socios || []).map(s => ({
-        nome: s.nome || '',
-        qualificacao: s.qualificacao_socio?.descricao || '',
-        desde: s.data_entrada || ''
-      })),
-      fonte: 'Receita Federal via CPF.CNPJ',
-      consultado_em: new Date().toISOString()
-    };
-  } catch (e) {
     return await consultarCNPJFallback(doc);
   }
 }
 
-// Fallback 2: CNPJ.ws (gratuito)
 async function consultarCNPJFallback(doc) {
   try {
     const res = await axios.get(`https://publica.cnpj.ws/cnpj/${doc}`, { timeout: 10000 });
@@ -124,123 +79,67 @@ async function consultarCNPJFallback(doc) {
 }
 
 // ─────────────────────────────────────────────
-// 2. CPF — Direct Data com fallback CPF.CNPJ
-// Direct Data: https://app.directd.com.br (R$50 grátis)
-// CPF.CNPJ: https://www.cpfcnpj.com.br (R$0,53/consulta)
-// Env: DIRECTD_TOKEN, CPFCNPJ_API_KEY
+// 2. CPF — Direct Data
+// Cadastro em: https://app.directd.com.br (R$50 grátis)
+// Env: DIRECTD_TOKEN
 // ─────────────────────────────────────────────
 
 async function consultarCPF(cpf) {
   const doc = limparDoc(cpf);
-  console.log(`[CPF] Iniciando consulta. DIRECTD_TOKEN: ${!!process.env.DIRECTD_TOKEN}, CPFCNPJ_API_KEY: ${!!process.env.CPFCNPJ_API_KEY}`);
-  if (process.env.DIRECTD_TOKEN) {
-    try {
-      console.log(`[Direct Data] Consultando CPF ${doc.substring(0,3)}***`);
-      const res = await axios.get('https://apiv3.directd.com.br/api/CadastroPessoaFisicaPlus', {
-        params: { Cpf: doc, Token: process.env.DIRECTD_TOKEN },
-        timeout: 15000
-      });
-      console.log(`[Direct Data] Resposta: status=${res.status}, retorno=${!!res.data?.retorno}`);
-      const r = res.data?.retorno || {};
-      return {
-        cpf: doc,
-        cpf_formatado: formatarCPF(doc),
-        nome: r.nome || '',
-        sexo: r.sexo || '',
-        data_nascimento: r.dataNascimento || '',
-        idade: r.idade || null,
-        nome_mae: r.nomeMae || '',
-        nome_pai: r.nomePai || '',
-        situacao_rf: r.situacaoCadastral || '',
-        obito: r.possuiObito || false,
-        classe_social: r.classeSocial || '',
-        renda_estimada: r.rendaEstimada || '',
-        faixa_salarial: r.rendaFaixaSalarial || '',
-        telefones: (r.telefones || []).slice(0, 5).map(t => ({
-          numero: t.telefoneComDDD || '',
-          tipo: t.tipoTelefone || '',
-          operadora: t.operadora || '',
-          whatsapp: t.whatsApp || false
-        })),
-        enderecos: (r.enderecos || []).slice(0, 3).map(e => ({
-          logradouro: e.logradouro || '',
-          numero: e.numero || '',
-          bairro: e.bairro || '',
-          cidade: e.cidade || '',
-          uf: e.uf || '',
-          cep: e.cep || ''
-        })),
-        emails: (r.emails || []).slice(0, 3).map(e => e.enderecoEmail || e),
-        fonte: 'Direct Data',
-        consultado_em: new Date().toISOString()
-      };
-    } catch (e) {
-      console.error(`[Direct Data] Erro: ${e.response?.status} - ${JSON.stringify(e.response?.data) || e.message}`);
-      // Direct Data falhou, tenta fallback CPF.CNPJ
-      const fallback = await consultarCPFviaCpfCnpj(doc);
-      if (!fallback.erro) return fallback;
-    }
-  }
-  // Sem Direct Data ou falhou — tenta CPF.CNPJ
-  return await consultarCPFviaCpfCnpj(doc);
-}
-
-async function consultarCPFviaCpfCnpj(doc) {
-  if (!process.env.CPFCNPJ_API_KEY) {
+  if (!process.env.DIRECTD_TOKEN) {
     return {
       cpf: doc,
       cpf_formatado: formatarCPF(doc),
-      aviso: 'Nenhuma API de CPF configurada.',
-      instrucao: 'Configure DIRECTD_TOKEN ou CPFCNPJ_API_KEY no .env',
+      aviso: 'Direct Data não configurada.',
+      instrucao: 'Criar conta em https://app.directd.com.br (R$50 grátis para testar)',
       fonte: 'Não configurada',
       consultado_em: new Date().toISOString()
     };
   }
   try {
-    console.log(`[CPF.CNPJ] Consultando CPF ${doc.substring(0,3)}***`);
-    const res = await axios.get(
-      `https://api.cpfcnpj.com.br/${process.env.CPFCNPJ_API_KEY}/9/${doc}`,
-      { timeout: 60000 }
-    );
-    const d = res.data;
-    console.log(`[CPF.CNPJ] Resposta status=${d.status}, keys=${Object.keys(d).join(',')}`);
-    if (d.status === 0) {
-      return { cpf: doc, cpf_formatado: formatarCPF(doc), erro: d.mensagem || 'CPF não encontrado', fonte: 'CPF.CNPJ' };
-    }
-    return {
-      cpf: doc,
-      cpf_formatado: d.cpf || formatarCPF(doc),
-      nome: d.nome || '',
-      sexo: d.genero === 'M' ? 'Masculino' : d.genero === 'F' ? 'Feminino' : d.genero || '',
-      data_nascimento: d.nascimento || '',
-      nome_mae: d.mae || '',
-      situacao_rf: d.situacao || '',
-      telefones: (d.telefones || []).slice(0, 5).map(t => ({
-        numero: t.ddd ? `(${t.ddd}) ${t.numero}` : t.numero || '',
-        tipo: '',
-        operadora: '',
-        whatsapp: false
-      })),
-      enderecos: d.endereco ? [{
-        logradouro: d.endereco || '',
-        numero: d.numero || '',
-        bairro: d.bairro || '',
-        cidade: d.cidade || '',
-        uf: d.uf || '',
-        cep: d.cep || ''
-      }] : [],
-      emails: (d.emails || []).slice(0, 3),
-      fonte: 'Receita Federal via CPF.CNPJ',
-      consultado_em: new Date().toISOString()
-    };
-  } catch (e) {
-    console.error(`[CPF.CNPJ] Erro: ${e.response?.status} - ${JSON.stringify(e.response?.data) || e.message}`);
+    const res = await axios.get('https://apiv3.directd.com.br/api/CadastroPessoaFisicaPlus', {
+      params: { Cpf: doc, Token: process.env.DIRECTD_TOKEN },
+      timeout: 15000
+    });
+    const r = res.data?.retorno || {};
     return {
       cpf: doc,
       cpf_formatado: formatarCPF(doc),
-      erro: 'Falha na consulta CPF.CNPJ',
-      detalhes: e.response?.data?.mensagem || e.response?.data?.message || e.message,
-      fonte: 'CPF.CNPJ',
+      nome: r.nome || '',
+      sexo: r.sexo || '',
+      data_nascimento: r.dataNascimento || '',
+      idade: r.idade || null,
+      nome_mae: r.nomeMae || '',
+      nome_pai: r.nomePai || '',
+      situacao_rf: r.situacaoCadastral || '',
+      obito: r.possuiObito || false,
+      classe_social: r.classeSocial || '',
+      renda_estimada: r.rendaEstimada || '',
+      faixa_salarial: r.rendaFaixaSalarial || '',
+      telefones: (r.telefones || []).slice(0, 5).map(t => ({
+        numero: t.telefoneComDDD || '',
+        tipo: t.tipoTelefone || '',
+        operadora: t.operadora || '',
+        whatsapp: t.whatsApp || false
+      })),
+      enderecos: (r.enderecos || []).slice(0, 3).map(e => ({
+        logradouro: e.logradouro || '',
+        numero: e.numero || '',
+        bairro: e.bairro || '',
+        cidade: e.cidade || '',
+        uf: e.uf || '',
+        cep: e.cep || ''
+      })),
+      emails: (r.emails || []).slice(0, 3).map(e => e.enderecoEmail || e),
+      fonte: 'Direct Data',
+      consultado_em: new Date().toISOString()
+    };
+  } catch (e) {
+    return {
+      cpf: doc,
+      cpf_formatado: formatarCPF(doc),
+      erro: 'Falha na consulta Direct Data',
+      detalhes: e.response?.data?.mensagem || e.message,
       consultado_em: new Date().toISOString()
     };
   }
@@ -294,9 +193,10 @@ async function consultarEscavador(doc, tipo, nome) {
 }
 
 async function consultarDatajud(doc, tipo, nome) {
-  // API pública e gratuita do CNJ — cobre todos os tribunais do Brasil
-  // Chave pública (rate limit generoso para uso B2B)
-  const API_KEY = process.env.DATAJUD_API_KEY || 'cDZHYzlZa0JadVREZDJCendFbzFmbkdqclY0OHFKcFk=';
+  const API_KEY = process.env.DATAJUD_API_KEY;
+  if (!API_KEY) {
+    return { total: 0, processos: [], link_jusbrasil: gerarLinkJusBrasil(nome, doc), fonte: 'Datajud CNJ', nota: 'Configure DATAJUD_API_KEY para consultar processos via Datajud.', consultado_em: new Date().toISOString() };
+  }
   const headers = { Authorization: `ApiKey ${API_KEY}`, 'Content-Type': 'application/json' };
 
   const query = {
@@ -359,8 +259,6 @@ async function consultarDatajud(doc, tipo, nome) {
 
 // ─────────────────────────────────────────────
 // 4. PORTAL DA TRANSPARÊNCIA — gratuito
-// Token gratuito: https://portaldatransparencia.gov.br/api-de-dados/cadastrar-email
-// Env: TRANSPARENCIA_TOKEN
 // ─────────────────────────────────────────────
 
 async function consultarTransparencia(documento, nome) {
@@ -451,9 +349,7 @@ async function executarConsultaCompleta(pedido) {
 
 module.exports = {
   consultarCNPJ,
-  consultarCNPJviaCpfCnpj,
   consultarCPF,
-  consultarCPFviaCpfCnpj,
   consultarProcessos,
   consultarEscavador,
   consultarDatajud,

@@ -58,6 +58,8 @@
   const usuario = JSON.parse(localStorage.getItem('rastreia_usuario') || '{}');
   document.getElementById('nav-user').textContent = usuario.nome || '';
 
+  function esc(str) { const d = document.createElement('div'); d.textContent = str; return d.innerHTML; }
+
   const TIPOS = {
     dossie_pf: 'Dossiê PF', dossie_pj: 'Dossiê PJ',
     due_diligence: 'Due Diligence', analise_devedor: 'Análise Devedor',
@@ -115,15 +117,15 @@
         <tbody>
           ${data.pedidos.map(p => `
             <tr>
-              <td><strong>#${p.numero}</strong></td>
-              <td>${TIPOS[p.tipo] || p.tipo}</td>
-              <td>${p.alvo_nome}</td>
-              <td><code>${p.alvo_documento}</code></td>
-              <td>${p.cliente_nome}</td>
+              <td><strong>#${esc(String(p.numero))}</strong></td>
+              <td>${TIPOS[p.tipo] || esc(p.tipo)}</td>
+              <td>${esc(p.alvo_nome)}</td>
+              <td><code>${esc(p.alvo_documento)}</code></td>
+              <td>${esc(p.cliente_nome)}</td>
               <td><strong>R$ ${Number(p.valor).toLocaleString('pt-BR')}</strong></td>
-              <td><span class="badge ${BADGES[p.status] || ''}">${STATUS_LABEL[p.status] || p.status}</span></td>
+              <td><span class="badge ${BADGES[p.status] || ''}">${STATUS_LABEL[p.status] || esc(p.status)}</span></td>
               <td>${new Date(p.criado_em).toLocaleDateString('pt-BR')}</td>
-              <td><a href="/pedido.html?id=${p.id}" class="btn btn-sm btn-outline">Abrir</a></td>
+              <td><a href="/pedido.html?id=${encodeURIComponent(p.id)}" class="btn btn-sm btn-outline">Abrir</a></td>
             </tr>
           `).join('')}
         </tbody>

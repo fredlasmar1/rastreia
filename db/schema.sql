@@ -20,32 +20,32 @@ CREATE TABLE IF NOT EXISTS pedidos (
   numero SERIAL,
   tipo VARCHAR(100) NOT NULL, -- dossie_pf, dossie_pj, due_diligence, analise_devedor, investigacao_patrimonial
   status VARCHAR(50) DEFAULT 'aguardando', -- aguardando_pagamento, pago, em_andamento, concluido, cancelado
-  
+
   -- Dados do solicitante
   cliente_nome VARCHAR(255) NOT NULL,
   cliente_email VARCHAR(255),
   cliente_whatsapp VARCHAR(20),
-  
+
   -- Alvo da consulta
   alvo_nome VARCHAR(255) NOT NULL,
   alvo_documento VARCHAR(20) NOT NULL, -- CPF ou CNPJ
   alvo_tipo VARCHAR(10) NOT NULL, -- PF ou PJ
-  
+
   -- Financeiro
   valor DECIMAL(10,2) NOT NULL,
   mp_payment_id VARCHAR(100),
   pago_em TIMESTAMP,
-  
+
   -- Operação
   operador_id UUID REFERENCES usuarios(id),
   iniciado_em TIMESTAMP,
   concluido_em TIMESTAMP,
   prazo_entrega TIMESTAMP,
-  
+
   -- Resultado
   relatorio_url TEXT,
   observacoes TEXT,
-  
+
   criado_em TIMESTAMP DEFAULT NOW(),
   atualizado_em TIMESTAMP DEFAULT NOW()
 );
@@ -77,7 +77,7 @@ CREATE TABLE IF NOT EXISTS configuracoes (
 );
 
 -- Preços dos produtos
-INSERT INTO configuracoes VALUES 
+INSERT INTO configuracoes VALUES
   ('preco_dossie_pf', '197', NOW()),
   ('preco_dossie_pj', '397', NOW()),
   ('preco_due_diligence', '997', NOW()),
@@ -89,16 +89,12 @@ INSERT INTO configuracoes VALUES
   ('email_operador', '', NOW())
 ON CONFLICT (chave) DO NOTHING;
 
--- Admin padrão (senha: rastreia2024 - TROCAR NO PRIMEIRO ACESSO)
-INSERT INTO usuarios (nome, email, senha_hash, perfil) VALUES (
-  'Administrador',
-  'admin@recobro.com.br',
-  '$2a$10$zfhKv9KGXg2jyfwX1w8dkeE2tjjTuPm0WklVSVa2F0vWzAVjDcuaW',
-  'admin'
-) ON CONFLICT (email) DO NOTHING;
+-- Admin padrão é criado via variáveis de ambiente (ADMIN_EMAIL, ADMIN_SENHA)
+-- NÃO incluir senhas hardcoded em arquivos versionados
 
 -- Índices de performance
 CREATE INDEX IF NOT EXISTS idx_pedidos_status ON pedidos(status);
 CREATE INDEX IF NOT EXISTS idx_pedidos_criado ON pedidos(criado_em DESC);
 CREATE INDEX IF NOT EXISTS idx_pedidos_documento ON pedidos(alvo_documento);
+CREATE INDEX IF NOT EXISTS idx_pedidos_mp ON pedidos(mp_payment_id);
 CREATE INDEX IF NOT EXISTS idx_dados_pedido ON dados_consulta(pedido_id);

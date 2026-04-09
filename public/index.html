@@ -53,8 +53,9 @@
     }
   }
 
+  function esc(str) { const d = document.createElement('div'); d.textContent = str; return d.innerHTML; }
   function alerta(msg, tipo) {
-    document.getElementById('alerta').innerHTML = `<div class="alert alert-${tipo === 'error' ? 'error' : 'success'}" style="margin-bottom:16px">${msg}</div>`;
+    document.getElementById('alerta').innerHTML = `<div class="alert alert-${tipo === 'error' ? 'error' : 'success'}" style="margin-bottom:16px">${esc(msg)}</div>`;
   }
 </script>
 </body>
