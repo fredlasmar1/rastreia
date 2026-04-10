@@ -90,11 +90,55 @@ INSERT INTO configuracoes VALUES
 ON CONFLICT (chave) DO NOTHING;
 
 -- Admin padrão é criado via variáveis de ambiente (ADMIN_EMAIL, ADMIN_SENHA)
--- NÃO incluir senhas hardcoded em arquivos versionados
+
+-- ─────────────────────────────────────────────
+-- COLUNAS NOVAS — Mercado Pago, LGPD, Imobiliário, Portal Público
+-- ─────────────────────────────────────────────
+
+-- Mercado Pago (P1)
+ALTER TABLE pedidos ADD COLUMN IF NOT EXISTS mp_preference_id VARCHAR(255);
+ALTER TABLE pedidos ADD COLUMN IF NOT EXISTS mp_init_point TEXT;
+
+-- LGPD (P2)
+ALTER TABLE pedidos ADD COLUMN IF NOT EXISTS finalidade VARCHAR(100);
+ALTER TABLE pedidos ADD COLUMN IF NOT EXISTS ip_solicitante VARCHAR(50);
+ALTER TABLE pedidos ADD COLUMN IF NOT EXISTS aceite_termos BOOLEAN DEFAULT false;
+
+-- Due Diligence Imobiliária (P3)
+ALTER TABLE pedidos ADD COLUMN IF NOT EXISTS alvo2_nome VARCHAR(255);
+ALTER TABLE pedidos ADD COLUMN IF NOT EXISTS alvo2_documento VARCHAR(20);
+ALTER TABLE pedidos ADD COLUMN IF NOT EXISTS alvo2_tipo VARCHAR(10) DEFAULT 'PF';
+ALTER TABLE pedidos ADD COLUMN IF NOT EXISTS imovel_matricula VARCHAR(100);
+ALTER TABLE pedidos ADD COLUMN IF NOT EXISTS imovel_endereco TEXT;
+ALTER TABLE pedidos ADD COLUMN IF NOT EXISTS imovel_estado VARCHAR(2) DEFAULT 'GO';
+
+-- Portal público do cliente (P5)
+ALTER TABLE pedidos ADD COLUMN IF NOT EXISTS token_publico VARCHAR(64) UNIQUE;
+
+-- Tabela de assinaturas (P4)
+CREATE TABLE IF NOT EXISTS assinaturas (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  cliente_nome VARCHAR(255) NOT NULL,
+  cliente_cnpj VARCHAR(20),
+  cliente_email VARCHAR(255),
+  cliente_whatsapp VARCHAR(20),
+  nicho VARCHAR(100),
+  plano VARCHAR(50) NOT NULL,
+  valor_mensal DECIMAL(10,2) NOT NULL,
+  consultas_inclusas INT DEFAULT 0,
+  consultas_utilizadas INT DEFAULT 0,
+  ativo BOOLEAN DEFAULT true,
+  mp_subscription_id VARCHAR(255),
+  renovacao_em DATE,
+  criado_em TIMESTAMP DEFAULT NOW(),
+  atualizado_em TIMESTAMP DEFAULT NOW()
+);
 
 -- Índices de performance
 CREATE INDEX IF NOT EXISTS idx_pedidos_status ON pedidos(status);
 CREATE INDEX IF NOT EXISTS idx_pedidos_criado ON pedidos(criado_em DESC);
 CREATE INDEX IF NOT EXISTS idx_pedidos_documento ON pedidos(alvo_documento);
 CREATE INDEX IF NOT EXISTS idx_pedidos_mp ON pedidos(mp_payment_id);
+CREATE INDEX IF NOT EXISTS idx_pedidos_token ON pedidos(token_publico);
 CREATE INDEX IF NOT EXISTS idx_dados_pedido ON dados_consulta(pedido_id);
+CREATE INDEX IF NOT EXISTS idx_assinaturas_ativo ON assinaturas(ativo);

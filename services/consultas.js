@@ -319,7 +319,115 @@ async function consultarSerasa(documento) {
 }
 
 // ─────────────────────────────────────────────
-// 6. LINK JUSBRASIL (consulta manual)
+// 6. ONR — RI Digital (matrícula de imóveis)
+// Docs: integracao.registrodeimoveis.org.br
+// ─────────────────────────────────────────────
+
+async function consultarONR(cpf, estado = 'GO') {
+  if (!process.env.ONR_API_KEY) {
+    return {
+      disponivel: false,
+      nota: 'ONR RI Digital não configurado. Consulta manual em: registradores.onr.org.br',
+      link: 'https://registradores.onr.org.br',
+      fonte: 'ONR RI Digital'
+    };
+  }
+  try {
+    const res = await axios.get('https://integracao.registrodeimoveis.org.br/api/v1/imoveis/buscar', {
+      params: { cpf: limparDoc(cpf), estado },
+      headers: { Authorization: `Bearer ${process.env.ONR_API_KEY}` },
+      timeout: 20000
+    });
+    const imoveis = res.data?.imoveis || [];
+    return {
+      total: imoveis.length,
+      imoveis: imoveis.slice(0, 20).map(i => ({
+        matricula: i.matricula || '',
+        cartorio: i.cartorio || '',
+        endereco: i.endereco || '',
+        tipo: i.tipo || '',
+        valor_estimado: i.valor_estimado || null,
+        proprietarios: i.proprietarios || [],
+        onus: i.onus || []
+      })),
+      fonte: 'ONR RI Digital',
+      consultado_em: new Date().toISOString()
+    };
+  } catch (e) {
+    return { disponivel: false, erro: 'ONR indisponível', detalhes: e.response?.data?.message || e.message, fonte: 'ONR RI Digital' };
+  }
+}
+
+async function consultarMatricula(matricula, estado = 'GO') {
+  if (!process.env.ONR_API_KEY) {
+    return {
+      disponivel: false,
+      nota: 'ONR RI Digital não configurado.',
+      link: 'https://registradores.onr.org.br',
+      matricula,
+      fonte: 'ONR RI Digital'
+    };
+  }
+  try {
+    const res = await axios.get('https://integracao.registrodeimoveis.org.br/api/v1/matricula', {
+      params: { numero: matricula, estado },
+      headers: { Authorization: `Bearer ${process.env.ONR_API_KEY}` },
+      timeout: 20000
+    });
+    return {
+      ...res.data,
+      fonte: 'ONR RI Digital',
+      consultado_em: new Date().toISOString()
+    };
+  } catch (e) {
+    return { disponivel: false, erro: 'Matrícula não encontrada', detalhes: e.message, matricula, fonte: 'ONR RI Digital' };
+  }
+}
+
+// ─────────────────────────────────────────────
+// 7. VEÍCULOS — Infosimples (DETRAN-GO)
+// Docs: infosimples.com
+// ─────────────────────────────────────────────
+
+async function consultarVeiculos(cpf) {
+  if (!process.env.INFOSIMPLES_TOKEN) {
+    return {
+      disponivel: false,
+      nota: 'Infosimples não configurado. Consulta manual em: detran.go.gov.br',
+      link: 'https://www.detran.go.gov.br',
+      fonte: 'Infosimples DETRAN-GO'
+    };
+  }
+  try {
+    const res = await axios.post('https://api.infosimples.com/api/v2/consultas/detran/go/veiculos', {
+      cpf: limparDoc(cpf),
+      token: process.env.INFOSIMPLES_TOKEN,
+      timeout: 600
+    }, { timeout: 30000 });
+    const data = res.data?.data?.[0] || {};
+    const veiculos = data.veiculos || [];
+    return {
+      total: veiculos.length,
+      veiculos: veiculos.slice(0, 20).map(v => ({
+        placa: v.placa || '',
+        modelo: v.modelo || '',
+        marca: v.marca || '',
+        ano: v.ano || '',
+        chassi: v.chassi || '',
+        cor: v.cor || '',
+        situacao: v.situacao || '',
+        restricoes: v.restricoes || []
+      })),
+      fonte: 'Infosimples DETRAN-GO',
+      consultado_em: new Date().toISOString()
+    };
+  } catch (e) {
+    return { disponivel: false, erro: 'Infosimples indisponível', detalhes: e.response?.data?.message || e.message, fonte: 'Infosimples DETRAN-GO' };
+  }
+}
+
+// ─────────────────────────────────────────────
+// 8. LINK JUSBRASIL (consulta manual)
 // ─────────────────────────────────────────────
 
 function gerarLinkJusBrasil(nome, documento) {
@@ -332,18 +440,53 @@ function gerarLinkJusBrasil(nome, documento) {
 // ─────────────────────────────────────────────
 
 async function executarConsultaCompleta(pedido) {
-  const { alvo_documento, alvo_tipo, alvo_nome } = pedido;
-  const [cadastral, processos, transparencia, serasa] = await Promise.all([
+  const { alvo_documento, alvo_tipo, alvo_nome, tipo } = pedido;
+
+  // Consultas comuns a todos os produtos
+  const promises = [
     alvo_tipo === 'PJ' ? consultarCNPJ(alvo_documento) : consultarCPF(alvo_documento),
     consultarProcessos(alvo_documento, alvo_tipo, alvo_nome),
     alvo_tipo === 'PJ' ? consultarTransparencia(alvo_documento, alvo_nome) : Promise.resolve(null),
     consultarSerasa(alvo_documento)
-  ]);
+  ];
+
+  // Consultas extras para Investigação Patrimonial e Due Diligence Imobiliária
+  const precisaImoveis = ['investigacao_patrimonial', 'due_diligence_imobiliaria'].includes(tipo);
+  const precisaVeiculos = ['investigacao_patrimonial', 'due_diligence_imobiliaria'].includes(tipo);
+
+  if (precisaImoveis) promises.push(consultarONR(alvo_documento, 'GO'));
+  if (precisaVeiculos) promises.push(consultarVeiculos(alvo_documento));
+
+  const resultados = await Promise.all(promises);
+  const [cadastral, processos, transparencia, serasa] = resultados;
+  let idx = 4;
+  const imoveis = precisaImoveis ? resultados[idx++] : null;
+  const veiculos = precisaVeiculos ? resultados[idx++] : null;
+
+  // Para Due Diligence Imobiliária: consultar também o segundo alvo (vendedor) e a matrícula
+  let cadastral2 = null, processos2 = null, matricula = null;
+  if (tipo === 'due_diligence_imobiliaria' && pedido.alvo2_documento) {
+    const [c2, p2] = await Promise.all([
+      pedido.alvo2_tipo === 'PJ' ? consultarCNPJ(pedido.alvo2_documento) : consultarCPF(pedido.alvo2_documento),
+      consultarProcessos(pedido.alvo2_documento, pedido.alvo2_tipo, pedido.alvo2_nome)
+    ]);
+    cadastral2 = c2;
+    processos2 = p2;
+  }
+  if (tipo === 'due_diligence_imobiliaria' && pedido.imovel_matricula) {
+    matricula = await consultarMatricula(pedido.imovel_matricula, pedido.imovel_estado || 'GO');
+  }
+
   return {
     receita_federal: cadastral,
     processos,
     ...(transparencia ? { transparencia } : {}),
-    serasa
+    serasa,
+    ...(imoveis ? { imoveis } : {}),
+    ...(veiculos ? { veiculos } : {}),
+    ...(cadastral2 ? { receita_federal_2: cadastral2 } : {}),
+    ...(processos2 ? { processos_2: processos2 } : {}),
+    ...(matricula ? { matricula } : {})
   };
 }
 
@@ -355,6 +498,9 @@ module.exports = {
   consultarDatajud,
   consultarTransparencia,
   consultarSerasa,
+  consultarONR,
+  consultarMatricula,
+  consultarVeiculos,
   gerarLinkJusBrasil,
   executarConsultaCompleta
 };

@@ -36,24 +36,37 @@ app.get('/api/health', (req, res) => res.json({ status: 'ok' }));
 // Rotas API
 app.use('/api/auth', require('./routes/auth'));
 app.use('/api/pedidos', require('./routes/pedidos'));
+app.use('/api/assinaturas', require('./routes/assinaturas'));
 
 // Webhook Mercado Pago
-app.post('/webhook/mp', express.raw({ type: 'application/json' }), async (req, res) => {
+app.post('/webhook/mp', express.json(), async (req, res) => {
   try {
-    const body = JSON.parse(req.body.toString());
+    const body = req.body;
     if (body.type === 'payment' && body.data?.id) {
+      const { consultarPagamento } = require('./services/mercadopago');
+      const { notificarOperadorNovoPedido } = require('./services/whatsapp');
       const { pool } = require('./db');
-      const mpId = String(body.data.id);
-      await pool.query(
-        `UPDATE pedidos SET status = 'pago', pago_em = NOW(), mp_payment_id = $1, atualizado_em = NOW()
-         WHERE mp_payment_id = $1 OR (status = 'aguardando_pagamento' AND id::text = $2)`,
-        [mpId, body.data.external_reference || '']
-      );
+
+      const pagamento = await consultarPagamento(body.data.id);
+      if (pagamento && pagamento.status === 'approved') {
+        const pedidoId = pagamento.external_reference;
+        const update = await pool.query(
+          `UPDATE pedidos SET status = 'pago', pago_em = NOW(), mp_payment_id = $1, atualizado_em = NOW()
+           WHERE id = $2 AND status = 'aguardando_pagamento'
+           RETURNING *`,
+          [String(body.data.id), pedidoId]
+        );
+        if (update.rows[0]) {
+          await pool.query('INSERT INTO logs (pedido_id, acao) VALUES ($1, $2)',
+            [pedidoId, 'Pagamento confirmado via webhook MP']);
+          await notificarOperadorNovoPedido(update.rows[0]);
+        }
+      }
     }
-    res.sendStatus(200);
+    res.sendStatus(200); // sempre 200 para o MP não retentar
   } catch (e) {
-    console.error('Webhook MP erro:', e);
-    res.sendStatus(500);
+    console.error('Webhook MP erro:', e.message);
+    res.sendStatus(200);
   }
 });
 

@@ -80,7 +80,8 @@
 
       <!-- AÇÕES -->
       <div class="acoes-bar">
-        ${p.status === 'aguardando_pagamento' ? `<button class="btn btn-success" onclick="marcarPago()">✅ Confirmar Pagamento</button>` : ''}
+        ${p.status === 'aguardando_pagamento' && p.mp_init_point ? `<a href="${esc(p.mp_init_point)}" target="_blank" class="btn btn-success">💳 Pagar Agora — R$ ${Number(p.valor).toLocaleString('pt-BR', {minimumFractionDigits:2})}</a>` : ''}
+        ${p.status === 'aguardando_pagamento' ? `<button class="btn btn-outline" onclick="marcarPago()">✅ Confirmar Pagamento Manual</button>` : ''}
         ${p.status === 'pago' ? `<button class="btn btn-primary" onclick="iniciar()">▶ Iniciar Análise</button>` : ''}
         ${p.status === 'em_andamento' ? `
           <button class="btn btn-warning" onclick="executarConsultas()" id="btn-consultar">🔍 Executar Consultas Automáticas</button>

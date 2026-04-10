@@ -3,3 +3,6 @@ node_modules/
 *.log
 dist/
 .DS_Store
+rastreia2/
+rastreia 3/
+public/relatorios/

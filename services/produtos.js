@@ -132,6 +132,34 @@ const PRODUTOS = {
     ],
   },
 
+  due_diligence_imobiliaria: {
+    nome: 'Due Diligence Imobiliária',
+    preco: 997,
+    prazo_horas: 24,
+    icone: '🏠',
+    alvos_multiplos: true,
+    publico_alvo: [
+      'Comprador de imóvel antes de assinar contrato',
+      'Imobiliária que intermedia vendas',
+      'Advogado que faz contrato de compra e venda',
+      'Quem vai financiar imóvel',
+      'Quem vai investir em imóvel comercial',
+    ],
+    argumento: 'Antes de assinar o contrato de compra e venda, descubra: o comprador tem crédito? O vendedor tem penhora no imóvel? O imóvel está com a matrícula limpa? Em 24h entregamos análise completa dos 3 elementos da transação.',
+    dados_entregues: [
+      { secao: 'COMPRADOR', campos: ['Dossiê PF completo', 'Score de crédito', 'Processos como réu', 'Capacidade de pagamento estimada', 'Endereços e telefones'] },
+      { secao: 'VENDEDOR', campos: ['Dossiê PF completo', 'Processos de execução ativos', 'Penhoras registradas', 'Situação fiscal', 'Outros imóveis vinculados'] },
+      { secao: 'IMÓVEL', campos: ['Situação da matrícula no cartório', 'Ônus e gravames (hipoteca, alienação fiduciária)', 'Histórico de transferências', 'Pesquisa de bens vinculados ao CPF do vendedor'] },
+      { secao: 'PARECER FINAL', campos: ['Recomendação: PROSSEGUIR / COM RESSALVAS / NÃO PROSSEGUIR', 'Cláusulas contratuais sugeridas', 'Documentos a exigir antes da assinatura'] },
+    ],
+    fatores_score: [
+      { fator: 'matricula_limpa', peso: 35 },
+      { fator: 'capacidade_pagamento_comprador', peso: 25 },
+      { fator: 'execucoes_vendedor', peso: 25 },
+      { fator: 'historico_transferencias', peso: 15 },
+    ],
+  },
+
   investigacao_patrimonial: {
     nome: 'Investigação Patrimonial',
     preco: 497,

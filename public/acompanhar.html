@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Acompanhar Pedido — Rastreia</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: 'Inter', sans-serif; background: #f8fafc; color: #1e293b; min-height: 100vh; }
+    .header { background: #1a3a5c; color: white; padding: 32px 20px; text-align: center; }
+    .header h1 { font-size: 24px; font-weight: 700; }
+    .header p { opacity: 0.7; font-size: 13px; margin-top: 4px; }
+    .container { max-width: 600px; margin: 0 auto; padding: 32px 20px; }
+    .card { background: white; border-radius: 12px; padding: 28px; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
+    .protocolo { font-size: 12px; color: #6b7280; text-transform: uppercase; letter-spacing: 0.5px; }
+    .numero { font-size: 32px; font-weight: 800; color: #1a3a5c; margin: 4px 0 16px; }
+    .status { display: inline-block; padding: 8px 16px; border-radius: 20px; font-size: 13px; font-weight: 600; margin-bottom: 24px; }
+    .status-aguardando_pagamento { background: #fef3c7; color: #92400e; }
+    .status-pago { background: #dbeafe; color: #1e40af; }
+    .status-em_andamento { background: #e0e7ff; color: #4338ca; }
+    .status-concluido { background: #dcfce7; color: #14532d; }
+    .info { display: flex; justify-content: space-between; padding: 12px 0; border-bottom: 1px solid #f3f4f6; font-size: 14px; }
+    .info-label { color: #6b7280; }
+    .info-valor { color: #111827; font-weight: 500; }
+    .btn-pdf { display: block; margin-top: 24px; padding: 14px; background: #16a34a; color: white; text-align: center; border-radius: 8px; text-decoration: none; font-weight: 600; }
+    .erro { background: #fee2e2; color: #991b1b; padding: 16px; border-radius: 8px; text-align: center; }
+    .timeline { margin-top: 24px; }
+    .timeline-item { display: flex; gap: 12px; padding: 8px 0; }
+    .timeline-dot { width: 24px; height: 24px; border-radius: 50%; background: #e5e7eb; flex-shrink: 0; display: flex; align-items: center; justify-content: center; }
+    .timeline-dot.ativo { background: #16a34a; color: white; }
+    .timeline-text { font-size: 14px; color: #6b7280; padding-top: 2px; }
+    .timeline-text.ativo { color: #111827; font-weight: 600; }
+  </style>
+</head>
+<body>
+
+<div class="header">
+  <h1>🔍 RASTREIA</h1>
+  <p>Acompanhe o status do seu pedido</p>
+</div>
+
+<div class="container">
+  <div id="conteudo">
+    <div class="card"><p style="text-align:center;color:#6b7280">Carregando...</p></div>
+  </div>
+</div>
+
+<script>
+  const STATUS_LABEL = {
+    aguardando_pagamento: 'Aguardando Pagamento',
+    pago: 'Pago — Aguardando Início',
+    em_andamento: 'Em Andamento',
+    concluido: 'Concluído',
+    cancelado: 'Cancelado'
+  };
+
+  const TIPOS = {
+    dossie_pf: 'Dossiê Pessoa Física',
+    dossie_pj: 'Dossiê Pessoa Jurídica',
+    due_diligence: 'Due Diligence Empresarial',
+    due_diligence_imobiliaria: 'Due Diligence Imobiliária',
+    analise_devedor: 'Análise de Devedor',
+    investigacao_patrimonial: 'Investigação Patrimonial'
+  };
+
+  function esc(str) { if (!str) return ''; const d = document.createElement('div'); d.textContent = String(str); return d.innerHTML; }
+
+  async function carregar() {
+    const token = new URLSearchParams(window.location.search).get('token');
+    if (!token) {
+      document.getElementById('conteudo').innerHTML = '<div class="erro">Token de acesso inválido</div>';
+      return;
+    }
+    try {
+      const res = await fetch(`/api/pedidos/publico/${token}`);
+      if (!res.ok) {
+        document.getElementById('conteudo').innerHTML = '<div class="erro">Pedido não encontrado</div>';
+        return;
+      }
+      const p = await res.json();
+      const etapas = ['aguardando_pagamento', 'pago', 'em_andamento', 'concluido'];
+      const idxAtual = etapas.indexOf(p.status);
+
+      document.getElementById('conteudo').innerHTML = `
+        <div class="card">
+          <div class="protocolo">Protocolo</div>
+          <div class="numero">#${esc(String(p.numero))}</div>
+          <span class="status status-${esc(p.status)}">${esc(STATUS_LABEL[p.status] || p.status)}</span>
+
+          <div class="info"><span class="info-label">Tipo</span><span class="info-valor">${esc(TIPOS[p.tipo] || p.tipo)}</span></div>
+          <div class="info"><span class="info-label">Criado em</span><span class="info-valor">${new Date(p.criado_em).toLocaleString('pt-BR')}</span></div>
+          ${p.prazo_entrega ? `<div class="info"><span class="info-label">Prazo de entrega</span><span class="info-valor">${new Date(p.prazo_entrega).toLocaleString('pt-BR')}</span></div>` : ''}
+          ${p.concluido_em ? `<div class="info"><span class="info-label">Concluído em</span><span class="info-valor">${new Date(p.concluido_em).toLocaleString('pt-BR')}</span></div>` : ''}
+
+          <div class="timeline">
+            ${etapas.map((e, i) => `
+              <div class="timeline-item">
+                <div class="timeline-dot ${i <= idxAtual ? 'ativo' : ''}">${i <= idxAtual ? '✓' : ''}</div>
+                <div class="timeline-text ${i <= idxAtual ? 'ativo' : ''}">${esc(STATUS_LABEL[e])}</div>
+              </div>
+            `).join('')}
+          </div>
+
+          ${p.relatorio_url ? `<a href="${esc(p.relatorio_url)}" target="_blank" class="btn-pdf">📄 Baixar Relatório PDF</a>` : ''}
+        </div>
+        <p style="text-align:center;color:#6b7280;font-size:12px;margin-top:24px">Recobro Recuperação de Crédito — Anápolis/GO</p>
+      `;
+    } catch (e) {
+      document.getElementById('conteudo').innerHTML = '<div class="erro">Erro ao carregar pedido</div>';
+    }
+  }
+
+  carregar();
+</script>
+
+</body>
+</html>

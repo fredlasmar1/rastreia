@@ -39,6 +39,7 @@
   <!-- PASSO 2: Dados do Alvo -->
   <div class="pedido-section">
     <div class="section-title">2. Dados do Alvo da Consulta</div>
+    <div id="label-alvo1" style="font-size:12px;color:#6b7280;margin-bottom:8px;display:none">COMPRADOR</div>
     <div class="form-grid">
       <div class="form-group full">
         <label>Nome Completo / Razão Social *</label>
@@ -58,6 +59,50 @@
     </div>
   </div>
 
+  <!-- PASSO 2B: Segundo Alvo + Imóvel (apenas para Due Diligence Imobiliária) -->
+  <div class="pedido-section" id="secao-imobiliaria" style="display:none">
+    <div class="section-title">2B. Vendedor e Imóvel</div>
+    <div style="font-size:12px;color:#6b7280;margin-bottom:8px">VENDEDOR</div>
+    <div class="form-grid">
+      <div class="form-group full">
+        <label>Nome do Vendedor *</label>
+        <input type="text" id="alvo2_nome" placeholder="Nome do vendedor">
+      </div>
+      <div class="form-group">
+        <label>CPF/CNPJ do Vendedor *</label>
+        <input type="text" id="alvo2_documento" placeholder="000.000.000-00">
+      </div>
+      <div class="form-group">
+        <label>Tipo</label>
+        <select id="alvo2_tipo">
+          <option value="PF">Pessoa Física</option>
+          <option value="PJ">Pessoa Jurídica</option>
+        </select>
+      </div>
+    </div>
+    <div style="font-size:12px;color:#6b7280;margin:16px 0 8px">IMÓVEL</div>
+    <div class="form-grid">
+      <div class="form-group">
+        <label>Matrícula no Cartório *</label>
+        <input type="text" id="imovel_matricula" placeholder="Ex: 12345">
+      </div>
+      <div class="form-group">
+        <label>Estado do Cartório</label>
+        <select id="imovel_estado">
+          <option value="GO">GO</option>
+          <option value="SP">SP</option>
+          <option value="MG">MG</option>
+          <option value="DF">DF</option>
+          <option value="RJ">RJ</option>
+        </select>
+      </div>
+      <div class="form-group full">
+        <label>Endereço do Imóvel</label>
+        <input type="text" id="imovel_endereco" placeholder="Rua, número, bairro, cidade">
+      </div>
+    </div>
+  </div>
+
   <!-- PASSO 3: Dados do Cliente -->
   <div class="pedido-section">
     <div class="section-title">3. Dados de Quem Solicitou</div>
@@ -73,6 +118,26 @@
       <div class="form-group">
         <label>Email</label>
         <input type="email" id="cliente_email" placeholder="email@cliente.com">
+      </div>
+      <div class="form-group full">
+        <label>Finalidade da Consulta * <span style="color:#dc2626">(LGPD - obrigatório)</span></label>
+        <select id="finalidade" required>
+          <option value="">Selecione a finalidade</option>
+          <option value="analise_credito">Análise de crédito antes de contrato</option>
+          <option value="due_diligence_imobiliaria">Due diligence em transação imobiliária</option>
+          <option value="due_diligence_empresarial">Due diligence em aquisição/sociedade</option>
+          <option value="instrucao_processo">Instrução de processo judicial ou arbitral</option>
+          <option value="investigacao_patrimonial">Investigação patrimonial para execução</option>
+          <option value="verificacao_idoneidade">Verificação de idoneidade em negociação</option>
+          <option value="prevencao_fraude">Prevenção a fraude em concessão de crédito</option>
+        </select>
+      </div>
+      <div class="form-group full">
+        <label style="display:flex;align-items:center;gap:8px;font-size:13px;font-weight:normal;text-transform:none">
+          <input type="checkbox" id="aceite_termos" required>
+          Li e aceito os <a href="/termos.html" target="_blank">Termos de Uso</a> e a
+          <a href="/privacidade.html" target="_blank">Política de Privacidade</a>
+        </label>
       </div>
     </div>
   </div>
@@ -125,6 +190,11 @@
       argumento: 'Ganhar a ação é só metade do caminho. Se não localizar os bens, não recebe. Mapeamos imóveis, veículos, empresas e participações societárias para você entrar na execução com alvo certo.',
       dados: ['Imóveis registrados (próprios e via empresas vinculadas)', 'Veículos (DETRAN)', 'Todas as empresas abertas em nome do investigado', 'Participações societárias em outras empresas', 'Vínculos com interpostas pessoas (possíveis laranjas)', 'Execuções e penhoras já existentes', 'Estratégia de penhora recomendada (imóvel / veículo / quota / conta)', 'Estimativa de patrimônio localizável'],
       publico: ['Advogado com título judicial para executar', 'Credor com sentença favorável', 'Empresa que ganhou ação e quer receber', 'Quem suspeita que devedor ocultou patrimônio']
+    },
+    due_diligence_imobiliaria: { nome: 'Due Diligence Imobiliária', preco: 997, prazo: '24 horas', icone: '🏠',
+      argumento: 'Antes de assinar o contrato de compra e venda, descubra: o comprador tem crédito? O vendedor tem penhora no imóvel? O imóvel está com a matrícula limpa? Em 24h analisamos os 3 elementos da transação.',
+      dados: ['Dossiê PF do COMPRADOR (capacidade de pagamento, score)', 'Dossiê PF do VENDEDOR (execuções, penhoras, situação fiscal)', 'Matrícula do IMÓVEL (ônus, gravames, histórico)', 'Bens vinculados ao CPF do vendedor (ONR)', 'Veículos do vendedor (DETRAN)', 'Parecer técnico final: PROSSEGUIR / COM RESSALVAS / NÃO PROSSEGUIR', 'Cláusulas contratuais sugeridas'],
+      publico: ['Comprador antes de assinar contrato', 'Imobiliária intermediando vendas', 'Advogado fazendo contrato de compra e venda', 'Quem vai financiar imóvel', 'Investidor em imóvel comercial']
     }
   };
   const PRODUTOS_ORIG = {
@@ -159,9 +229,14 @@
     // Mostrar detalhe do produto
     document.getElementById('detalhe-nome').textContent = p.icone + ' ' + p.nome + ' — R$ ' + p.preco.toLocaleString('pt-BR');
     document.getElementById('detalhe-argumento').textContent = p.argumento;
-    document.getElementById('detalhe-dados').innerHTML = p.dados.map(d => '✓ ' + d).join('<br>');
-    document.getElementById('detalhe-publico').innerHTML = p.publico.map(d => '• ' + d).join('<br>');
+    document.getElementById('detalhe-dados').innerHTML = p.dados.map(d => '✓ ' + esc(d)).join('<br>');
+    document.getElementById('detalhe-publico').innerHTML = p.publico.map(d => '• ' + esc(d)).join('<br>');
     document.getElementById('produto-detalhe').style.display = 'block';
+
+    // Mostrar/ocultar seção imobiliária
+    const isImob = tipo === 'due_diligence_imobiliaria';
+    document.getElementById('secao-imobiliaria').style.display = isImob ? 'block' : 'none';
+    document.getElementById('label-alvo1').style.display = isImob ? 'block' : 'none';
 
     document.getElementById('r-produto').textContent = p.nome;
     document.getElementById('r-valor').textContent = 'R$ ' + p.preco.toLocaleString('pt-BR');
@@ -183,17 +258,36 @@
     const cliente_nome = document.getElementById('cliente_nome').value.trim();
     const cliente_whatsapp = document.getElementById('cliente_whatsapp').value.trim();
     const cliente_email = document.getElementById('cliente_email').value.trim();
+    const finalidade = document.getElementById('finalidade').value;
+    const aceite_termos = document.getElementById('aceite_termos').checked;
 
     if (!tipo) return alerta('Selecione um produto', 'error');
     if (!alvo_nome) return alerta('Informe o nome do alvo', 'error');
     if (!alvo_documento) return alerta('Informe o CPF ou CNPJ', 'error');
     if (!cliente_nome) return alerta('Informe o nome do cliente', 'error');
+    if (!finalidade) return alerta('Selecione a finalidade da consulta (LGPD)', 'error');
+    if (!aceite_termos) return alerta('Você precisa aceitar os Termos de Uso', 'error');
+
+    const payload = { tipo, alvo_nome, alvo_documento, alvo_tipo, cliente_nome, cliente_whatsapp, cliente_email, finalidade, aceite_termos };
+
+    // Campos de Due Diligence Imobiliária
+    if (tipo === 'due_diligence_imobiliaria') {
+      payload.alvo2_nome = document.getElementById('alvo2_nome').value.trim();
+      payload.alvo2_documento = document.getElementById('alvo2_documento').value.replace(/\D/g, '');
+      payload.alvo2_tipo = document.getElementById('alvo2_tipo').value;
+      payload.imovel_matricula = document.getElementById('imovel_matricula').value.trim();
+      payload.imovel_endereco = document.getElementById('imovel_endereco').value.trim();
+      payload.imovel_estado = document.getElementById('imovel_estado').value;
+      if (!payload.alvo2_nome || !payload.alvo2_documento || !payload.imovel_matricula) {
+        return alerta('Para Due Diligence Imobiliária: vendedor e matrícula são obrigatórios', 'error');
+      }
+    }
 
     try {
       const res = await fetch('/api/pedidos', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ tipo, alvo_nome, alvo_documento, alvo_tipo, cliente_nome, cliente_whatsapp, cliente_email })
+        body: JSON.stringify(payload)
       });
       const data = await res.json();
       if (!res.ok) return alerta(data.erro || 'Erro ao criar pedido', 'error');
