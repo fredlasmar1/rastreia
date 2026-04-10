@@ -66,7 +66,7 @@
     const dados = p.dados || [];
 
     const receitaFederal = dados.find(d => d.fonte === 'receita_federal')?.dados;
-    const escavador = dados.find(d => d.fonte === 'escavador')?.dados;
+    const processos = dados.find(d => d.fonte === 'processos')?.dados;
     const serasa = dados.find(d => d.fonte === 'serasa')?.dados;
 
     document.getElementById('conteudo').innerHTML = `
@@ -133,25 +133,25 @@
           `}
         </div>` : ''}
 
-      <!-- ESCAVADOR / PROCESSOS -->
-      ${escavador ? `
+      <!-- PROCESSOS JUDICIAIS -->
+      ${processos ? `
         <div class="pedido-section">
           <div class="section-title">⚖️ Processos Judiciais</div>
-          ${escavador.erro ? `
-            <div class="alert alert-info">${escavador.erro}</div>
-            ${escavador.link_jusbrasil ? `<a href="${escavador.link_jusbrasil}" target="_blank" class="btn btn-outline btn-sm">🔗 Verificar no JusBrasil</a>` : ''}
+          ${processos.erro ? `
+            <div class="alert alert-info">${esc(processos.erro)}</div>
+            ${processos.link_jusbrasil ? `<a href="${processos.link_jusbrasil}" target="_blank" class="btn btn-outline btn-sm">🔗 Verificar no JusBrasil</a>` : ''}
           ` : `
             <div style="margin-bottom:12px">
-              <strong style="font-size:20px;color:${escavador.total === 0 ? '#16a34a' : escavador.total < 5 ? '#ea580c' : '#dc2626'}">${escavador.total}</strong>
+              <strong style="font-size:20px;color:${processos.total === 0 ? '#16a34a' : processos.total < 5 ? '#ea580c' : '#dc2626'}">${processos.total}</strong>
               <span style="color:#6b7280;font-size:13px"> processos encontrados</span>
             </div>
-            ${escavador.processos?.map(proc => `
+            ${processos.processos?.map(proc => `
               <div style="background:#f9fafb;border-radius:8px;padding:12px;margin-bottom:8px;border-left:3px solid #2563eb">
                 <div style="font-weight:700;font-size:13px">${esc(proc.numero)}</div>
-                <div style="font-size:12px;color:#6b7280;margin-top:4px">${esc(proc.tribunal)} | ${esc(proc.tipo)} | ${esc(proc.ultima_movimentacao)}</div>
+                <div style="font-size:12px;color:#6b7280;margin-top:4px">${esc(proc.tribunal)} | ${esc(proc.classe || '')} | ${esc(proc.ultima_movimentacao)}</div>
                 <div style="font-size:12px;margin-top:2px">${esc(proc.assunto)}</div>
               </div>`).join('') || ''}
-            <a href="${escavador.link_jusbrasil || '#'}" target="_blank" class="btn btn-outline btn-sm" style="margin-top:8px">🔗 Ver no JusBrasil</a>
+            ${processos.link_jusbrasil ? `<a href="${processos.link_jusbrasil}" target="_blank" class="btn btn-outline btn-sm" style="margin-top:8px">🔗 Ver no JusBrasil</a>` : ''}
           `}
         </div>` : ''}
 

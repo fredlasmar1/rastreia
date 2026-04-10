@@ -48,7 +48,7 @@ function gerarDossie(pedido, dadosDB) {
     // ── CABEÇALHO ──
     doc.rect(0, 0, 595, 95).fill(COR.azul);
     doc.fillColor('#ffffff').fontSize(24).font('Helvetica-Bold').text('RASTREIA', 50, 22);
-    doc.fontSize(10).font('Helvetica').text('Sistema de Consultas e Dossiês | Recobro Recuperação de Crédito', 50, 52);
+    doc.fontSize(10).font('Helvetica').text('Sistema de Consultas e Dossies | Recobro Recuperacao de Credito', 50, 52);
     doc.fontSize(9).text(`Emitido em: ${new Date().toLocaleString('pt-BR')}   |   Protocolo: #${pedido.numero || pedido.id.substring(0,8).toUpperCase()}`, 50, 68);
 
     // ── TIPO DO RELATÓRIO ──
@@ -60,7 +60,7 @@ function gerarDossie(pedido, dadosDB) {
 
     // ── ALVO DA CONSULTA ──
     y = secao(doc, 'ALVO DA CONSULTA', y);
-    linha(doc, 'Nome / Razão Social', pedido.alvo_nome, y); y += 18;
+    linha(doc, 'Nome / Razao Social', pedido.alvo_nome, y); y += 18;
     linha(doc, 'CPF / CNPJ', pedido.alvo_documento, y); y += 18;
     linha(doc, 'Tipo', pedido.alvo_tipo === 'PF' ? 'Pessoa Fisica' : 'Pessoa Juridica', y); y += 18;
     linha(doc, 'Solicitante', pedido.cliente_nome, y); y += 18;
