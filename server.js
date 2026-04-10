@@ -33,6 +33,118 @@ app.use('/api/auth/login', rateLimit({ windowMs: 15 * 60 * 1000, max: 10, messag
 // Health check
 app.get('/api/health', (req, res) => res.json({ status: 'ok' }));
 
+// Health check das APIs externas — mostra quais estão configuradas
+app.get('/api/health/apis', (req, res) => {
+  res.json({
+    // Dados cadastrais
+    CNPJA_API_KEY: !!process.env.CNPJA_API_KEY,
+    DIRECTD_TOKEN: !!process.env.DIRECTD_TOKEN,
+    // Processos
+    ESCAVADOR_API_KEY: !!process.env.ESCAVADOR_API_KEY,
+    DATAJUD_API_KEY: !!(process.env.DATAJUD_API_KEY || process.env.DATAJUS_API_KEY),
+    // Listas negras
+    TRANSPARENCIA_TOKEN: !!process.env.TRANSPARENCIA_TOKEN,
+    // Imobiliário
+    ONR_API_KEY: !!process.env.ONR_API_KEY,
+    INFOSIMPLES: !!(process.env.INFOSIMPLES_TOKEN || process.env.INFOSIMPLES_CALLBACK_SECRET),
+    // Pagamentos
+    MERCADOPAGO: !!(process.env.MP_ACCESS_TOKEN || process.env.MERCADOPAGO_ACCESS_TOKEN),
+    // WhatsApp
+    EVOLUTION_API: !!process.env.EVOLUTION_API_KEY,
+    // Outros
+    SERASA_API_KEY: !!process.env.SERASA_API_KEY
+  });
+});
+
+// Teste real das APIs (admin) — faz uma chamada em cada API e retorna o status
+app.get('/api/health/apis/teste', async (req, res) => {
+  const axios = require('axios');
+  const results = {};
+
+  // Teste CNPJá
+  if (process.env.CNPJA_API_KEY) {
+    try {
+      const r = await axios.get('https://api.cnpja.com/office/00000000000191', {
+        headers: { Authorization: process.env.CNPJA_API_KEY },
+        timeout: 10000
+      });
+      results.CNPJA = { ok: true, status: r.status };
+    } catch (e) {
+      results.CNPJA = { ok: false, erro: e.response?.status || e.message };
+    }
+  } else results.CNPJA = { ok: false, erro: 'não configurado' };
+
+  // Teste Direct Data
+  if (process.env.DIRECTD_TOKEN) {
+    try {
+      const r = await axios.get('https://apiv3.directd.com.br/api/CadastroPessoaFisicaPlus', {
+        params: { Cpf: '11111111111', Token: process.env.DIRECTD_TOKEN },
+        timeout: 10000
+      });
+      results.DIRECTD = { ok: true, status: r.status };
+    } catch (e) {
+      results.DIRECTD = { ok: e.response?.status === 400, status: e.response?.status, erro: e.response?.data?.mensagem || e.message };
+    }
+  } else results.DIRECTD = { ok: false, erro: 'não configurado' };
+
+  // Teste Escavador
+  if (process.env.ESCAVADOR_API_KEY) {
+    try {
+      const r = await axios.get('https://api.escavador.com/api/v2/envolvido/processos?cpf_cnpj=00000000000191', {
+        headers: { Authorization: `Bearer ${process.env.ESCAVADOR_API_KEY}` },
+        timeout: 10000
+      });
+      results.ESCAVADOR = { ok: true, status: r.status };
+    } catch (e) {
+      results.ESCAVADOR = { ok: false, erro: e.response?.status || e.message };
+    }
+  } else results.ESCAVADOR = { ok: false, erro: 'não configurado' };
+
+  // Teste Datajud
+  const datajudKey = process.env.DATAJUD_API_KEY || process.env.DATAJUS_API_KEY;
+  if (datajudKey) {
+    try {
+      const r = await axios.post('https://api-publica.datajud.cnj.jus.br/api_publica_tjgo/_search',
+        { query: { match_all: {} }, size: 1 },
+        { headers: { Authorization: `ApiKey ${datajudKey}`, 'Content-Type': 'application/json' }, timeout: 10000 }
+      );
+      results.DATAJUD = { ok: true, status: r.status };
+    } catch (e) {
+      results.DATAJUD = { ok: false, erro: e.response?.status || e.message };
+    }
+  } else results.DATAJUD = { ok: false, erro: 'não configurado' };
+
+  // Teste Transparência
+  if (process.env.TRANSPARENCIA_TOKEN) {
+    try {
+      const r = await axios.get('https://api.portaldatransparencia.gov.br/api-de-dados/ceis', {
+        params: { pagina: 1 },
+        headers: { 'chave-api-dados': process.env.TRANSPARENCIA_TOKEN },
+        timeout: 10000
+      });
+      results.TRANSPARENCIA = { ok: true, status: r.status };
+    } catch (e) {
+      results.TRANSPARENCIA = { ok: false, erro: e.response?.status || e.message };
+    }
+  } else results.TRANSPARENCIA = { ok: false, erro: 'não configurado' };
+
+  // Teste Mercado Pago
+  const mpToken = process.env.MP_ACCESS_TOKEN || process.env.MERCADOPAGO_ACCESS_TOKEN;
+  if (mpToken) {
+    try {
+      const r = await axios.get('https://api.mercadopago.com/users/me', {
+        headers: { Authorization: `Bearer ${mpToken}` },
+        timeout: 10000
+      });
+      results.MERCADOPAGO = { ok: true, status: r.status, nickname: r.data.nickname };
+    } catch (e) {
+      results.MERCADOPAGO = { ok: false, erro: e.response?.status || e.message };
+    }
+  } else results.MERCADOPAGO = { ok: false, erro: 'não configurado' };
+
+  res.json(results);
+});
+
 // Rotas API
 app.use('/api/auth', require('./routes/auth'));
 app.use('/api/pedidos', require('./routes/pedidos'));
@@ -109,8 +221,18 @@ async function iniciar() {
   app.listen(PORT, () => {
     console.log(`🔍 RASTREIA rodando na porta ${PORT}`);
     console.log(`📊 Ambiente: ${process.env.NODE_ENV || 'development'}`);
-    const apis = ['DIRECTD_TOKEN', 'CPFCNPJ_API_KEY', 'CNPJA_API_KEY', 'ESCAVADOR_API_KEY', 'TRANSPARENCIA_TOKEN', 'DATAJUD_API_KEY'];
-    console.log(`📡 APIs: ${apis.map(k => `${k}=${!!process.env[k]}`).join(' | ')}`);
+    const statusAPIs = {
+      CNPJA: !!process.env.CNPJA_API_KEY,
+      DIRECTD: !!process.env.DIRECTD_TOKEN,
+      ESCAVADOR: !!process.env.ESCAVADOR_API_KEY,
+      DATAJUD: !!(process.env.DATAJUD_API_KEY || process.env.DATAJUS_API_KEY),
+      TRANSPARENCIA: !!process.env.TRANSPARENCIA_TOKEN,
+      ONR: !!process.env.ONR_API_KEY,
+      INFOSIMPLES: !!(process.env.INFOSIMPLES_TOKEN || process.env.INFOSIMPLES_CALLBACK_SECRET),
+      MERCADOPAGO: !!(process.env.MP_ACCESS_TOKEN || process.env.MERCADOPAGO_ACCESS_TOKEN),
+      EVOLUTION: !!process.env.EVOLUTION_API_KEY
+    };
+    console.log(`📡 APIs: ${Object.entries(statusAPIs).map(([k, v]) => `${k}=${v ? '✅' : '❌'}`).join(' | ')}`);
   });
 }
 

@@ -193,7 +193,7 @@ async function consultarEscavador(doc, tipo, nome) {
 }
 
 async function consultarDatajud(doc, tipo, nome) {
-  const API_KEY = process.env.DATAJUD_API_KEY;
+  const API_KEY = process.env.DATAJUD_API_KEY || process.env.DATAJUS_API_KEY;
   if (!API_KEY) {
     return { total: 0, processos: [], link_jusbrasil: gerarLinkJusBrasil(nome, doc), fonte: 'Datajud CNJ', nota: 'Configure DATAJUD_API_KEY para consultar processos via Datajud.', consultado_em: new Date().toISOString() };
   }
@@ -390,7 +390,8 @@ async function consultarMatricula(matricula, estado = 'GO') {
 // ─────────────────────────────────────────────
 
 async function consultarVeiculos(cpf) {
-  if (!process.env.INFOSIMPLES_TOKEN) {
+  const INFO_TOKEN = process.env.INFOSIMPLES_TOKEN || process.env.INFOSIMPLES_CALLBACK_SECRET;
+  if (!INFO_TOKEN) {
     return {
       disponivel: false,
       nota: 'Infosimples não configurado. Consulta manual em: detran.go.gov.br',
@@ -401,7 +402,7 @@ async function consultarVeiculos(cpf) {
   try {
     const res = await axios.post('https://api.infosimples.com/api/v2/consultas/detran/go/veiculos', {
       cpf: limparDoc(cpf),
-      token: process.env.INFOSIMPLES_TOKEN,
+      token: INFO_TOKEN,
       timeout: 600
     }, { timeout: 30000 });
     const data = res.data?.data?.[0] || {};

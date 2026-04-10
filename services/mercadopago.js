@@ -1,10 +1,11 @@
 const axios = require('axios');
 
 const MP_BASE = 'https://api.mercadopago.com';
+const MP_TOKEN = MP_TOKEN || process.env.MERCADOPAGO_ACCESS_TOKEN;
 
 async function criarPreferencia(pedido, nomeProduto) {
-  if (!process.env.MP_ACCESS_TOKEN) {
-    return { erro: 'MP_ACCESS_TOKEN não configurado' };
+  if (!MP_TOKEN) {
+    return { erro: 'MP_ACCESS_TOKEN / MERCADOPAGO_ACCESS_TOKEN não configurado' };
   }
   try {
     const baseUrl = process.env.BASE_URL || 'https://rastreia-production.up.railway.app';
@@ -29,7 +30,7 @@ async function criarPreferencia(pedido, nomeProduto) {
       },
       {
         headers: {
-          Authorization: `Bearer ${process.env.MP_ACCESS_TOKEN}`,
+          Authorization: `Bearer ${MP_TOKEN}`,
           'Content-Type': 'application/json'
         },
         timeout: 15000
@@ -46,12 +47,12 @@ async function criarPreferencia(pedido, nomeProduto) {
 }
 
 async function consultarPagamento(paymentId) {
-  if (!process.env.MP_ACCESS_TOKEN) return null;
+  if (!MP_TOKEN) return null;
   try {
     const res = await axios.get(
       `${MP_BASE}/v1/payments/${paymentId}`,
       {
-        headers: { Authorization: `Bearer ${process.env.MP_ACCESS_TOKEN}` },
+        headers: { Authorization: `Bearer ${MP_TOKEN}` },
         timeout: 10000
       }
     );
