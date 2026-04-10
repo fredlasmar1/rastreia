@@ -33,6 +33,28 @@ app.use('/api/auth/login', rateLimit({ windowMs: 15 * 60 * 1000, max: 10, messag
 // Health check
 app.get('/api/health', (req, res) => res.json({ status: 'ok' }));
 
+// Mostra os primeiros/últimos caracteres de cada key para verificar se foi copiada certo
+app.get('/api/health/apis/mask', (req, res) => {
+  const mask = (v) => {
+    if (!v) return null;
+    const s = String(v);
+    if (s.length < 10) return '***';
+    return `${s.substring(0, 4)}...${s.substring(s.length - 4)} (${s.length} chars)`;
+  };
+  res.json({
+    CNPJA_API_KEY: mask(process.env.CNPJA_API_KEY),
+    DIRECTD_TOKEN: mask(process.env.DIRECTD_TOKEN),
+    ESCAVADOR_API_KEY: mask(process.env.ESCAVADOR_API_KEY),
+    DATAJUD_API_KEY: mask(process.env.DATAJUD_API_KEY),
+    DATAJUS_API_KEY: mask(process.env.DATAJUS_API_KEY),
+    TRANSPARENCIA_TOKEN: mask(process.env.TRANSPARENCIA_TOKEN),
+    MP_ACCESS_TOKEN: mask(process.env.MP_ACCESS_TOKEN),
+    MERCADOPAGO_ACCESS_TOKEN: mask(process.env.MERCADOPAGO_ACCESS_TOKEN),
+    INFOSIMPLES_TOKEN: mask(process.env.INFOSIMPLES_TOKEN),
+    INFOSIMPLES_CALLBACK_SECRET: mask(process.env.INFOSIMPLES_CALLBACK_SECRET)
+  });
+});
+
 // Health check das APIs externas — mostra quais estão configuradas
 app.get('/api/health/apis', (req, res) => {
   res.json({
@@ -87,12 +109,12 @@ app.get('/api/health/apis/teste', async (req, res) => {
     }
   } else results.DIRECTD = { ok: false, erro: 'não configurado' };
 
-  // Teste Escavador
+  // Teste Escavador (usa endpoint /me que é rápido e só valida o token)
   if (process.env.ESCAVADOR_API_KEY) {
     try {
-      const r = await axios.get('https://api.escavador.com/api/v2/envolvido/processos?cpf_cnpj=00000000000191', {
+      const r = await axios.get('https://api.escavador.com/api/v2/usuario', {
         headers: { Authorization: `Bearer ${process.env.ESCAVADOR_API_KEY}` },
-        timeout: 10000
+        timeout: 30000
       });
       results.ESCAVADOR = { ok: true, status: r.status };
     } catch (e) {
