@@ -1,7 +1,7 @@
 const axios = require('axios');
 
 const MP_BASE = 'https://api.mercadopago.com';
-const MP_TOKEN = MP_TOKEN || process.env.MERCADOPAGO_ACCESS_TOKEN;
+const MP_TOKEN = process.env.MP_ACCESS_TOKEN || process.env.MERCADOPAGO_ACCESS_TOKEN;
 
 async function criarPreferencia(pedido, nomeProduto) {
   if (!MP_TOKEN) {
