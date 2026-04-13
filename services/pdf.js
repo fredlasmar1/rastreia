@@ -70,7 +70,7 @@ function rodape(doc) {
 function gerarDossie(pedido, dadosDB) {
   return new Promise((resolve, reject) => {
     try {
-      const doc = new PDFDocument({ margin: MARGEM, size: 'A4', autoFirstPage: true, bufferPages: true });
+      const doc = new PDFDocument({ margin: MARGEM, size: 'A4' });
       const filename = `rastreia_${pedido.tipo}_${pedido.id.substring(0,8)}_${Date.now()}.pdf`;
       const dirRelatorios = path.join(__dirname, '../public/relatorios');
       if (!fs.existsSync(dirRelatorios)) fs.mkdirSync(dirRelatorios, { recursive: true });
@@ -384,14 +384,8 @@ function gerarDossie(pedido, dadosDB) {
         });
       }
 
-      // ════ RODAPE em todas as paginas ════
-      const range = doc.bufferedPageRange();
-      for (let i = 0; i < range.count; i++) {
-        doc.switchToPage(i);
-        rodape(doc);
-      }
-      // Voltar para a ultima pagina antes de finalizar
-      doc.switchToPage(range.count - 1);
+      // ════ RODAPE na ultima pagina ════
+      rodape(doc);
       doc.end();
       stream.on('finish', () => resolve({ filename, filepath, url: `/relatorios/${filename}` }));
       stream.on('error', reject);

@@ -127,14 +127,28 @@ async function consultarCPF(cpf) {
         timeout: 15000
       });
       const r = res.data?.retorno || {};
+      console.log('[DirectData PF] Keys:', Object.keys(r).join(', '));
+      console.log('[DirectData PF] sexo:', r.sexo, '| genero:', r.genero, '| situacao:', r.situacaoCadastral, '| situacaoRF:', r.situacaoReceitaFederal);
       if (r.nome) {
+        // Mapear sexo corretamente
+        let sexo = r.sexo || r.genero || '';
+        if (sexo === 'M' || sexo === 'm') sexo = 'Masculino';
+        else if (sexo === 'F' || sexo === 'f') sexo = 'Feminino';
+        // Formatar data sem hora
+        let dataNasc = r.dataNascimento || r.nascimento || '';
+        if (dataNasc && dataNasc.includes(' ')) dataNasc = dataNasc.split(' ')[0];
+        if (dataNasc && dataNasc.includes('T')) dataNasc = dataNasc.split('T')[0];
+        // Formatar renda
+        const renda = r.rendaEstimada || r.renda || '';
+        const rendaFormatada = renda ? `R$ ${Number(renda).toLocaleString('pt-BR', {minimumFractionDigits:2})}` : '';
         return {
           cpf: doc, cpf_formatado: formatarCPF(doc),
-          nome: r.nome || '', sexo: r.sexo || '',
-          data_nascimento: r.dataNascimento || '', idade: r.idade || null,
-          nome_mae: r.nomeMae || '', nome_pai: r.nomePai || '',
-          situacao_rf: r.situacaoCadastral || '', obito: r.possuiObito || false,
-          classe_social: r.classeSocial || '', renda_estimada: r.rendaEstimada || '',
+          nome: r.nome || '', sexo: sexo,
+          data_nascimento: dataNasc, idade: r.idade || null,
+          nome_mae: r.nomeMae || r.mae || '', nome_pai: r.nomePai || r.pai || '',
+          situacao_rf: r.situacaoCadastral || r.situacaoReceitaFederal || r.situacao || '',
+          obito: r.possuiObito || r.obito || false,
+          classe_social: r.classeSocial || '', renda_estimada: rendaFormatada,
           faixa_salarial: r.rendaFaixaSalarial || '',
           telefones: (r.telefones || []).slice(0, 5).map(t => ({
             numero: t.telefoneComDDD || '', tipo: t.tipoTelefone || '',
