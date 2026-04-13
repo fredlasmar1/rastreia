@@ -488,9 +488,30 @@ function gerarDossie(pedido, dadosDB) {
         .text('Este documento contem dados pessoais protegidos pela Lei Geral de Protecao de Dados. E PROIBIDO compartilhar, reproduzir ou repassar este relatorio a terceiros sem autorizacao. O uso indevido sujeita o responsavel as sancoes previstas nos artigos 42 a 45 da LGPD, incluindo multa de ate 2% do faturamento. Uso exclusivo para a finalidade declarada no momento da contratacao.', MARGEM + 8, y + 14, { width: LARGURA - 16 });
       y += 42;
 
-      // ════ RODAPE (inline, sem criar pagina nova) ════
+      // ════ FONTES DE DADOS + RODAPE ════
+      y += 6;
+      doc.fillColor(COR.azul).fontSize(7).font('Helvetica-Bold').text('FONTES DE DADOS CONSULTADAS', MARGEM, y); y += 10;
       doc.fillColor(COR.cinza).fontSize(6).font('Helvetica')
-        .text('Documento informativo gerado pelo sistema Rastreia. Nao substitui consulta juridica. Recobro Recuperacao de Credito | Anapolis - GO', MARGEM, y + 4, { align: 'center', width: LARGURA });
+        .text('As informacoes deste relatorio foram extraidas das seguintes bases de dados publicas e privadas:', MARGEM, y, { width: LARGURA });
+      y += 10;
+      const fontes = [
+        'Receita Federal do Brasil (CPF/CNPJ)',
+        'Direct Data - Cadastro, Score QUOD, Protestos e Negativacoes',
+        'Escavador - Processos Judiciais estruturados',
+        'Datajud CNJ - Processos nos tribunais (TJGO, TRF1, STJ, TST)',
+        'Portal da Transparencia (CGU) - Listas CEIS/CNEP',
+        'CNPJa / CNPJ.ws - Dados empresariais'
+      ];
+      doc.fillColor(COR.cinza).fontSize(5.5).font('Helvetica')
+        .text(fontes.join('  |  '), MARGEM, y, { width: LARGURA });
+      y += doc.heightOfString(fontes.join('  |  '), { width: LARGURA }) + 6;
+
+      doc.fillColor('#92400e').fontSize(5.5).font('Helvetica-Bold')
+        .text('Caso alguma informacao esteja incorreta ou desatualizada, solicitamos que o titular entre em contato diretamente com a base de dados de origem para solicitar a correcao. A Recobro Recuperacao de Credito nao se responsabiliza por inexatidoes ou desatualizacoes nas bases consultadas.', MARGEM, y, { width: LARGURA });
+      y += doc.heightOfString('placeholder', { width: LARGURA }) + 10;
+
+      doc.fillColor(COR.cinza).fontSize(5.5).font('Helvetica')
+        .text('Documento gerado pelo sistema Rastreia. Nao substitui consulta juridica especializada. Recobro Recuperacao de Credito | Anapolis - GO', MARGEM, y, { align: 'center', width: LARGURA });
 
       doc.end();
       stream.on('finish', () => resolve({ filename, filepath, url: `/relatorios/${filename}` }));
