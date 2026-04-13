@@ -97,28 +97,27 @@ function gerarDossie(pedido, dadosDB) {
       const vinculos = dados.vinculos || {};
       const serasa = dados.serasa || {};
 
-      // ════ CABECALHO ════
-      doc.rect(0, 0, 595, 100).fill(COR.azul);
-      // Logo Recobro (branca para fundo azul)
-      const logoWhite = path.join(__dirname, '../public/img/logo-recobro-white.png');
+      // ════ CABECALHO (fundo branco) ════
+      doc.rect(0, 0, 595, 80).fill('#ffffff');
+      doc.rect(0, 78, 595, 2).fill(COR.azul); // linha azul separadora
+      // Logo Recobro (colorida - icone azul + texto preto)
       const logoPng = path.join(__dirname, '../public/img/logo-recobro.png');
-      const logoPath = fs.existsSync(logoWhite) ? logoWhite : (fs.existsSync(logoPng) ? logoPng : null);
-      if (logoPath) {
+      if (fs.existsSync(logoPng)) {
         try {
-          doc.image(logoPath, 148, 8, { width: 300 });
+          doc.image(logoPng, MARGEM, 12, { width: 150 });
         } catch (e) {
           console.error('[PDF] Erro logo:', e.message);
         }
       }
-      // RASTREIA + subtitulo abaixo da logo
-      doc.fillColor('#ffffff').fontSize(13).font('Helvetica-Bold').text('RASTREIA', 0, 62, { width: 595, align: 'center' });
-      doc.fillColor('#93c5fd').fontSize(7).font('Helvetica').text('Sistema de Inteligencia de Dados', 0, 78, { width: 595, align: 'center' });
-      doc.fillColor('#93c5fd').fontSize(6.5).text(`Emitido em: ${new Date().toLocaleString('pt-BR')}  |  Protocolo: #${pedido.numero || pedido.id.substring(0,8).toUpperCase()}`, 0, 89, { width: 595, align: 'center' });
+      // RASTREIA no lado direito
+      doc.fillColor(COR.azul).fontSize(22).font('Helvetica-Bold').text('RASTREIA', 0, 16, { width: 595 - MARGEM, align: 'right' });
+      doc.fillColor(COR.cinza).fontSize(7).font('Helvetica').text('Sistema de Inteligencia de Dados', 0, 40, { width: 595 - MARGEM, align: 'right' });
+      doc.fillColor(COR.cinza).fontSize(6.5).text(`Emitido em: ${new Date().toLocaleString('pt-BR')}  |  Protocolo: #${pedido.numero || pedido.id.substring(0,8).toUpperCase()}`, 0, 52, { width: 595 - MARGEM, align: 'right' });
 
-      doc.rect(0, 100, 595, 28).fill('#0f2660');
-      doc.fillColor('#ffffff').fontSize(12).font('Helvetica-Bold').text((produto.nome || pedido.tipo).toUpperCase(), 0, 106, { width: 595, align: 'center' });
+      doc.rect(0, 80, 595, 24).fill(COR.azul);
+      doc.fillColor('#ffffff').fontSize(11).font('Helvetica-Bold').text((produto.nome || pedido.tipo).toUpperCase(), 0, 85, { width: 595, align: 'center' });
 
-      let y = 142;
+      let y = 118;
 
       // ════ ALVO ════
       y = secao(doc, 'ALVO DA CONSULTA', y);
