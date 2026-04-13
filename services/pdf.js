@@ -93,6 +93,7 @@ function gerarDossie(pedido, dadosDB) {
       const transparencia = dados.transparencia || {};
       const scoreCredito = dados.score_credito || {};
       const negativacoes = dados.negativacoes || {};
+      const perfilEco = dados.perfil_economico || {};
       const vinculos = dados.vinculos || {};
       const serasa = dados.serasa || {};
 
@@ -346,6 +347,63 @@ function gerarDossie(pedido, dadosDB) {
         y += 12;
       }
       y += 6;
+
+      // ════ PERFIL FINANCEIRO CONSOLIDADO ════
+      if (pedido.alvo_tipo === 'PF' && (cadastral.renda_estimada || scoreCredito.score)) {
+        y = secao(doc, 'PERFIL FINANCEIRO', y);
+
+        // Calcular nivel de endividamento
+        const renda = parseFloat(String(cadastral.renda_estimada || '0').replace(/[^\d.,]/g, '').replace(',', '.')) || 0;
+        const pendencias = Number(negativacoes.total_pendencias || 0);
+        const scoreQ = Number(scoreCredito.score || 0);
+        const totalProcessos = processos.total || 0;
+
+        // Tabela de perfil
+        if (cadastral.classe_social) { linha(doc, 'Classe Social', cadastral.classe_social, y); y += 14; }
+        if (cadastral.renda_estimada) { linha(doc, 'Renda Estimada', cadastral.renda_estimada, y); y += 14; }
+        if (cadastral.faixa_salarial) { linha(doc, 'Faixa Salarial', cadastral.faixa_salarial, y); y += 14; }
+        if (cadastral.profissao) { linha(doc, 'Profissao', cadastral.profissao, y); y += 14; }
+        if (perfilEco.nivel_socioeconomico) { linha(doc, 'Nivel Socioeconomico', perfilEco.nivel_socioeconomico, y); y += 14; }
+        if (perfilEco.escolaridade) { linha(doc, 'Escolaridade', perfilEco.escolaridade, y); y += 14; }
+        if (perfilEco.poder_aquisitivo) { linha(doc, 'Poder Aquisitivo', perfilEco.poder_aquisitivo, y); y += 14; }
+        if (perfilEco.renda_presumida) { linha(doc, 'Renda Presumida', `R$ ${Number(perfilEco.renda_presumida).toLocaleString('pt-BR', {minimumFractionDigits:2})}`, y); y += 14; }
+        y += 4;
+
+        // Nivel de endividamento calculado
+        let nivelEndividamento = 'Baixo';
+        let corEndiv = COR.verde;
+        if (pendencias > 0 && renda > 0) {
+          const razao = pendencias / (renda * 12);
+          if (razao > 5) { nivelEndividamento = 'Critico (divida > 5x renda anual)'; corEndiv = COR.vermelho; }
+          else if (razao > 2) { nivelEndividamento = 'Alto (divida > 2x renda anual)'; corEndiv = COR.vermelho; }
+          else if (razao > 0.5) { nivelEndividamento = 'Moderado (divida > 50% renda anual)'; corEndiv = COR.laranja; }
+          else { nivelEndividamento = 'Baixo (divida < 50% renda anual)'; corEndiv = COR.verde; }
+        } else if (pendencias > 0) {
+          nivelEndividamento = 'Possui pendencias (renda nao informada)';
+          corEndiv = COR.laranja;
+        } else {
+          nivelEndividamento = 'Sem pendencias financeiras';
+          corEndiv = COR.verde;
+        }
+
+        doc.rect(MARGEM, y, LARGURA, 50).fill('#f8fafc').stroke(COR.borda);
+        doc.fillColor(COR.azul).fontSize(8).font('Helvetica-Bold').text('ANALISE DE CAPACIDADE FINANCEIRA', MARGEM + 8, y + 4);
+
+        doc.fillColor(corEndiv).fontSize(9).font('Helvetica-Bold').text(`Endividamento: ${nivelEndividamento}`, MARGEM + 8, y + 16);
+
+        let capacidade = 'Indeterminada';
+        let corCap = COR.cinza;
+        if (scoreQ >= 700 && pendencias === 0) { capacidade = 'ALTA — bom pagador, sem restricoes'; corCap = COR.verde; }
+        else if (scoreQ >= 500 && pendencias === 0) { capacidade = 'MEDIA — score moderado, sem restricoes'; corCap = COR.laranja; }
+        else if (scoreQ >= 500) { capacidade = 'MEDIA COM RESSALVAS — score ok mas possui pendencias'; corCap = COR.laranja; }
+        else if (scoreQ > 0) { capacidade = 'BAIXA — score ruim e/ou pendencias ativas'; corCap = COR.vermelho; }
+        doc.fillColor(corCap).fontSize(9).font('Helvetica-Bold').text(`Capacidade de Pagamento: ${capacidade}`, MARGEM + 8, y + 28);
+
+        const risco = totalProcessos > 5 ? 'ALTO' : totalProcessos > 0 ? 'MODERADO' : 'BAIXO';
+        const corRisco = totalProcessos > 5 ? COR.vermelho : totalProcessos > 0 ? COR.laranja : COR.verde;
+        doc.fillColor(corRisco).fontSize(9).font('Helvetica-Bold').text(`Risco Judicial: ${risco} (${totalProcessos} processo(s))`, MARGEM + 8, y + 40);
+        y += 58;
+      }
 
       // ════ VINCULOS SOCIETARIOS ════
       if (vinculos.total > 0) {

@@ -505,7 +505,38 @@ async function consultarProtestos(documento) {
 }
 
 // ─────────────────────────────────────────────
-// 9. VÍNCULOS SOCIETÁRIOS — Direct Data
+// 9. NIVEL SOCIOECONOMICO — Direct Data
+// Endpoint: /api/NivelSocioEconomico | R$ 0,36
+// ─────────────────────────────────────────────
+
+async function consultarPerfilEconomico(cpf) {
+  if (!process.env.DIRECTD_TOKEN) return null;
+  try {
+    const res = await axios.get('https://apiv3.directd.com.br/api/NivelSocioEconomico', {
+      params: { Cpf: limparDoc(cpf), Token: process.env.DIRECTD_TOKEN },
+      timeout: 20000
+    });
+    const retorno = res.data?.retorno || {};
+    const r = retorno.pessoaFisica || retorno || {};
+    console.log('[NivelSocio] Keys:', Object.keys(r).join(', '));
+    return {
+      nivel_socioeconomico: r.nivelSocioEconomico || r.nivel || r.nse || null,
+      renda_presumida: r.rendaPresumida || r.renda || null,
+      faixa_renda: r.faixaRenda || r.faixa || null,
+      escolaridade: r.escolaridade || null,
+      ocupacao: r.ocupacao || r.profissao || null,
+      poder_aquisitivo: r.poderAquisitivo || null,
+      fonte: 'Direct Data (Nivel Socioeconomico)',
+      consultado_em: new Date().toISOString()
+    };
+  } catch (e) {
+    console.error(`[NivelSocio] Erro: ${e.response?.status || e.message}`);
+    return null;
+  }
+}
+
+// ─────────────────────────────────────────────
+// 10. VÍNCULOS SOCIETÁRIOS — Direct Data
 // Endpoint: /api/VinculosSocietarios | R$ 1,84
 // ─────────────────────────────────────────────
 
@@ -697,7 +728,8 @@ async function executarConsultaCompleta(pedido) {
     consultarProcessos(alvo_documento, alvo_tipo, alvo_nome),
     alvo_tipo === 'PJ' ? consultarTransparencia(alvo_documento, alvo_nome) : Promise.resolve(null),
     consultarScore(alvo_documento),
-    consultarNegativacoes(alvo_documento)
+    consultarNegativacoes(alvo_documento),
+    alvo_tipo === 'PF' ? consultarPerfilEconomico(alvo_documento) : Promise.resolve(null)
   ];
 
   // Vínculos societários para produtos premium
@@ -709,8 +741,8 @@ async function executarConsultaCompleta(pedido) {
   if (precisaVeiculos) promises.push(consultarVeiculos(alvo_documento));
 
   const resultados = await Promise.all(promises);
-  const [cadastral, processos, transparencia, score_credito, negativacoes] = resultados;
-  let idx = 5;
+  const [cadastral, processos, transparencia, score_credito, negativacoes, perfil_economico] = resultados;
+  let idx = 6;
   const vinculos = precisaVinculos ? resultados[idx++] : null;
   const veiculos = precisaVeiculos ? resultados[idx++] : null;
 
@@ -737,6 +769,7 @@ async function executarConsultaCompleta(pedido) {
     ...(transparencia ? { transparencia } : {}),
     ...(score_credito?.score ? { score_credito } : {}),
     ...(negativacoes?.status ? { negativacoes } : {}),
+    ...(perfil_economico ? { perfil_economico } : {}),
     ...(vinculos?.total ? { vinculos } : {}),
     ...(veiculos ? { veiculos } : {}),
     ...(cadastral2 ? { receita_federal_2: cadastral2 } : {}),
@@ -751,7 +784,7 @@ module.exports = {
   consultarCNPJ, consultarCPF, consultarProcessos,
   consultarEscavador, consultarDatajud, consultarTransparencia,
   consultarSerasa, consultarScore, consultarNegativacoes, consultarProtestos,
-  consultarVinculos, consultarObito,
+  consultarPerfilEconomico, consultarVinculos, consultarObito,
   consultarONR, consultarMatricula, consultarVeiculos,
   gerarLinkJusBrasil, executarConsultaCompleta
 };
