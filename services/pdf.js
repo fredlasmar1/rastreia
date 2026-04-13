@@ -11,7 +11,7 @@ const COR = {
 
 const MARGEM = 50;
 const LARGURA = 495;
-const RODAPE_H = 50;
+const RODAPE_H = 35;
 
 function formatarDoc(doc) {
   if (!doc) return '';
@@ -63,8 +63,8 @@ function avisoBox(doc, y, msg, cor) {
 function rodape(doc) {
   const y = doc.page.height - RODAPE_H;
   doc.rect(0, y, 595, RODAPE_H).fill('#f3f4f6');
-  doc.fillColor(COR.cinza).fontSize(6.5).font('Helvetica')
-    .text('Documento informativo gerado pelo sistema Rastreia. Nao substitui consulta juridica. Recobro Recuperacao de Credito | Anapolis - GO', MARGEM, y + 12, { align: 'center', width: LARGURA });
+  doc.fillColor(COR.cinza).fontSize(6).font('Helvetica')
+    .text('Documento informativo gerado pelo sistema Rastreia. Nao substitui consulta juridica. Recobro Recuperacao de Credito | Anapolis - GO', MARGEM, y + 10, { align: 'center', width: LARGURA });
 }
 
 function gerarDossie(pedido, dadosDB) {
@@ -322,12 +322,13 @@ function gerarDossie(pedido, dadosDB) {
       }
 
       // ════ RODAPE em todas as paginas ════
-      const totalPages = doc.bufferedPageRange().count;
-      for (let i = 0; i < totalPages; i++) {
+      const range = doc.bufferedPageRange();
+      for (let i = 0; i < range.count; i++) {
         doc.switchToPage(i);
         rodape(doc);
       }
-
+      // Voltar para a ultima pagina antes de finalizar
+      doc.switchToPage(range.count - 1);
       doc.end();
       stream.on('finish', () => resolve({ filename, filepath, url: `/relatorios/${filename}` }));
       stream.on('error', reject);
