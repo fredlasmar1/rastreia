@@ -98,29 +98,31 @@ function gerarDossie(pedido, dadosDB) {
       const serasa = dados.serasa || {};
 
       // ════ CABECALHO ════
-      doc.rect(0, 0, 595, 90).fill(COR.azul);
-      // Logo Recobro
+      doc.rect(0, 0, 595, 100).fill(COR.azul);
+      // Logo centralizada
       const logoPath = path.join(__dirname, '../public/img/logo-recobro.jpg');
       const logoExists = fs.existsSync(logoPath);
-      console.log('[PDF] Logo path:', logoPath, '| Existe:', logoExists);
       if (logoExists) {
         try {
-          doc.image(logoPath, MARGEM, 16, { height: 32 });
-          doc.fillColor('#ffffff').fontSize(20).font('Helvetica-Bold').text('RASTREIA', MARGEM + 40, 20);
-        } catch (imgErr) {
-          console.error('[PDF] Erro ao carregar logo:', imgErr.message);
-          doc.fillColor('#ffffff').fontSize(22).font('Helvetica-Bold').text('RASTREIA', MARGEM, 20);
+          // Logo centralizada no topo
+          doc.save();
+          // Circulo branco como fundo da logo
+          doc.circle(297, 28, 22).fill('#ffffff');
+          doc.restore();
+          doc.image(logoPath, 275, 6, { width: 44, height: 44 });
+        } catch (e) {
+          console.error('[PDF] Erro logo:', e.message);
         }
-      } else {
-        doc.fillColor('#ffffff').fontSize(22).font('Helvetica-Bold').text('RASTREIA', MARGEM, 20);
       }
-      doc.fillColor('#ffffff').fontSize(9).font('Helvetica').text('Sistema de Consultas e Dossies | Recobro Recuperacao de Credito', MARGEM, 46);
-      doc.fontSize(8).text(`Emitido em: ${new Date().toLocaleString('pt-BR')}  |  Protocolo: #${pedido.numero || pedido.id.substring(0,8).toUpperCase()}`, MARGEM, 60);
+      // RASTREIA centralizado
+      doc.fillColor('#ffffff').fontSize(18).font('Helvetica-Bold').text('RASTREIA', 0, 54, { width: 595, align: 'center' });
+      doc.fillColor('rgba(255,255,255,0.8)').fontSize(8).font('Helvetica').text('Recobro Recuperacao de Credito | Sistema de Inteligencia de Dados', 0, 72, { width: 595, align: 'center' });
+      doc.fillColor('rgba(255,255,255,0.6)').fontSize(7).text(`Emitido em: ${new Date().toLocaleString('pt-BR')}  |  Protocolo: #${pedido.numero || pedido.id.substring(0,8).toUpperCase()}`, 0, 84, { width: 595, align: 'center' });
 
-      doc.rect(0, 90, 595, 32).fill('#f0f4f8');
-      doc.fillColor(COR.azul).fontSize(13).font('Helvetica-Bold').text((produto.nome || pedido.tipo).toUpperCase(), MARGEM, 98);
+      doc.rect(0, 100, 595, 28).fill('#0f2660');
+      doc.fillColor('#ffffff').fontSize(12).font('Helvetica-Bold').text((produto.nome || pedido.tipo).toUpperCase(), 0, 106, { width: 595, align: 'center' });
 
-      let y = 136;
+      let y = 142;
 
       // ════ ALVO ════
       y = secao(doc, 'ALVO DA CONSULTA', y);
