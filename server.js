@@ -7,6 +7,33 @@ const rateLimit = require('express-rate-limit');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
+// Limpar variáveis de ambiente (remover espaços e = no início/fim)
+function limparEnv(nome) {
+  if (process.env[nome]) {
+    process.env[nome] = process.env[nome].replace(/^[\s=]+|[\s]+$/g, '');
+  }
+}
+// Limpar todas as API keys
+['CNPJA_API_KEY', 'DIRECTD_TOKEN', 'ESCAVADOR_API_KEY', 'DATAJUD_API_KEY', 'DATAJUS_API_KEY',
+ 'TRANSPARENCIA_TOKEN', 'MP_ACCESS_TOKEN', 'MERCADOPAGO_ACCESS_TOKEN', 'CPFCNPJ_API_KEY',
+ 'CNPJWS_API_KEY', 'INFOSIMPLES_TOKEN', 'INFOSIMPLES_CALLBACK_SECRET', 'ONR_API_KEY',
+ 'SERASA_API_KEY', 'JWT_SECRET'
+].forEach(limparEnv);
+
+// Compatibilizar nomes alternativos de variáveis
+if (!process.env.CPFCNPJ_API_KEY && process.env.CNPJWS_API_KEY) {
+  process.env.CPFCNPJ_API_KEY = process.env.CNPJWS_API_KEY;
+}
+if (!process.env.DATAJUD_API_KEY && process.env.DATAJUS_API_KEY) {
+  process.env.DATAJUD_API_KEY = process.env.DATAJUS_API_KEY;
+}
+if (!process.env.MP_ACCESS_TOKEN && process.env.MERCADOPAGO_ACCESS_TOKEN) {
+  process.env.MP_ACCESS_TOKEN = process.env.MERCADOPAGO_ACCESS_TOKEN;
+}
+if (!process.env.INFOSIMPLES_TOKEN && process.env.INFOSIMPLES_CALLBACK_SECRET) {
+  process.env.INFOSIMPLES_TOKEN = process.env.INFOSIMPLES_CALLBACK_SECRET;
+}
+
 // Validar variáveis de ambiente obrigatórias
 console.log('🔄 Iniciando Rastreia...');
 console.log(`DATABASE_URL definida: ${!!process.env.DATABASE_URL}`);

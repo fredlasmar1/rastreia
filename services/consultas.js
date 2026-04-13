@@ -242,7 +242,7 @@ async function consultarEscavador(doc, tipo, nome) {
 }
 
 async function consultarDatajud(doc, tipo, nome) {
-  const API_KEY = process.env.DATAJUD_API_KEY || process.env.DATAJUS_API_KEY;
+  const API_KEY = process.env.DATAJUD_API_KEY;
   if (!API_KEY) {
     return { total: 0, processos: [], link_jusbrasil: gerarLinkJusBrasil(nome, doc), fonte: 'Datajud CNJ', nota: 'Configure DATAJUD_API_KEY para consultar processos via Datajud.', consultado_em: new Date().toISOString() };
   }
@@ -439,7 +439,7 @@ async function consultarMatricula(matricula, estado = 'GO') {
 // ─────────────────────────────────────────────
 
 async function consultarVeiculos(cpf) {
-  const INFO_TOKEN = process.env.INFOSIMPLES_TOKEN || process.env.INFOSIMPLES_CALLBACK_SECRET;
+  const INFO_TOKEN = process.env.INFOSIMPLES_TOKEN;
   if (!INFO_TOKEN) {
     return {
       disponivel: false,
