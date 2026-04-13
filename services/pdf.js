@@ -256,14 +256,25 @@ function gerarDossie(pedido, dadosDB) {
         doc.fillColor(COR.cinza).fontSize(7).font('Helvetica').text(`Fonte: ${processos.fonte || 'Datajud CNJ'}`, MARGEM + LARGURA - 150, y + 8);
         y += 30;
 
+        const ativos = (processos.processos || []).filter(p => p.status === 'Ativo');
+        const inativos = (processos.processos || []).filter(p => p.status !== 'Ativo');
+        doc.fillColor(COR.cinza).fontSize(7).font('Helvetica')
+          .text(`${ativos.length} ativo(s) | ${inativos.length} baixado(s)/inativo(s)`, MARGEM + 8, y - 16);
+        y += 4;
+
         (processos.processos || []).slice(0, 15).forEach((proc, i) => {
-          y = verificarPagina(doc, y, 40);
-          doc.rect(MARGEM, y, LARGURA, 36).fill(i % 2 === 0 ? '#f9fafb' : '#fff').stroke(COR.borda);
-          doc.fillColor(COR.azul).fontSize(8).font('Helvetica-Bold').text(proc.numero || 'S/N', MARGEM + 6, y + 4);
-          doc.fillColor(COR.cinza).font('Helvetica').fontSize(7)
-            .text(`${proc.tribunal || ''}  |  ${proc.classe || ''}  |  Inicio: ${proc.data_inicio || 'N/D'}${proc.valor_causa ? '  |  ' + proc.valor_causa : ''}`, MARGEM + 6, y + 15);
-          if (proc.assunto) doc.fillColor('#111827').text(`Assunto: ${proc.assunto}`, MARGEM + 6, y + 25, { width: LARGURA - 12 });
-          y += 40;
+          y = verificarPagina(doc, y, 26);
+          const corStatus = proc.status === 'Ativo' ? COR.vermelho : COR.verde;
+          const bgCor = i % 2 === 0 ? '#f9fafb' : '#fff';
+          doc.rect(MARGEM, y, LARGURA, 22).fill(bgCor);
+          doc.rect(MARGEM, y, 3, 22).fill(corStatus); // barra lateral colorida
+          doc.fillColor(COR.azul).fontSize(7).font('Helvetica-Bold').text(proc.numero || 'S/N', MARGEM + 8, y + 3);
+          doc.fillColor(COR.cinza).font('Helvetica').fontSize(6.5)
+            .text(`${proc.tribunal || ''} | ${proc.data_inicio || 'N/D'} | ${proc.status}`, MARGEM + 8, y + 13);
+          // Status badge no lado direito
+          doc.fillColor(corStatus).fontSize(6).font('Helvetica-Bold')
+            .text(proc.status === 'Ativo' ? 'ATIVO' : 'BAIXADO', MARGEM + LARGURA - 50, y + 7);
+          y += 24;
         });
       }
 
@@ -386,23 +397,24 @@ function gerarDossie(pedido, dadosDB) {
           corEndiv = COR.verde;
         }
 
-        doc.rect(MARGEM, y, LARGURA, 50).fill('#f8fafc').stroke(COR.borda);
-        doc.fillColor(COR.azul).fontSize(8).font('Helvetica-Bold').text('ANALISE DE CAPACIDADE FINANCEIRA', MARGEM + 8, y + 4);
+        y += 2;
+        doc.fillColor(COR.azul).fontSize(9).font('Helvetica-Bold').text('ANALISE DE CAPACIDADE FINANCEIRA', MARGEM, y); y += 14;
 
-        doc.fillColor(corEndiv).fontSize(9).font('Helvetica-Bold').text(`Endividamento: ${nivelEndividamento}`, MARGEM + 8, y + 16);
+        doc.fillColor(corEndiv).fontSize(8).font('Helvetica-Bold').text(`Endividamento: ${nivelEndividamento}`, MARGEM + 6, y); y += 12;
 
         let capacidade = 'Indeterminada';
         let corCap = COR.cinza;
-        if (scoreQ >= 700 && pendencias === 0) { capacidade = 'ALTA — bom pagador, sem restricoes'; corCap = COR.verde; }
-        else if (scoreQ >= 500 && pendencias === 0) { capacidade = 'MEDIA — score moderado, sem restricoes'; corCap = COR.laranja; }
-        else if (scoreQ >= 500) { capacidade = 'MEDIA COM RESSALVAS — score ok mas possui pendencias'; corCap = COR.laranja; }
-        else if (scoreQ > 0) { capacidade = 'BAIXA — score ruim e/ou pendencias ativas'; corCap = COR.vermelho; }
-        doc.fillColor(corCap).fontSize(9).font('Helvetica-Bold').text(`Capacidade de Pagamento: ${capacidade}`, MARGEM + 8, y + 28);
+        if (scoreQ >= 700 && pendencias === 0) { capacidade = 'ALTA - bom pagador, sem restricoes'; corCap = COR.verde; }
+        else if (scoreQ >= 500 && pendencias === 0) { capacidade = 'MEDIA - score moderado, sem restricoes'; corCap = COR.laranja; }
+        else if (scoreQ >= 500) { capacidade = 'MEDIA COM RESSALVAS - score ok mas possui pendencias'; corCap = COR.laranja; }
+        else if (scoreQ > 0) { capacidade = 'BAIXA - score ruim e/ou pendencias ativas'; corCap = COR.vermelho; }
+        doc.fillColor(corCap).fontSize(8).font('Helvetica-Bold').text(`Capacidade de Pagamento: ${capacidade}`, MARGEM + 6, y); y += 12;
 
-        const risco = totalProcessos > 5 ? 'ALTO' : totalProcessos > 0 ? 'MODERADO' : 'BAIXO';
-        const corRisco = totalProcessos > 5 ? COR.vermelho : totalProcessos > 0 ? COR.laranja : COR.verde;
-        doc.fillColor(corRisco).fontSize(9).font('Helvetica-Bold').text(`Risco Judicial: ${risco} (${totalProcessos} processo(s))`, MARGEM + 8, y + 40);
-        y += 58;
+        // Contar apenas processos ativos
+        const processosAtivos = (processos.processos || []).filter(p => p.status === 'Ativo').length;
+        const risco = processosAtivos > 5 ? 'ALTO' : processosAtivos > 0 ? 'MODERADO' : 'BAIXO';
+        const corRisco = processosAtivos > 5 ? COR.vermelho : processosAtivos > 0 ? COR.laranja : COR.verde;
+        doc.fillColor(corRisco).fontSize(8).font('Helvetica-Bold').text(`Risco Judicial: ${risco} (${processosAtivos} processo(s) ativo(s) de ${totalProcessos} total)`, MARGEM + 6, y); y += 14;
       }
 
       // ════ VINCULOS SOCIETARIOS ════
@@ -443,17 +455,7 @@ function gerarDossie(pedido, dadosDB) {
         y += doc.heightOfString(pedido.observacoes, { width: LARGURA }) + 10;
       }
 
-      // ════ O QUE ESTA INCLUSO ════
-      if (produto.dados_entregues) {
-        y = secao(doc, 'O QUE ESTA INCLUSO NESTE PRODUTO', y);
-        produto.dados_entregues.forEach(secItem => {
-          y = verificarPagina(doc, y, 30);
-          doc.fillColor(COR.azul).fontSize(8).font('Helvetica-Bold').text(`> ${secItem.secao}`, MARGEM, y); y += 12;
-          const txt = secItem.campos.join('  |  ');
-          doc.fillColor(COR.cinza).font('Helvetica').fontSize(7).text(txt, MARGEM + 8, y, { width: LARGURA - 16 });
-          y += doc.heightOfString(txt, { width: LARGURA - 16 }) + 6;
-        });
-      }
+      // Seção "O QUE ESTA INCLUSO" removida para manter PDF compacto
 
       // ════ RODAPE na ultima pagina ════
       rodape(doc);

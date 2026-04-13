@@ -240,17 +240,31 @@ async function consultarEscavador(doc, tipo, nome) {
     const items = res.data?.items || [];
     return {
       total: res.data?.meta?.total || items.length,
-      processos: items.slice(0, 30).map(p => ({
-        numero: p.numero_cnj || '',
-        tribunal: p.fontes?.[0]?.nome || p.tribunal?.sigla || '',
-        classe: p.classe?.nome || '',
-        assunto: p.assuntos?.[0]?.nome || '',
-        polo_ativo: p.titulo_polo_ativo || '',
-        polo_passivo: p.titulo_polo_passivo || '',
-        data_inicio: p.data_inicio || '',
-        ultima_movimentacao: p.data_ultima_movimentacao || '',
-        valor_causa: p.valor_causa ? `R$ ${Number(p.valor_causa).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` : null
-      })),
+      processos: items.slice(0, 30).map(p => {
+        // Determinar status: ativo, arquivado, baixado
+        const ultMov = p.data_ultima_movimentacao || '';
+        const anoUltMov = ultMov ? new Date(ultMov).getFullYear() : 0;
+        const anoAtual = new Date().getFullYear();
+        const statusOriginal = p.status?.nome || p.situacao?.nome || p.grau || '';
+        let status = 'Ativo';
+        if (statusOriginal.toLowerCase().includes('arquiv') || statusOriginal.toLowerCase().includes('baixa') || statusOriginal.toLowerCase().includes('extint')) {
+          status = 'Baixado/Arquivado';
+        } else if (anoUltMov > 0 && (anoAtual - anoUltMov) >= 3) {
+          status = 'Possivelmente inativo (sem movimentacao ha 3+ anos)';
+        }
+        return {
+          numero: p.numero_cnj || '',
+          tribunal: p.fontes?.[0]?.nome || p.tribunal?.sigla || '',
+          classe: p.classe?.nome || '',
+          assunto: p.assuntos?.[0]?.nome || '',
+          polo_ativo: p.titulo_polo_ativo || '',
+          polo_passivo: p.titulo_polo_passivo || '',
+          data_inicio: p.data_inicio || '',
+          ultima_movimentacao: ultMov,
+          valor_causa: p.valor_causa ? `R$ ${Number(p.valor_causa).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` : null,
+          status: status
+        };
+      }),
       link_jusbrasil: gerarLinkJusBrasil(nome, doc),
       fonte: 'Escavador',
       consultado_em: new Date().toISOString()
@@ -300,6 +314,15 @@ async function consultarDatajud(doc, tipo, nome) {
       const hits = r.value.data?.hits?.hits || [];
       hits.forEach(h => {
         const s = h._source || {};
+        const ultMov = s.dataUltimaAtualizacao || '';
+        const anoUltMov = ultMov ? new Date(ultMov).getFullYear() : 0;
+        const sitOriginal = s.situacao?.nome || '';
+        let statusProc = 'Ativo';
+        if (sitOriginal.toLowerCase().includes('arquiv') || sitOriginal.toLowerCase().includes('baixa') || sitOriginal.toLowerCase().includes('extint')) {
+          statusProc = 'Baixado/Arquivado';
+        } else if (anoUltMov > 0 && (new Date().getFullYear() - anoUltMov) >= 3) {
+          statusProc = 'Possivelmente inativo';
+        }
         processos.push({
           numero: s.numeroProcesso || '',
           tribunal: s.tribunal || '',
@@ -308,8 +331,9 @@ async function consultarDatajud(doc, tipo, nome) {
           polo_ativo: (s.partes || []).filter(p => p.polo === 'ATIVO').map(p => p.nome).join(', '),
           polo_passivo: (s.partes || []).filter(p => p.polo === 'PASSIVO').map(p => p.nome).join(', '),
           data_inicio: s.dataAjuizamento || '',
-          ultima_movimentacao: s.dataUltimaAtualizacao || '',
-          valor_causa: s.valorCausa ? `R$ ${Number(s.valorCausa).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` : null
+          ultima_movimentacao: ultMov,
+          valor_causa: s.valorCausa ? `R$ ${Number(s.valorCausa).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` : null,
+          status: statusProc
         });
       });
     }

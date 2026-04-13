@@ -255,12 +255,17 @@ function calcularScore(tipo, dados) {
     alertas.push(`Pendencias financeiras: R$ ${valorPend.toLocaleString('pt-BR', {minimumFractionDigits:2})} — ${negativacoes.status || ''}`);
   }
 
-  // Penalidades por processos judiciais
+  // Penalidades por processos judiciais (apenas ativos contam)
   const totalProcessos = processos.total || 0;
-  if (totalProcessos > 0) {
-    const penalidade = Math.min(totalProcessos * 5, 40);
+  const processosAtivos = (processos.processos || []).filter(p => p.status === 'Ativo').length;
+  const processosInativos = totalProcessos - processosAtivos;
+  if (processosAtivos > 0) {
+    const penalidade = Math.min(processosAtivos * 5, 40);
     score -= penalidade;
-    alertas.push(`${totalProcessos} processo(s) judicial(is) encontrado(s)`);
+    alertas.push(`${processosAtivos} processo(s) ativo(s) encontrado(s)`);
+  }
+  if (processosInativos > 0) {
+    alertas.push(`${processosInativos} processo(s) baixado(s)/arquivado(s) (nao impactam score)`);
   }
 
   // Penalidade por lista negra federal
