@@ -256,6 +256,9 @@ router.post('/:id/consultar', autenticar, async (req, res) => {
 
     const resultados = await executarConsultaCompleta(pedido);
 
+    // Limpar dados antigos deste pedido antes de salvar novos (evita duplicatas)
+    await pool.query('DELETE FROM dados_consulta WHERE pedido_id = $1', [pedido.id]);
+
     for (const [fonte, dados] of Object.entries(resultados)) {
       await pool.query(
         'INSERT INTO dados_consulta (pedido_id, fonte, dados) VALUES ($1, $2, $3)',

@@ -280,15 +280,13 @@ app.get('/relatorios/:filename', async (req, res) => {
   try {
     const { pool } = require('./db');
     const { gerarDossie } = require('./services/pdf');
-    // Extrair ID do pedido do nome do arquivo (rastreia_tipo_ID_timestamp.pdf)
-    const parts = req.params.filename.replace('.pdf', '').split('_');
-    const pedidoIdPart = parts[2]; // 8 chars do UUID
-    if (!pedidoIdPart) return res.status(404).send('PDF nao encontrado');
+    // Extrair ID do pedido pelo relatorio_url salvo no banco
+    const relUrl = `/relatorios/${req.params.filename}`;
     const pedidoResult = await pool.query(
-      "SELECT * FROM pedidos WHERE id::text LIKE $1",
-      [`${pedidoIdPart}%`]
+      "SELECT * FROM pedidos WHERE relatorio_url = $1",
+      [relUrl]
     );
-    if (pedidoResult.rows.length === 0) return res.status(404).send('Pedido nao encontrado');
+    if (pedidoResult.rows.length === 0) return res.status(404).send('Pedido nao encontrado. Gere o relatorio novamente.');
     const pedido = pedidoResult.rows[0];
     const dadosResult = await pool.query('SELECT * FROM dados_consulta WHERE pedido_id = $1', [pedido.id]);
     const { filepath } = await gerarDossie(pedido, dadosResult.rows);
