@@ -99,8 +99,19 @@ function gerarDossie(pedido, dadosDB) {
 
       // ════ CABECALHO ════
       doc.rect(0, 0, 595, 90).fill(COR.azul);
-      doc.fillColor('#ffffff').fontSize(22).font('Helvetica-Bold').text('RASTREIA', MARGEM, 20);
-      doc.fontSize(9).font('Helvetica').text('Sistema de Consultas e Dossies | Recobro Recuperacao de Credito', MARGEM, 46);
+      // Logo Recobro
+      try {
+        const logoPath = path.join(__dirname, '../public/img/logo-recobro.jpg');
+        if (fs.existsSync(logoPath)) {
+          doc.image(logoPath, MARGEM, 14, { height: 36 });
+          doc.fillColor('#ffffff').fontSize(22).font('Helvetica-Bold').text('RASTREIA', MARGEM + 44, 20);
+        } else {
+          doc.fillColor('#ffffff').fontSize(22).font('Helvetica-Bold').text('RASTREIA', MARGEM, 20);
+        }
+      } catch {
+        doc.fillColor('#ffffff').fontSize(22).font('Helvetica-Bold').text('RASTREIA', MARGEM, 20);
+      }
+      doc.fillColor('#ffffff').fontSize(9).font('Helvetica').text('Sistema de Consultas e Dossies | Recobro Recuperacao de Credito', MARGEM, 46);
       doc.fontSize(8).text(`Emitido em: ${new Date().toLocaleString('pt-BR')}  |  Protocolo: #${pedido.numero || pedido.id.substring(0,8).toUpperCase()}`, MARGEM, 60);
 
       doc.rect(0, 90, 595, 32).fill('#f0f4f8');
