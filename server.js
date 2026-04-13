@@ -50,6 +50,7 @@ app.get('/api/health/apis/mask', (req, res) => {
     TRANSPARENCIA_TOKEN: mask(process.env.TRANSPARENCIA_TOKEN),
     MP_ACCESS_TOKEN: mask(process.env.MP_ACCESS_TOKEN),
     MERCADOPAGO_ACCESS_TOKEN: mask(process.env.MERCADOPAGO_ACCESS_TOKEN),
+    CPFCNPJ_API_KEY: mask(process.env.CPFCNPJ_API_KEY),
     INFOSIMPLES_TOKEN: mask(process.env.INFOSIMPLES_TOKEN),
     INFOSIMPLES_CALLBACK_SECRET: mask(process.env.INFOSIMPLES_CALLBACK_SECRET)
   });
@@ -149,6 +150,16 @@ app.get('/api/health/apis/teste', async (req, res) => {
       results.TRANSPARENCIA = { ok: false, erro: e.response?.status || e.message };
     }
   } else results.TRANSPARENCIA = { ok: false, erro: 'não configurado' };
+
+  // Teste CPF.CNPJ
+  if (process.env.CPFCNPJ_API_KEY) {
+    try {
+      const r = await axios.get(`https://api.cpfcnpj.com.br/${process.env.CPFCNPJ_API_KEY}/9/00000000000`, { timeout: 15000 });
+      results.CPFCNPJ = { ok: true, status: r.status };
+    } catch (e) {
+      results.CPFCNPJ = { ok: e.response?.status !== 401, status: e.response?.status, erro: e.response?.data?.message || e.message };
+    }
+  } else results.CPFCNPJ = { ok: false, erro: 'nao configurado' };
 
   // Teste Mercado Pago
   const mpToken = process.env.MP_ACCESS_TOKEN || process.env.MERCADOPAGO_ACCESS_TOKEN;
