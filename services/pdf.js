@@ -195,47 +195,43 @@ function gerarDossie(pedido, dadosDB) {
           if (cadastral.classe_social) { linha(doc, 'Classe Social', cadastral.classe_social, y); y += 15; }
           if (cadastral.renda_estimada) { linha(doc, 'Renda Estimada', cadastral.renda_estimada, y); y += 15; }
 
-          // Parentescos / Vinculos familiares
+          // Parentescos (inline)
           if (cadastral.parentescos?.length > 0) {
-            y += 4;
-            doc.fillColor(COR.azul).fontSize(9).font('Helvetica-Bold').text('VINCULOS FAMILIARES', MARGEM, y); y += 12;
-            cadastral.parentescos.forEach(p => {
-              y = verificarPagina(doc, y, 12);
-              const vinculo = p.tipo ? `(${p.tipo})` : '';
-              doc.fillColor('#111827').fontSize(8).font('Helvetica').text(`- ${p.nome} ${vinculo}`, MARGEM + 6, y, { width: LARGURA - 12 });
-              y += 12;
-            });
+            const nomes = cadastral.parentescos.map(p => p.nome + (p.tipo ? ` (${p.tipo})` : '')).join('  |  ');
+            y += 2;
+            doc.fillColor(COR.azul).fontSize(8).font('Helvetica-Bold').text('VINCULOS FAMILIARES', MARGEM, y); y += 10;
+            doc.fillColor('#111827').fontSize(7).font('Helvetica').text(nomes, MARGEM + 6, y, { width: LARGURA - 12 });
+            y += doc.heightOfString(nomes, { width: LARGURA - 12 }) + 4;
           }
-
+          // Enderecos (inline)
           if (cadastral.enderecos?.length > 0) {
-            y += 4;
-            doc.fillColor(COR.azul).fontSize(9).font('Helvetica-Bold').text('ENDERECOS', MARGEM, y); y += 12;
+            doc.fillColor(COR.azul).fontSize(8).font('Helvetica-Bold').text('ENDERECOS', MARGEM, y); y += 10;
             cadastral.enderecos.forEach((e, i) => {
-              y = verificarPagina(doc, y, 14);
               const end = [e.logradouro, e.numero, e.bairro, e.cidade, e.uf, e.cep].filter(Boolean).join(', ');
-              doc.fillColor('#111827').fontSize(8).font('Helvetica').text(`${i + 1}. ${end}`, MARGEM + 6, y, { width: LARGURA - 12 });
-              y += 13;
+              doc.fillColor('#111827').fontSize(7).font('Helvetica').text(`${i + 1}. ${end}`, MARGEM + 6, y, { width: LARGURA - 12 });
+              y += 10;
             });
+            y += 2;
           }
+          // Telefones (inline, separados por |)
           if (cadastral.telefones?.length > 0) {
-            y += 4;
-            doc.fillColor(COR.azul).fontSize(9).font('Helvetica-Bold').text('TELEFONES', MARGEM, y); y += 12;
+            doc.fillColor(COR.azul).fontSize(8).font('Helvetica-Bold').text('TELEFONES', MARGEM, y); y += 10;
             cadastral.telefones.forEach(t => {
-              y = verificarPagina(doc, y, 12);
-              const wpp = t.whatsapp ? ' [WhatsApp]' : '';
+              const wpp = t.whatsapp ? ' [WPP]' : '';
               const info = [t.numero, t.tipo, t.operadora].filter(Boolean).join(' - ');
-              doc.fillColor('#111827').fontSize(8).font('Helvetica').text(`- ${info}${wpp}`, MARGEM + 6, y);
-              y += 12;
+              doc.fillColor('#111827').fontSize(7).font('Helvetica').text(`- ${info}${wpp}`, MARGEM + 6, y);
+              y += 9;
             });
+            y += 2;
           }
+          // Emails (inline)
           if (cadastral.emails?.length > 0) {
-            y += 4;
-            doc.fillColor(COR.azul).fontSize(9).font('Helvetica-Bold').text('EMAILS', MARGEM, y); y += 12;
-            cadastral.emails.forEach(e => {
-              doc.fillColor('#111827').fontSize(8).font('Helvetica').text(`- ${e}`, MARGEM + 6, y); y += 12;
-            });
+            const emailsTxt = cadastral.emails.join('  |  ');
+            doc.fillColor(COR.azul).fontSize(8).font('Helvetica-Bold').text('EMAILS', MARGEM, y);
+            doc.fillColor('#111827').font('Helvetica').fontSize(7).text(emailsTxt, MARGEM + 50, y);
+            y += 10;
           }
-          y += 6;
+          y += 4;
         } else if (cadastral.erro) {
           y = avisoBox(doc, y, 'Dados cadastrais indisponiveis. API retornou erro. Verifique DIRECTD_TOKEN.');
         } else {
@@ -263,18 +259,15 @@ function gerarDossie(pedido, dadosDB) {
         y += 4;
 
         (processos.processos || []).slice(0, 15).forEach((proc, i) => {
-          y = verificarPagina(doc, y, 26);
+          y = verificarPagina(doc, y, 16);
           const corStatus = proc.status === 'Ativo' ? COR.vermelho : COR.verde;
-          const bgCor = i % 2 === 0 ? '#f9fafb' : '#fff';
-          doc.rect(MARGEM, y, LARGURA, 22).fill(bgCor);
-          doc.rect(MARGEM, y, 3, 22).fill(corStatus); // barra lateral colorida
-          doc.fillColor(COR.azul).fontSize(7).font('Helvetica-Bold').text(proc.numero || 'S/N', MARGEM + 8, y + 3);
-          doc.fillColor(COR.cinza).font('Helvetica').fontSize(6.5)
-            .text(`${proc.tribunal || ''} | ${proc.data_inicio || 'N/D'} | ${proc.status}`, MARGEM + 8, y + 13);
-          // Status badge no lado direito
+          doc.rect(MARGEM, y, 3, 14).fill(corStatus);
+          doc.fillColor(COR.azul).fontSize(6.5).font('Helvetica-Bold').text(proc.numero || 'S/N', MARGEM + 8, y + 2);
+          doc.fillColor(COR.cinza).font('Helvetica').fontSize(6)
+            .text(`${proc.tribunal || ''} | ${proc.data_inicio || 'N/D'}`, MARGEM + 170, y + 2);
           doc.fillColor(corStatus).fontSize(6).font('Helvetica-Bold')
-            .text(proc.status === 'Ativo' ? 'ATIVO' : 'BAIXADO', MARGEM + LARGURA - 50, y + 7);
-          y += 24;
+            .text(proc.status === 'Ativo' ? 'ATIVO' : 'BAIXADO', MARGEM + LARGURA - 45, y + 2);
+          y += 16;
         });
       }
 
@@ -370,15 +363,12 @@ function gerarDossie(pedido, dadosDB) {
         const totalProcessos = processos.total || 0;
 
         // Tabela de perfil
-        if (cadastral.classe_social) { linha(doc, 'Classe Social', cadastral.classe_social, y); y += 14; }
-        if (cadastral.renda_estimada) { linha(doc, 'Renda Estimada', cadastral.renda_estimada, y); y += 14; }
-        if (cadastral.faixa_salarial) { linha(doc, 'Faixa Salarial', cadastral.faixa_salarial, y); y += 14; }
-        if (cadastral.profissao) { linha(doc, 'Profissao', cadastral.profissao, y); y += 14; }
-        if (perfilEco.nivel_socioeconomico) { linha(doc, 'Nivel Socioeconomico', perfilEco.nivel_socioeconomico, y); y += 14; }
-        if (perfilEco.escolaridade) { linha(doc, 'Escolaridade', perfilEco.escolaridade, y); y += 14; }
-        if (perfilEco.poder_aquisitivo) { linha(doc, 'Poder Aquisitivo', perfilEco.poder_aquisitivo, y); y += 14; }
-        if (perfilEco.renda_presumida) { linha(doc, 'Renda Presumida', `R$ ${Number(perfilEco.renda_presumida).toLocaleString('pt-BR', {minimumFractionDigits:2})}`, y); y += 14; }
-        y += 4;
+        if (cadastral.renda_estimada) { linha(doc, 'Renda Estimada', cadastral.renda_estimada, y); y += 12; }
+        if (cadastral.faixa_salarial) { linha(doc, 'Faixa Salarial', cadastral.faixa_salarial, y); y += 12; }
+        if (perfilEco.nivel_socioeconomico) { linha(doc, 'Nivel Socioeconomico', perfilEco.nivel_socioeconomico, y); y += 12; }
+        if (perfilEco.poder_aquisitivo) { linha(doc, 'Poder Aquisitivo', perfilEco.poder_aquisitivo, y); y += 12; }
+        if (perfilEco.renda_presumida) { linha(doc, 'Renda Presumida', `R$ ${Number(perfilEco.renda_presumida).toLocaleString('pt-BR', {minimumFractionDigits:2})}`, y); y += 12; }
+        y += 2;
 
         // Nivel de endividamento calculado
         let nivelEndividamento = 'Baixo';
@@ -432,19 +422,18 @@ function gerarDossie(pedido, dadosDB) {
         doc.fillColor(COR.cinza).fontSize(6).font('Helvetica').text(`Fonte: ${vinculos.fonte || 'Direct Data'}`, MARGEM, y); y += 10;
       }
 
-      // ════ CHECKLIST ════
+      // ════ CHECKLIST (compacto) ════
       if (checklist.length > 0) {
         y = secao(doc, 'VERIFICACOES COMPLEMENTARES', y);
         checklist.forEach(c => {
-          y = verificarPagina(doc, y, 22);
-          const prefixo = c.obrigatorio ? '[OBRIG.]' : '[Opc.]';
+          y = verificarPagina(doc, y, 11);
+          const prefixo = c.obrigatorio ? '[!]' : '[o]';
           const cor_item = c.obrigatorio ? COR.vermelho : COR.cinza;
-          doc.fillColor(cor_item).fontSize(7).font('Helvetica-Bold').text(prefixo, MARGEM, y);
-          doc.fillColor('#111827').font('Helvetica').text(c.item, MARGEM + 50, y, { width: LARGURA - 50 });
-          if (c.link && c.link !== '#') { doc.fillColor(COR.azul_claro).fontSize(6.5).text(c.link, MARGEM + 50, y + 9, { width: LARGURA - 50 }); y += 9; }
-          y += 14;
+          doc.fillColor(cor_item).fontSize(6).font('Helvetica-Bold').text(prefixo, MARGEM, y);
+          doc.fillColor('#111827').font('Helvetica').fontSize(6.5).text(c.item, MARGEM + 20, y, { width: LARGURA - 20 });
+          y += 11;
         });
-        y += 4;
+        y += 2;
       }
 
       // ════ PARECER ════
