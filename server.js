@@ -188,6 +188,32 @@ app.get('/api/health/apis/teste', async (req, res) => {
     }
   } else results.CPFCNPJ = { ok: false, erro: 'nao configurado' };
 
+  // Teste Direct Data Score
+  if (process.env.DIRECTD_TOKEN) {
+    try {
+      const r = await axios.get('https://apiv3.directd.com.br/api/Score', {
+        params: { Documento: '00000000191', Token: process.env.DIRECTD_TOKEN },
+        timeout: 20000
+      });
+      results.DD_SCORE = { ok: true, status: r.status, dados: r.data ? Object.keys(r.data) : 'vazio' };
+    } catch (e) {
+      results.DD_SCORE = { ok: false, status: e.response?.status, erro: e.response?.data || e.message };
+    }
+  } else results.DD_SCORE = { ok: false, erro: 'nao configurado' };
+
+  // Teste Direct Data DetalhamentoNegativo
+  if (process.env.DIRECTD_TOKEN) {
+    try {
+      const r = await axios.get('https://apiv3.directd.com.br/api/DetalhamentoNegativo', {
+        params: { Documento: '00000000191', Token: process.env.DIRECTD_TOKEN },
+        timeout: 20000
+      });
+      results.DD_NEGATIVACOES = { ok: true, status: r.status, dados: r.data ? Object.keys(r.data) : 'vazio' };
+    } catch (e) {
+      results.DD_NEGATIVACOES = { ok: false, status: e.response?.status, erro: e.response?.data || e.message };
+    }
+  } else results.DD_NEGATIVACOES = { ok: false, erro: 'nao configurado' };
+
   // Teste Mercado Pago
   const mpToken = process.env.MP_ACCESS_TOKEN || process.env.MERCADOPAGO_ACCESS_TOKEN;
   if (mpToken) {
