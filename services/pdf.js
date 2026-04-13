@@ -282,57 +282,49 @@ function gerarDossie(pedido, dadosDB) {
 
       // ════ SCORE DE CREDITO ════
       if (scoreCredito.score) {
-        y = secao(doc, 'SCORE DE CREDITO', y);
+        y = secao(doc, 'SCORE DE CREDITO (QUOD)', y);
         const scoreCred = Number(scoreCredito.score) || 0;
         const corCred = scoreCred >= 700 ? COR.verde : scoreCred >= 400 ? COR.laranja : COR.vermelho;
-        doc.rect(MARGEM, y, LARGURA, 28).fill('#f8fafc').stroke(COR.borda);
-        doc.fillColor(corCred).fontSize(16).font('Helvetica-Bold').text(`${scoreCred}`, MARGEM + 10, y + 5);
-        doc.fillColor(COR.cinza).fontSize(8).font('Helvetica').text('/1000', MARGEM + 50, y + 10);
-        if (scoreCredito.faixa) doc.fillColor('#111827').fontSize(9).text(`Faixa: ${scoreCredito.faixa}`, MARGEM + 100, y + 8);
-        if (scoreCredito.probabilidade_inadimplencia) doc.fillColor(COR.cinza).fontSize(8).text(`Prob. inadimplencia: ${scoreCredito.probabilidade_inadimplencia}%`, MARGEM + 300, y + 10);
-        y += 34;
+        doc.rect(MARGEM, y, LARGURA, 40).fill('#f8fafc').stroke(COR.borda);
+        doc.fillColor(corCred).fontSize(22).font('Helvetica-Bold').text(`${scoreCred}`, MARGEM + 10, y + 4);
+        doc.fillColor(COR.cinza).fontSize(8).font('Helvetica').text('/1000', MARGEM + 55, y + 10);
+        doc.fillColor(corCred).fontSize(10).font('Helvetica-Bold').text(scoreCredito.faixa || '', MARGEM + 100, y + 6);
+        // Motivos
+        if (scoreCredito.motivos?.length > 0) {
+          doc.fillColor(COR.cinza).fontSize(7).font('Helvetica');
+          scoreCredito.motivos.slice(0, 3).forEach((m, i) => {
+            doc.text(`- ${m}`, MARGEM + 100, y + 20 + (i * 9), { width: 380 });
+          });
+        }
+        y += 44 + Math.min((scoreCredito.motivos?.length || 0), 3) * 9;
       }
 
-      // ════ NEGATIVACOES / PROTESTOS ════
+      // ════ RESTRICOES FINANCEIRAS ════
       y = secao(doc, 'RESTRICOES FINANCEIRAS', y);
-      if (negativacoes.total_pendencias !== undefined) {
-        if (negativacoes.total_pendencias === 0) {
+      if (negativacoes.status && negativacoes.status !== 'Nao consultado') {
+        const temPendencia = negativacoes.total_pendencias > 0 || negativacoes.status === 'Consta Pendencia';
+        if (!temPendencia) {
           doc.rect(MARGEM, y, LARGURA, 20).fill('#dcfce7');
-          doc.fillColor('#14532d').fontSize(9).font('Helvetica').text('Nenhuma pendencia financeira encontrada.', MARGEM + 8, y + 4);
+          doc.fillColor('#14532d').fontSize(9).font('Helvetica').text('Nada consta - nenhuma pendencia financeira encontrada.', MARGEM + 8, y + 4);
           y += 26;
         } else {
+          const valorTotal = Number(negativacoes.total_pendencias || 0);
           doc.rect(MARGEM, y, LARGURA, 20).fill('#fee2e2');
           doc.fillColor(COR.vermelho).fontSize(9).font('Helvetica-Bold')
-            .text(`${negativacoes.total_pendencias} pendencia(s) | Valor total: R$ ${Number(negativacoes.valor_total || 0).toLocaleString('pt-BR')}`, MARGEM + 8, y + 4);
+            .text(`${negativacoes.status} | Valor total: R$ ${valorTotal.toLocaleString('pt-BR', {minimumFractionDigits:2})}`, MARGEM + 8, y + 4);
           y += 26;
 
           if (negativacoes.protestos?.length > 0) {
             doc.fillColor(COR.azul).fontSize(8).font('Helvetica-Bold').text('PROTESTOS:', MARGEM, y); y += 12;
             negativacoes.protestos.slice(0, 5).forEach(p => {
-              y = verificarPagina(doc, y, 12);
-              doc.fillColor('#111827').fontSize(7).font('Helvetica')
-                .text(`- R$ ${p.valor} | ${p.data} | ${p.cartorio} ${p.cidade}`, MARGEM + 8, y);
-              y += 12;
+              y = verificarPagina(doc, y, 20);
+              doc.fillColor('#111827').fontSize(7).font('Helvetica-Bold')
+                .text(`${p.nome_cartorio}`, MARGEM + 8, y);
+              doc.fillColor(COR.cinza).font('Helvetica')
+                .text(`${p.situacao} | Total: R$ ${Number(p.valor_total_protesto || 0).toLocaleString('pt-BR', {minimumFractionDigits:2})}`, MARGEM + 8, y + 9);
+              y += 22;
             });
             y += 4;
-          }
-          if (negativacoes.acoes_judiciais?.length > 0) {
-            doc.fillColor(COR.azul).fontSize(8).font('Helvetica-Bold').text('ACOES JUDICIAIS:', MARGEM, y); y += 12;
-            negativacoes.acoes_judiciais.slice(0, 5).forEach(a => {
-              y = verificarPagina(doc, y, 12);
-              doc.fillColor('#111827').fontSize(7).font('Helvetica')
-                .text(`- ${a.tipo} | R$ ${a.valor} | ${a.data}`, MARGEM + 8, y);
-              y += 12;
-            });
-            y += 4;
-          }
-          if (negativacoes.cheques_sem_fundo?.length > 0) {
-            doc.fillColor(COR.azul).fontSize(8).font('Helvetica-Bold').text('CHEQUES SEM FUNDO:', MARGEM, y); y += 12;
-            negativacoes.cheques_sem_fundo.slice(0, 3).forEach(c => {
-              doc.fillColor('#111827').fontSize(7).font('Helvetica')
-                .text(`- Banco: ${c.banco} | Ag: ${c.agencia} | ${c.data}`, MARGEM + 8, y);
-              y += 12;
-            });
           }
         }
         doc.fillColor(COR.cinza).fontSize(6).font('Helvetica').text(`Fonte: ${negativacoes.fonte || 'Direct Data'}`, MARGEM, y); y += 10;

@@ -385,12 +385,11 @@ async function consultarScore(documento, tipo) {
     });
     const retorno = res.data?.retorno || {};
     const r = retorno.pessoaFisica || retorno.pessoaJuridica || retorno || {};
-    console.log('[Score] Retorno keys:', Object.keys(r), JSON.stringify(r).substring(0, 300));
     return {
-      score: r.score || r.Score || r.scoreCredito || r.valor || r.pontuacao || null,
-      faixa: r.faixa || r.Faixa || r.classificacao || r.risco || '',
-      probabilidade_inadimplencia: r.probabilidadeInadimplencia || r.probabilidade || null,
-      detalhes: r,
+      score: r.score || null,
+      faixa: r.faixaScore || '',
+      motivos: r.motivos || [],
+      indicadores: r.indicadoresNegocio || null,
       fonte: 'Direct Data Score (QUOD)',
       consultado_em: new Date().toISOString()
     };
@@ -419,20 +418,32 @@ async function consultarNegativacoes(documento) {
     });
     const retorno = res.data?.retorno || {};
     const r = retorno.pessoaFisica || retorno.pessoaJuridica || retorno || {};
-    console.log('[Negativacoes] Retorno keys:', Object.keys(r), JSON.stringify(r).substring(0, 300));
+    const pf = r.pendenciaFinanceira || {};
+    const protestosArr = pf.protestos || [];
+    // Extrair cartorios de dentro de cada protesto
+    const todosCartorios = [];
+    protestosArr.forEach(p => {
+      (p.cartorios || []).forEach(c => {
+        todosCartorios.push({
+          situacao: p.situacao || '',
+          valor_total_protesto: p.valorTotal || 0,
+          nome_cartorio: c.nome || '',
+          cidade: c.codigoCidade || '',
+          telefone: c.telefone || '',
+          titulos: (c.titulos || []).slice(0, 10).map(t => ({
+            valor: t.valor || 0, data: t.data || t.dataProtesto || '',
+            tipo: t.especie || t.tipo || ''
+          }))
+        });
+      });
+    });
     return {
-      total_pendencias: r.totalPendencias || r.quantidadeTotal || r.totalOcorrencias || r.quantidade || 0,
-      valor_total: r.valorTotal || r.valor || 0,
-      protestos: (r.protestos || r.cartorioProtestos || []).map(p => ({
-        valor: p.valor || 0, data: p.data || '', cartorio: p.cartorio || '', cidade: p.cidade || ''
-      })),
-      acoes_judiciais: (r.acoesJudiciais || r.acoes || []).map(a => ({
-        tipo: a.tipo || '', valor: a.valor || 0, data: a.data || '', vara: a.vara || ''
-      })),
-      cheques_sem_fundo: (r.chequesSemFundo || []).map(c => ({
-        banco: c.banco || '', agencia: c.agencia || '', data: c.data || ''
-      })),
-      falencias: r.falencias || [],
+      status: pf.status || 'Nao consultado',
+      total_pendencias: pf.totalPendencia || 0,
+      protestos: todosCartorios,
+      acoes_judiciais: pf.acoesJudiciais || pf.acoes || [],
+      cheques_sem_fundo: pf.chequesSemFundo || pf.cheques || [],
+      falencias: pf.falencias || [],
       fonte: 'Direct Data (Detalhamento Negativo)',
       consultado_em: new Date().toISOString()
     };
@@ -706,13 +717,13 @@ async function executarConsultaCompleta(pedido) {
     processos,
     ...(transparencia ? { transparencia } : {}),
     ...(score_credito?.score ? { score_credito } : {}),
-    ...(negativacoes?.total_pendencias !== undefined ? { negativacoes } : {}),
+    ...(negativacoes?.status ? { negativacoes } : {}),
     ...(vinculos?.total ? { vinculos } : {}),
     ...(veiculos ? { veiculos } : {}),
     ...(cadastral2 ? { receita_federal_2: cadastral2 } : {}),
     ...(processos2 ? { processos_2: processos2 } : {}),
     ...(score2?.score ? { score_credito_2: score2 } : {}),
-    ...(negativacoes2?.total_pendencias !== undefined ? { negativacoes_2: negativacoes2 } : {}),
+    ...(negativacoes2?.status ? { negativacoes_2: negativacoes2 } : {}),
     ...(vinculos2?.total ? { vinculos_2: vinculos2 } : {})
   };
 }

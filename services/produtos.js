@@ -203,6 +203,8 @@ function calcularScore(tipo, dados) {
   const processos = dados.processos || {};
   const cadastral = dados.receita_federal || {};
   const transparencia = dados.transparencia || {};
+  const scoreQuod = dados.score_credito || {};
+  const negativacoes = dados.negativacoes || {};
 
   // Verificar se temos dados suficientes para calcular score
   const temDadosCadastrais = cadastral.nome || cadastral.razao_social;
@@ -231,6 +233,26 @@ function calcularScore(tipo, dados) {
   if (cadastral.aviso || cadastral.erro) {
     score -= 10;
     alertas.push('API de dados cadastrais não retornou informações completas');
+  }
+
+  // Penalidade por Score QUOD (Direct Data)
+  if (scoreQuod.score) {
+    const sq = Number(scoreQuod.score);
+    if (sq < 300) { score -= 30; alertas.push(`Score QUOD muito baixo: ${sq}/1000 — ${scoreQuod.faixa || ''}`); }
+    else if (sq < 500) { score -= 20; alertas.push(`Score QUOD baixo: ${sq}/1000 — ${scoreQuod.faixa || ''}`); }
+    else if (sq < 700) { score -= 10; alertas.push(`Score QUOD medio: ${sq}/1000 — ${scoreQuod.faixa || ''}`); }
+    if (scoreQuod.motivos?.length > 0) {
+      scoreQuod.motivos.slice(0, 2).forEach(m => alertas.push(`QUOD: ${m}`));
+    }
+  }
+
+  // Penalidade por negativacoes (Direct Data)
+  if (negativacoes.total_pendencias > 0) {
+    const valorPend = Number(negativacoes.total_pendencias);
+    if (valorPend > 100000) { score -= 30; }
+    else if (valorPend > 10000) { score -= 20; }
+    else { score -= 10; }
+    alertas.push(`Pendencias financeiras: R$ ${valorPend.toLocaleString('pt-BR', {minimumFractionDigits:2})} — ${negativacoes.status || ''}`);
   }
 
   // Penalidades por processos judiciais
