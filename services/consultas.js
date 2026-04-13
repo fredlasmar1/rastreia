@@ -372,18 +372,21 @@ async function consultarSerasa(documento) {
 // Endpoint: /api/Score | R$ 1,98
 // ─────────────────────────────────────────────
 
-async function consultarScore(documento) {
+async function consultarScore(documento, tipo) {
   if (!process.env.DIRECTD_TOKEN) {
     return { disponivel: false, fonte: 'Direct Data Score' };
   }
   try {
+    const doc = limparDoc(documento);
+    const paramDoc = doc.length <= 11 ? { Cpf: doc } : { Cnpj: doc };
     const res = await axios.get('https://apiv3.directd.com.br/api/Score', {
-      params: { Documento: limparDoc(documento), Token: process.env.DIRECTD_TOKEN },
+      params: { ...paramDoc, Token: process.env.DIRECTD_TOKEN },
       timeout: 20000
     });
+    console.log('[Score] Retorno:', JSON.stringify(res.data).substring(0, 500));
     const r = res.data?.retorno || res.data || {};
     return {
-      score: r.score || r.Score || null,
+      score: r.score || r.Score || r.scoreCredito || r.valor || null,
       faixa: r.faixa || r.Faixa || '',
       probabilidade_inadimplencia: r.probabilidadeInadimplencia || null,
       detalhes: r,
@@ -407,13 +410,16 @@ async function consultarNegativacoes(documento) {
     return { disponivel: false, fonte: 'Direct Data Negativacoes' };
   }
   try {
+    const doc = limparDoc(documento);
+    const paramDoc = doc.length <= 11 ? { Cpf: doc } : { Cnpj: doc };
     const res = await axios.get('https://apiv3.directd.com.br/api/DetalhamentoNegativo', {
-      params: { Documento: limparDoc(documento), Token: process.env.DIRECTD_TOKEN },
+      params: { ...paramDoc, Token: process.env.DIRECTD_TOKEN },
       timeout: 20000
     });
+    console.log('[Negativacoes] Retorno:', JSON.stringify(res.data).substring(0, 500));
     const r = res.data?.retorno || res.data || {};
     return {
-      total_pendencias: r.totalPendencias || r.quantidadeTotal || 0,
+      total_pendencias: r.totalPendencias || r.quantidadeTotal || r.totalOcorrencias || 0,
       valor_total: r.valorTotal || 0,
       protestos: (r.protestos || []).map(p => ({
         valor: p.valor || 0, data: p.data || '', cartorio: p.cartorio || '', cidade: p.cidade || ''
@@ -444,8 +450,10 @@ async function consultarProtestos(documento) {
     return { disponivel: false, fonte: 'Direct Data Protestos' };
   }
   try {
+    const doc = limparDoc(documento);
+    const paramDoc = doc.length <= 11 ? { Cpf: doc } : { Cnpj: doc };
     const res = await axios.get('https://apiv3.directd.com.br/api/Protestos', {
-      params: { Documento: limparDoc(documento), Token: process.env.DIRECTD_TOKEN },
+      params: { ...paramDoc, Token: process.env.DIRECTD_TOKEN },
       timeout: 20000
     });
     const r = res.data?.retorno || res.data || {};
@@ -474,8 +482,10 @@ async function consultarVinculos(documento) {
     return { disponivel: false, fonte: 'Direct Data Vinculos' };
   }
   try {
+    const doc = limparDoc(documento);
+    const paramDoc = doc.length <= 11 ? { Cpf: doc } : { Cnpj: doc };
     const res = await axios.get('https://apiv3.directd.com.br/api/VinculosSocietarios', {
-      params: { Documento: limparDoc(documento), Token: process.env.DIRECTD_TOKEN },
+      params: { ...paramDoc, Token: process.env.DIRECTD_TOKEN },
       timeout: 20000
     });
     const r = res.data?.retorno || res.data || {};

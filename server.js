@@ -188,16 +188,16 @@ app.get('/api/health/apis/teste', async (req, res) => {
     }
   } else results.CPFCNPJ = { ok: false, erro: 'nao configurado' };
 
-  // Teste Direct Data Score
+  // Teste Direct Data Score (usa Cnpj para teste com CNPJ do BB)
   if (process.env.DIRECTD_TOKEN) {
     try {
       const r = await axios.get('https://apiv3.directd.com.br/api/Score', {
-        params: { Documento: '00000000191', Token: process.env.DIRECTD_TOKEN },
+        params: { Cnpj: '00000000000191', Token: process.env.DIRECTD_TOKEN },
         timeout: 20000
       });
-      results.DD_SCORE = { ok: true, status: r.status, dados: r.data ? Object.keys(r.data) : 'vazio' };
+      results.DD_SCORE = { ok: true, status: r.status, keys: r.data ? Object.keys(r.data) : 'vazio', retorno_keys: r.data?.retorno ? Object.keys(r.data.retorno) : null };
     } catch (e) {
-      results.DD_SCORE = { ok: false, status: e.response?.status, erro: e.response?.data || e.message };
+      results.DD_SCORE = { ok: false, status: e.response?.status, msg: e.response?.data?.metaDados?.mensagem || e.message };
     }
   } else results.DD_SCORE = { ok: false, erro: 'nao configurado' };
 
@@ -205,12 +205,12 @@ app.get('/api/health/apis/teste', async (req, res) => {
   if (process.env.DIRECTD_TOKEN) {
     try {
       const r = await axios.get('https://apiv3.directd.com.br/api/DetalhamentoNegativo', {
-        params: { Documento: '00000000191', Token: process.env.DIRECTD_TOKEN },
+        params: { Cnpj: '00000000000191', Token: process.env.DIRECTD_TOKEN },
         timeout: 20000
       });
-      results.DD_NEGATIVACOES = { ok: true, status: r.status, dados: r.data ? Object.keys(r.data) : 'vazio' };
+      results.DD_NEGATIVACOES = { ok: true, status: r.status, keys: r.data ? Object.keys(r.data) : 'vazio', retorno_keys: r.data?.retorno ? Object.keys(r.data.retorno) : null };
     } catch (e) {
-      results.DD_NEGATIVACOES = { ok: false, status: e.response?.status, erro: e.response?.data || e.message };
+      results.DD_NEGATIVACOES = { ok: false, status: e.response?.status, msg: e.response?.data?.metaDados?.mensagem || e.message };
     }
   } else results.DD_NEGATIVACOES = { ok: false, erro: 'nao configurado' };
 
