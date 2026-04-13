@@ -320,40 +320,72 @@ function gerarDossie(pedido, dadosDB) {
         y += 44 + Math.min((scoreCredito.motivos?.length || 0), 3) * 9;
       }
 
-      // ════ RESTRICOES FINANCEIRAS ════
-      y = secao(doc, 'RESTRICOES FINANCEIRAS', y);
+      // ════ RESTRICOES FINANCEIRAS (Protestos + Negativacoes) ════
+      y = secao(doc, 'PROTESTOS E NEGATIVACOES', y);
       if (negativacoes.status && negativacoes.status !== 'Nao consultado') {
         const temPendencia = negativacoes.total_pendencias > 0 || negativacoes.status === 'Consta Pendencia';
         if (!temPendencia) {
-          doc.rect(MARGEM, y, LARGURA, 20).fill('#dcfce7');
-          doc.fillColor('#14532d').fontSize(9).font('Helvetica').text('Nada consta - nenhuma pendencia financeira encontrada.', MARGEM + 8, y + 4);
-          y += 26;
+          doc.rect(MARGEM, y, LARGURA, 18).fill('#dcfce7');
+          doc.fillColor('#14532d').fontSize(8).font('Helvetica-Bold').text('NADA CONSTA - Nenhum protesto ou negativacao encontrada.', MARGEM + 8, y + 4);
+          y += 22;
         } else {
           const valorTotal = Number(negativacoes.total_pendencias || 0);
-          doc.rect(MARGEM, y, LARGURA, 20).fill('#fee2e2');
-          doc.fillColor(COR.vermelho).fontSize(9).font('Helvetica-Bold')
-            .text(`${negativacoes.status} | Valor total: R$ ${valorTotal.toLocaleString('pt-BR', {minimumFractionDigits:2})}`, MARGEM + 8, y + 4);
-          y += 26;
+          doc.rect(MARGEM, y, LARGURA, 18).fill('#fee2e2');
+          doc.fillColor(COR.vermelho).fontSize(8).font('Helvetica-Bold')
+            .text(`CONSTA PENDENCIA | Valor total: R$ ${valorTotal.toLocaleString('pt-BR', {minimumFractionDigits:2})}`, MARGEM + 8, y + 4);
+          y += 22;
 
+          // Protestos detalhados
           if (negativacoes.protestos?.length > 0) {
-            doc.fillColor(COR.azul).fontSize(8).font('Helvetica-Bold').text('PROTESTOS:', MARGEM, y); y += 12;
-            negativacoes.protestos.slice(0, 5).forEach(p => {
-              y = verificarPagina(doc, y, 20);
-              doc.fillColor('#111827').fontSize(7).font('Helvetica-Bold')
-                .text(`${p.nome_cartorio}`, MARGEM + 8, y);
-              doc.fillColor(COR.cinza).font('Helvetica')
-                .text(`${p.situacao} | Total: R$ ${Number(p.valor_total_protesto || 0).toLocaleString('pt-BR', {minimumFractionDigits:2})}`, MARGEM + 8, y + 9);
-              y += 22;
+            doc.fillColor(COR.vermelho).fontSize(7).font('Helvetica-Bold').text('PROTESTOS EM CARTORIO:', MARGEM, y); y += 10;
+            negativacoes.protestos.slice(0, 8).forEach(p => {
+              y = verificarPagina(doc, y, 14);
+              doc.rect(MARGEM, y, 3, 10).fill(COR.vermelho);
+              doc.fillColor('#111827').fontSize(6.5).font('Helvetica-Bold')
+                .text(`${p.nome_cartorio || 'Cartorio'}`, MARGEM + 8, y);
+              doc.fillColor(COR.cinza).font('Helvetica').fontSize(6)
+                .text(`R$ ${Number(p.valor_total_protesto || 0).toLocaleString('pt-BR', {minimumFractionDigits:2})} | ${p.situacao || ''}`, MARGEM + 250, y);
+              y += 12;
+              // Titulos individuais
+              (p.titulos || []).slice(0, 3).forEach(t => {
+                y = verificarPagina(doc, y, 10);
+                doc.fillColor(COR.cinza).fontSize(5.5).font('Helvetica')
+                  .text(`    ${t.tipo || 'Titulo'} - R$ ${Number(t.valor || 0).toLocaleString('pt-BR', {minimumFractionDigits:2})} - ${t.data || ''}`, MARGEM + 16, y);
+                y += 9;
+              });
+            });
+            y += 4;
+          }
+
+          // Acoes judiciais
+          if (negativacoes.acoes_judiciais?.length > 0) {
+            doc.fillColor(COR.vermelho).fontSize(7).font('Helvetica-Bold').text('ACOES JUDICIAIS:', MARGEM, y); y += 10;
+            negativacoes.acoes_judiciais.slice(0, 5).forEach(a => {
+              y = verificarPagina(doc, y, 10);
+              doc.fillColor('#111827').fontSize(6.5).font('Helvetica')
+                .text(`- ${a.tipo || 'Acao'} | R$ ${Number(a.valor || 0).toLocaleString('pt-BR')} | ${a.data || ''}`, MARGEM + 8, y);
+              y += 10;
+            });
+            y += 4;
+          }
+
+          // Cheques sem fundo
+          if (negativacoes.cheques_sem_fundo?.length > 0) {
+            doc.fillColor(COR.vermelho).fontSize(7).font('Helvetica-Bold').text('CHEQUES SEM FUNDO:', MARGEM, y); y += 10;
+            negativacoes.cheques_sem_fundo.slice(0, 3).forEach(c => {
+              doc.fillColor('#111827').fontSize(6.5).font('Helvetica')
+                .text(`- Banco: ${c.banco || ''} | Ag: ${c.agencia || ''} | ${c.data || ''}`, MARGEM + 8, y);
+              y += 10;
             });
             y += 4;
           }
         }
-        doc.fillColor(COR.cinza).fontSize(6).font('Helvetica').text(`Fonte: ${negativacoes.fonte || 'Direct Data'}`, MARGEM, y); y += 10;
+        doc.fillColor(COR.cinza).fontSize(5.5).font('Helvetica').text(`Fonte: ${negativacoes.fonte || 'Direct Data'}`, MARGEM, y); y += 8;
       } else {
-        doc.fillColor(COR.cinza).fontSize(8).font('Helvetica').text('Consulta de negativacoes nao realizada.', MARGEM, y);
+        doc.fillColor(COR.cinza).fontSize(8).font('Helvetica').text('Consulta de protestos/negativacoes nao realizada.', MARGEM, y);
         y += 12;
       }
-      y += 6;
+      y += 4;
 
       // ════ PERFIL FINANCEIRO CONSOLIDADO ════
       if (pedido.alvo_tipo === 'PF' && (cadastral.renda_estimada || scoreCredito.score)) {
@@ -447,10 +479,19 @@ function gerarDossie(pedido, dadosDB) {
         y += doc.heightOfString(pedido.observacoes, { width: LARGURA }) + 10;
       }
 
-      // Seção "O QUE ESTA INCLUSO" removida para manter PDF compacto
+      // ════ ALERTA LGPD ════
+      y = verificarPagina(doc, y, 40);
+      y += 6;
+      doc.rect(MARGEM, y, LARGURA, 36).fill('#fef3c7').stroke('#f59e0b');
+      doc.fillColor('#92400e').fontSize(7).font('Helvetica-Bold').text('AVISO LEGAL — LGPD (Lei 13.709/2018)', MARGEM + 8, y + 4);
+      doc.fillColor('#92400e').fontSize(6).font('Helvetica')
+        .text('Este documento contem dados pessoais protegidos pela Lei Geral de Protecao de Dados. E PROIBIDO compartilhar, reproduzir ou repassar este relatorio a terceiros sem autorizacao. O uso indevido sujeita o responsavel as sancoes previstas nos artigos 42 a 45 da LGPD, incluindo multa de ate 2% do faturamento. Uso exclusivo para a finalidade declarada no momento da contratacao.', MARGEM + 8, y + 14, { width: LARGURA - 16 });
+      y += 42;
 
-      // ════ RODAPE na ultima pagina ════
-      rodape(doc);
+      // ════ RODAPE (inline, sem criar pagina nova) ════
+      doc.fillColor(COR.cinza).fontSize(6).font('Helvetica')
+        .text('Documento informativo gerado pelo sistema Rastreia. Nao substitui consulta juridica. Recobro Recuperacao de Credito | Anapolis - GO', MARGEM, y + 4, { align: 'center', width: LARGURA });
+
       doc.end();
       stream.on('finish', () => resolve({ filename, filepath, url: `/relatorios/${filename}` }));
       stream.on('error', reject);
