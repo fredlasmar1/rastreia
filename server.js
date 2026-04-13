@@ -270,6 +270,35 @@ app.post('/webhook/mp', express.json(), async (req, res) => {
   }
 });
 
+// Servir PDF — regenera se arquivo não existir (Railway ephemeral storage)
+app.get('/relatorios/:filename', async (req, res) => {
+  const filePath = path.join(__dirname, 'public', 'relatorios', req.params.filename);
+  if (fs.existsSync(filePath)) {
+    return res.sendFile(filePath);
+  }
+  // Arquivo não existe (apagado no deploy). Tentar regenerar.
+  try {
+    const { pool } = require('./db');
+    const { gerarDossie } = require('./services/pdf');
+    // Extrair ID do pedido do nome do arquivo (rastreia_tipo_ID_timestamp.pdf)
+    const parts = req.params.filename.replace('.pdf', '').split('_');
+    const pedidoIdPart = parts[2]; // 8 chars do UUID
+    if (!pedidoIdPart) return res.status(404).send('PDF nao encontrado');
+    const pedidoResult = await pool.query(
+      "SELECT * FROM pedidos WHERE id::text LIKE $1",
+      [`${pedidoIdPart}%`]
+    );
+    if (pedidoResult.rows.length === 0) return res.status(404).send('Pedido nao encontrado');
+    const pedido = pedidoResult.rows[0];
+    const dadosResult = await pool.query('SELECT * FROM dados_consulta WHERE pedido_id = $1', [pedido.id]);
+    const { filepath } = await gerarDossie(pedido, dadosResult.rows);
+    res.sendFile(filepath);
+  } catch (e) {
+    console.error('[PDF Regen] Erro:', e.message);
+    res.status(404).send('PDF nao disponivel. Gere novamente pelo painel.');
+  }
+});
+
 // Servir frontend para todas as rotas não-API
 app.get('*', (req, res) => {
   if (!req.path.startsWith('/api') && !req.path.startsWith('/webhook')) {

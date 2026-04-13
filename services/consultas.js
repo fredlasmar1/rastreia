@@ -238,9 +238,31 @@ async function consultarEscavador(doc, tipo, nome) {
       }
     );
     const items = res.data?.items || [];
+    // Filtrar: manter apenas processos onde a pessoa é PARTE, nao advogado
+    const comoParte = items.filter(p => {
+      const poloA = (p.titulo_polo_ativo || '').toLowerCase();
+      const poloP = (p.titulo_polo_passivo || '').toLowerCase();
+      const nomeLower = (nome || '').toLowerCase();
+      const docLower = doc;
+      // Se o nome ou doc aparece no polo ativo/passivo = é parte
+      if (nomeLower && (poloA.includes(nomeLower) || poloP.includes(nomeLower))) return true;
+      // Verificar envolvimentos
+      const envolvimentos = p.envolvimentos || p.partes || [];
+      const ehParte = envolvimentos.some(e => {
+        const tipo = (e.tipo_envolvimento || e.tipo || e.polo || '').toLowerCase();
+        const cpfEnv = (e.cpf || e.documento || '').replace(/\D/g, '');
+        return cpfEnv === docLower && !tipo.includes('advog') && !tipo.includes('repres');
+      });
+      if (ehParte) return true;
+      // Se nao conseguiu determinar, incluir (melhor mostrar do que esconder)
+      if (!nomeLower) return true;
+      return false;
+    });
     return {
-      total: res.data?.meta?.total || items.length,
-      processos: items.slice(0, 30).map(p => {
+      total: comoParte.length,
+      total_geral: items.length,
+      excluidos_advogado: items.length - comoParte.length,
+      processos: comoParte.slice(0, 30).map(p => {
         // Determinar status: ativo, arquivado, baixado
         const ultMov = p.data_ultima_movimentacao || '';
         const anoUltMov = ultMov ? new Date(ultMov).getFullYear() : 0;

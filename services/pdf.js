@@ -254,8 +254,11 @@ function gerarDossie(pedido, dadosDB) {
 
         const ativos = (processos.processos || []).filter(p => p.status === 'Ativo');
         const inativos = (processos.processos || []).filter(p => p.status !== 'Ativo');
-        doc.fillColor(COR.cinza).fontSize(7).font('Helvetica')
-          .text(`${ativos.length} ativo(s) | ${inativos.length} baixado(s)/inativo(s)`, MARGEM + 8, y - 16);
+        const excluidos = processos.excluidos_advogado || 0;
+        let resumo = `${ativos.length} ativo(s) | ${inativos.length} baixado(s)/inativo(s)`;
+        if (excluidos > 0) resumo += ` | ${excluidos} excluido(s) (como advogado)`;
+        doc.fillColor(COR.cinza).fontSize(6.5).font('Helvetica')
+          .text(resumo, MARGEM + 8, y - 16);
         y += 4;
 
         (processos.processos || []).slice(0, 15).forEach((proc, i) => {
