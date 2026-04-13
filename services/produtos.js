@@ -335,6 +335,18 @@ function gerarChecklist(tipo, dadosAutomaticos) {
       { item: 'Confirmar possíveis laranjas — pesquisar família no JusBrasil', link: dadosAutomaticos?.processos?.link_jusbrasil || '#', obrigatorio: false },
     ],
   };
+  checklists.due_diligence_imobiliaria = [
+    { item: 'Consultar matricula do imovel no Cartorio de Registro de Imoveis', link: 'https://registradores.onr.org.br', obrigatorio: true },
+    { item: 'Verificar onus e gravames na matricula (hipoteca, alienacao fiduciaria)', link: '', obrigatorio: true },
+    { item: 'Confirmar proprietario registrado na matricula x vendedor', link: '', obrigatorio: true },
+    { item: 'Verificar certidoes negativas do vendedor (Federal, Estadual, Municipal)', link: 'https://solucoes.receita.fazenda.gov.br/servicos/certidaointernet/pf/emitir', obrigatorio: true },
+    { item: 'Confirmar IPTU em dia e inexistencia de debitos municipais', link: '', obrigatorio: true },
+    { item: 'Verificar processos do vendedor no JusBrasil', link: dadosAutomaticos?.processos?.link_jusbrasil || '#', obrigatorio: true },
+    { item: 'Solicitar parecer juridico do Balladao Advogados', link: '', obrigatorio: true },
+    { item: 'Verificar se imovel esta em area de protecao ambiental', link: '', obrigatorio: false },
+    { item: 'Confirmar inexistencia de inventario/usucapiao sobre o imovel', link: '', obrigatorio: false },
+  ];
+
   return checklists[tipo] || [];
 }
 

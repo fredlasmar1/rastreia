@@ -465,7 +465,67 @@ async function consultarProtestos(documento) {
 }
 
 // ─────────────────────────────────────────────
-// 9. ONR — RI Digital (matrícula de imóveis)
+// 9. VÍNCULOS SOCIETÁRIOS — Direct Data
+// Endpoint: /api/VinculosSocietarios | R$ 1,84
+// ─────────────────────────────────────────────
+
+async function consultarVinculos(documento) {
+  if (!process.env.DIRECTD_TOKEN) {
+    return { disponivel: false, fonte: 'Direct Data Vinculos' };
+  }
+  try {
+    const res = await axios.get('https://apiv3.directd.com.br/api/VinculosSocietarios', {
+      params: { Documento: limparDoc(documento), Token: process.env.DIRECTD_TOKEN },
+      timeout: 20000
+    });
+    const r = res.data?.retorno || res.data || {};
+    const empresas = r.empresas || r.participacoes || r.vinculos || [];
+    return {
+      total: empresas.length,
+      empresas: empresas.slice(0, 20).map(e => ({
+        cnpj: e.cnpj || e.documento || '',
+        razao_social: e.razaoSocial || e.nome || '',
+        situacao: e.situacao || e.status || '',
+        cargo: e.cargo || e.qualificacao || '',
+        data_entrada: e.dataEntrada || e.desde || '',
+        capital_social: e.capitalSocial || null,
+        porte: e.porte || ''
+      })),
+      fonte: 'Direct Data (Vinculos Societarios)',
+      consultado_em: new Date().toISOString()
+    };
+  } catch (e) {
+    console.error(`[Vinculos] Erro: ${e.response?.status || e.message}`);
+    return { disponivel: false, erro: e.response?.status || e.message, fonte: 'Direct Data Vinculos' };
+  }
+}
+
+// ─────────────────────────────────────────────
+// 10. ÓBITO — Direct Data
+// Endpoint: /api/Obito | R$ 0,36
+// ─────────────────────────────────────────────
+
+async function consultarObito(cpf) {
+  if (!process.env.DIRECTD_TOKEN) return null;
+  try {
+    const res = await axios.get('https://apiv3.directd.com.br/api/Obito', {
+      params: { Cpf: limparDoc(cpf), Token: process.env.DIRECTD_TOKEN },
+      timeout: 15000
+    });
+    const r = res.data?.retorno || res.data || {};
+    return {
+      possui_obito: r.possuiObito || r.obito || false,
+      data_obito: r.dataObito || r.dataFalecimento || null,
+      fonte: 'Direct Data Obito',
+      consultado_em: new Date().toISOString()
+    };
+  } catch (e) {
+    return null;
+  }
+}
+
+// ─────────────────────────────────────────────
+// 11. ONR — RI Digital (matrícula de imóveis)
 // Docs: integracao.registrodeimoveis.org.br
 // ─────────────────────────────────────────────
 
@@ -598,31 +658,35 @@ async function executarConsultaCompleta(pedido) {
     consultarNegativacoes(alvo_documento)
   ];
 
-  // Consultas extras para Investigação Patrimonial e Due Diligence Imobiliária
-  const precisaImoveis = ['investigacao_patrimonial', 'due_diligence_imobiliaria'].includes(tipo);
-  const precisaVeiculos = ['investigacao_patrimonial', 'due_diligence_imobiliaria'].includes(tipo);
+  // Vínculos societários para produtos premium
+  const precisaVinculos = ['due_diligence', 'investigacao_patrimonial', 'due_diligence_imobiliaria'].includes(tipo);
+  if (precisaVinculos) promises.push(consultarVinculos(alvo_documento));
 
-  if (precisaImoveis) promises.push(consultarONR(alvo_documento, 'GO'));
+  // Veículos e imóveis para investigação patrimonial e imobiliária
+  const precisaVeiculos = ['investigacao_patrimonial', 'due_diligence_imobiliaria'].includes(tipo);
   if (precisaVeiculos) promises.push(consultarVeiculos(alvo_documento));
 
   const resultados = await Promise.all(promises);
   const [cadastral, processos, transparencia, score_credito, negativacoes] = resultados;
   let idx = 5;
-  const imoveis = precisaImoveis ? resultados[idx++] : null;
+  const vinculos = precisaVinculos ? resultados[idx++] : null;
   const veiculos = precisaVeiculos ? resultados[idx++] : null;
 
-  // Para Due Diligence Imobiliária: consultar também o segundo alvo (vendedor) e a matrícula
-  let cadastral2 = null, processos2 = null, matricula = null;
+  // Para Due Diligence Imobiliária: consultar também o segundo alvo (vendedor)
+  let cadastral2 = null, processos2 = null, score2 = null, negativacoes2 = null, vinculos2 = null;
   if (tipo === 'due_diligence_imobiliaria' && pedido.alvo2_documento) {
-    const [c2, p2] = await Promise.all([
+    const [c2, p2, s2, n2, v2] = await Promise.all([
       pedido.alvo2_tipo === 'PJ' ? consultarCNPJ(pedido.alvo2_documento) : consultarCPF(pedido.alvo2_documento),
-      consultarProcessos(pedido.alvo2_documento, pedido.alvo2_tipo, pedido.alvo2_nome)
+      consultarProcessos(pedido.alvo2_documento, pedido.alvo2_tipo, pedido.alvo2_nome),
+      consultarScore(pedido.alvo2_documento),
+      consultarNegativacoes(pedido.alvo2_documento),
+      consultarVinculos(pedido.alvo2_documento)
     ]);
     cadastral2 = c2;
     processos2 = p2;
-  }
-  if (tipo === 'due_diligence_imobiliaria' && pedido.imovel_matricula) {
-    matricula = await consultarMatricula(pedido.imovel_matricula, pedido.imovel_estado || 'GO');
+    score2 = s2;
+    negativacoes2 = n2;
+    vinculos2 = v2;
   }
 
   return {
@@ -631,11 +695,13 @@ async function executarConsultaCompleta(pedido) {
     ...(transparencia ? { transparencia } : {}),
     ...(score_credito?.score ? { score_credito } : {}),
     ...(negativacoes?.total_pendencias !== undefined ? { negativacoes } : {}),
-    ...(imoveis ? { imoveis } : {}),
+    ...(vinculos?.total ? { vinculos } : {}),
     ...(veiculos ? { veiculos } : {}),
     ...(cadastral2 ? { receita_federal_2: cadastral2 } : {}),
     ...(processos2 ? { processos_2: processos2 } : {}),
-    ...(matricula ? { matricula } : {})
+    ...(score2?.score ? { score_credito_2: score2 } : {}),
+    ...(negativacoes2?.total_pendencias !== undefined ? { negativacoes_2: negativacoes2 } : {}),
+    ...(vinculos2?.total ? { vinculos_2: vinculos2 } : {})
   };
 }
 
@@ -643,6 +709,7 @@ module.exports = {
   consultarCNPJ, consultarCPF, consultarProcessos,
   consultarEscavador, consultarDatajud, consultarTransparencia,
   consultarSerasa, consultarScore, consultarNegativacoes, consultarProtestos,
+  consultarVinculos, consultarObito,
   consultarONR, consultarMatricula, consultarVeiculos,
   gerarLinkJusBrasil, executarConsultaCompleta
 };

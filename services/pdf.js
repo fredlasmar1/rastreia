@@ -93,6 +93,7 @@ function gerarDossie(pedido, dadosDB) {
       const transparencia = dados.transparencia || {};
       const scoreCredito = dados.score_credito || {};
       const negativacoes = dados.negativacoes || {};
+      const vinculos = dados.vinculos || {};
       const serasa = dados.serasa || {};
 
       // ════ CABECALHO ════
@@ -340,6 +341,21 @@ function gerarDossie(pedido, dadosDB) {
         y += 12;
       }
       y += 6;
+
+      // ════ VINCULOS SOCIETARIOS ════
+      if (vinculos.total > 0) {
+        y = secao(doc, 'VINCULOS SOCIETARIOS', y);
+        doc.fillColor('#111827').fontSize(9).font('Helvetica-Bold').text(`${vinculos.total} empresa(s) vinculada(s)`, MARGEM, y); y += 14;
+        (vinculos.empresas || []).slice(0, 10).forEach((emp, i) => {
+          y = verificarPagina(doc, y, 24);
+          doc.rect(MARGEM, y, LARGURA, 22).fill(i % 2 === 0 ? '#f9fafb' : '#ffffff');
+          doc.fillColor(COR.azul).fontSize(7).font('Helvetica-Bold').text(emp.razao_social || 'N/D', MARGEM + 6, y + 3);
+          const info = [emp.cnpj, emp.cargo, emp.situacao, emp.data_entrada ? `Desde: ${emp.data_entrada}` : ''].filter(Boolean).join('  |  ');
+          doc.fillColor(COR.cinza).font('Helvetica').text(info, MARGEM + 6, y + 13, { width: LARGURA - 12 });
+          y += 24;
+        });
+        doc.fillColor(COR.cinza).fontSize(6).font('Helvetica').text(`Fonte: ${vinculos.fonte || 'Direct Data'}`, MARGEM, y); y += 10;
+      }
 
       // ════ CHECKLIST ════
       if (checklist.length > 0) {
