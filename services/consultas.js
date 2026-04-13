@@ -150,6 +150,11 @@ async function consultarCPF(cpf) {
           obito: r.possuiObito || r.obito || false,
           classe_social: r.classeSocial || '', renda_estimada: rendaFormatada,
           faixa_salarial: r.rendaFaixaSalarial || '',
+          profissao: r.cbo || r.codigoCBO || '',
+          signo: r.signo || '',
+          parentescos: (r.parentescos || []).slice(0, 10).map(p => ({
+            nome: p.nome || '', cpf: p.cpf || '', tipo: p.tipoVinculo || p.parentesco || p.tipo || ''
+          })),
           telefones: (r.telefones || []).slice(0, 5).map(t => ({
             numero: t.telefoneComDDD || '', tipo: t.tipoTelefone || '',
             operadora: t.operadora || '', whatsapp: t.whatsApp || false

@@ -190,8 +190,21 @@ function gerarDossie(pedido, dadosDB) {
             doc.fillColor(COR.vermelho).fontSize(9).font('Helvetica-Bold').text('REGISTRO DE OBITO ENCONTRADO', MARGEM + 6, y + 3);
             y += 20;
           }
+          if (cadastral.profissao) { linha(doc, 'Profissao (CBO)', cadastral.profissao, y); y += 15; }
           if (cadastral.classe_social) { linha(doc, 'Classe Social', cadastral.classe_social, y); y += 15; }
           if (cadastral.renda_estimada) { linha(doc, 'Renda Estimada', cadastral.renda_estimada, y); y += 15; }
+
+          // Parentescos / Vinculos familiares
+          if (cadastral.parentescos?.length > 0) {
+            y += 4;
+            doc.fillColor(COR.azul).fontSize(9).font('Helvetica-Bold').text('VINCULOS FAMILIARES', MARGEM, y); y += 12;
+            cadastral.parentescos.forEach(p => {
+              y = verificarPagina(doc, y, 12);
+              const vinculo = p.tipo ? `(${p.tipo})` : '';
+              doc.fillColor('#111827').fontSize(8).font('Helvetica').text(`- ${p.nome} ${vinculo}`, MARGEM + 6, y, { width: LARGURA - 12 });
+              y += 12;
+            });
+          }
 
           if (cadastral.enderecos?.length > 0) {
             y += 4;
