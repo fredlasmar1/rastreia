@@ -11,7 +11,7 @@ const COR = {
 
 const MARGEM = 50;
 const LARGURA = 495;
-const RODAPE_H = 35;
+const RODAPE_H = 30;
 
 function formatarDoc(doc) {
   if (!doc) return '';
@@ -41,7 +41,7 @@ function verificarPagina(doc, y, espaco) {
 }
 
 function secao(doc, titulo, y) {
-  y = verificarPagina(doc, y, 40);
+  y = verificarPagina(doc, y, 30);
   doc.fillColor(COR.azul).fontSize(11).font('Helvetica-Bold').text(titulo, MARGEM, y);
   y += 16;
   doc.moveTo(MARGEM, y).lineTo(MARGEM + LARGURA, y).strokeColor(COR.azul_claro).lineWidth(1.5).stroke();
