@@ -99,25 +99,21 @@ function gerarDossie(pedido, dadosDB) {
 
       // ════ CABECALHO ════
       doc.rect(0, 0, 595, 100).fill(COR.azul);
-      // Logo centralizada
-      const logoPath = path.join(__dirname, '../public/img/logo-recobro.jpg');
-      const logoExists = fs.existsSync(logoPath);
-      if (logoExists) {
+      // Logo Recobro (PNG com fundo transparente)
+      const logoPng = path.join(__dirname, '../public/img/logo-recobro.png');
+      const logoJpg = path.join(__dirname, '../public/img/logo-recobro.jpg');
+      const logoPath = fs.existsSync(logoPng) ? logoPng : (fs.existsSync(logoJpg) ? logoJpg : null);
+      if (logoPath) {
         try {
-          // Logo centralizada no topo
-          doc.save();
-          // Circulo branco como fundo da logo
-          doc.circle(297, 28, 22).fill('#ffffff');
-          doc.restore();
-          doc.image(logoPath, 275, 6, { width: 44, height: 44 });
+          doc.image(logoPath, 175, 10, { width: 245, height: 50 });
         } catch (e) {
           console.error('[PDF] Erro logo:', e.message);
         }
       }
-      // RASTREIA centralizado
-      doc.fillColor('#ffffff').fontSize(18).font('Helvetica-Bold').text('RASTREIA', 0, 54, { width: 595, align: 'center' });
-      doc.fillColor('rgba(255,255,255,0.8)').fontSize(8).font('Helvetica').text('Recobro Recuperacao de Credito | Sistema de Inteligencia de Dados', 0, 72, { width: 595, align: 'center' });
-      doc.fillColor('rgba(255,255,255,0.6)').fontSize(7).text(`Emitido em: ${new Date().toLocaleString('pt-BR')}  |  Protocolo: #${pedido.numero || pedido.id.substring(0,8).toUpperCase()}`, 0, 84, { width: 595, align: 'center' });
+      // RASTREIA + subtitulo
+      doc.fillColor('#ffffff').fontSize(14).font('Helvetica-Bold').text('RASTREIA', 0, 64, { width: 595, align: 'center' });
+      doc.fillColor('#93c5fd').fontSize(7).font('Helvetica').text('Sistema de Inteligencia de Dados', 0, 80, { width: 595, align: 'center' });
+      doc.fillColor('#93c5fd').fontSize(6.5).text(`Emitido em: ${new Date().toLocaleString('pt-BR')}  |  Protocolo: #${pedido.numero || pedido.id.substring(0,8).toUpperCase()}`, 0, 90, { width: 595, align: 'center' });
 
       doc.rect(0, 100, 595, 28).fill('#0f2660');
       doc.fillColor('#ffffff').fontSize(12).font('Helvetica-Bold').text((produto.nome || pedido.tipo).toUpperCase(), 0, 106, { width: 595, align: 'center' });
