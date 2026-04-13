@@ -174,7 +174,7 @@ router.post('/', autenticar, async (req, res) => {
       [pedido.id, req.usuario.id, 'Pedido criado', `Finalidade: ${finalidade} | IP: ${ip}`]);
 
     // Gerar link Mercado Pago
-    if (process.env.MP_ACCESS_TOKEN) {
+    if (process.env.MP_ACCESS_TOKEN || process.env.MERCADOPAGO_ACCESS_TOKEN) {
       const nomeProduto = PRODUTOS[tipo]?.nome || tipo;
       const mp = await criarPreferencia(pedido, nomeProduto);
       if (mp.init_point) {

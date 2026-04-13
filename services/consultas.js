@@ -46,6 +46,38 @@ async function consultarCNPJ(cnpj) {
       consultado_em: new Date().toISOString()
     };
   } catch (e) {
+    console.error(`[CNPJa] Erro: ${e.response?.status || e.message}`);
+    // Tentar CPF.CNPJ como fallback
+    if (process.env.CPFCNPJ_API_KEY) {
+      try {
+        const res2 = await axios.get(
+          `https://api.cpfcnpj.com.br/${process.env.CPFCNPJ_API_KEY}/6/${doc}`,
+          { timeout: 60000 }
+        );
+        const d = res2.data;
+        if (d.status !== 0 && (d.razao || d.fantasia)) {
+          const addr = d.matrizEndereco || {};
+          return {
+            cnpj: doc, cnpj_formatado: d.cnpj || formatarCNPJ(doc),
+            razao_social: d.razao || '', nome_fantasia: d.fantasia || '',
+            situacao: (d.situacao || [])[0]?.nome || '',
+            data_abertura: d.inicioAtividade || '',
+            porte: (d.porte || [])[0]?.descricao || '',
+            natureza_juridica: (d.naturezaJuridica || [])[0]?.descricao || '',
+            capital_social: 0,
+            atividade_principal: (d.cnae || [])[0]?.descricao || '',
+            simples_nacional: (d.simplesNacional || [])[0]?.optante === 'Sim' ? 'Optante' : 'Nao optante',
+            endereco: addr.logradouro ? `${addr.tipo || ''} ${addr.logradouro}, ${addr.numero || 'S/N'} - ${addr.bairro || ''}, ${addr.cidade || ''} / ${addr.uf || ''}` : 'Nao informado',
+            email: d.email || '',
+            telefone: (d.telefones || [])[0] ? `(${d.telefones[0].ddd}) ${d.telefones[0].numero}` : '',
+            socios: (d.socios || []).map(s => ({ nome: s.nome || '', qualificacao: s.qualificacao_socio?.descricao || '', desde: s.data_entrada || '' })),
+            fonte: 'Receita Federal via CPF.CNPJ', consultado_em: new Date().toISOString()
+          };
+        }
+      } catch (e2) {
+        console.error(`[CPF.CNPJ CNPJ] Erro: ${e2.response?.status || e2.message}`);
+      }
+    }
     return await consultarCNPJFallback(doc);
   }
 }
@@ -79,70 +111,87 @@ async function consultarCNPJFallback(doc) {
 }
 
 // ─────────────────────────────────────────────
-// 2. CPF — Direct Data
-// Cadastro em: https://app.directd.com.br (R$50 grátis)
-// Env: DIRECTD_TOKEN
+// 2. CPF — Direct Data com fallback CPF.CNPJ
+// Direct Data: https://app.directd.com.br | Env: DIRECTD_TOKEN
+// CPF.CNPJ: https://www.cpfcnpj.com.br | Env: CPFCNPJ_API_KEY
 // ─────────────────────────────────────────────
 
 async function consultarCPF(cpf) {
   const doc = limparDoc(cpf);
-  if (!process.env.DIRECTD_TOKEN) {
-    return {
-      cpf: doc,
-      cpf_formatado: formatarCPF(doc),
-      aviso: 'Direct Data não configurada.',
-      instrucao: 'Criar conta em https://app.directd.com.br (R$50 grátis para testar)',
-      fonte: 'Não configurada',
-      consultado_em: new Date().toISOString()
-    };
+
+  // Tentar Direct Data primeiro
+  if (process.env.DIRECTD_TOKEN) {
+    try {
+      const res = await axios.get('https://apiv3.directd.com.br/api/CadastroPessoaFisicaPlus', {
+        params: { Cpf: doc, Token: process.env.DIRECTD_TOKEN },
+        timeout: 15000
+      });
+      const r = res.data?.retorno || {};
+      if (r.nome) {
+        return {
+          cpf: doc, cpf_formatado: formatarCPF(doc),
+          nome: r.nome || '', sexo: r.sexo || '',
+          data_nascimento: r.dataNascimento || '', idade: r.idade || null,
+          nome_mae: r.nomeMae || '', nome_pai: r.nomePai || '',
+          situacao_rf: r.situacaoCadastral || '', obito: r.possuiObito || false,
+          classe_social: r.classeSocial || '', renda_estimada: r.rendaEstimada || '',
+          faixa_salarial: r.rendaFaixaSalarial || '',
+          telefones: (r.telefones || []).slice(0, 5).map(t => ({
+            numero: t.telefoneComDDD || '', tipo: t.tipoTelefone || '',
+            operadora: t.operadora || '', whatsapp: t.whatsApp || false
+          })),
+          enderecos: (r.enderecos || []).slice(0, 3).map(e => ({
+            logradouro: e.logradouro || '', numero: e.numero || '',
+            bairro: e.bairro || '', cidade: e.cidade || '', uf: e.uf || '', cep: e.cep || ''
+          })),
+          emails: (r.emails || []).slice(0, 3).map(e => e.enderecoEmail || e),
+          fonte: 'Direct Data', consultado_em: new Date().toISOString()
+        };
+      }
+    } catch (e) {
+      console.error(`[Direct Data] Erro: ${e.response?.status || e.message}`);
+    }
   }
-  try {
-    const res = await axios.get('https://apiv3.directd.com.br/api/CadastroPessoaFisicaPlus', {
-      params: { Cpf: doc, Token: process.env.DIRECTD_TOKEN },
-      timeout: 15000
-    });
-    const r = res.data?.retorno || {};
-    return {
-      cpf: doc,
-      cpf_formatado: formatarCPF(doc),
-      nome: r.nome || '',
-      sexo: r.sexo || '',
-      data_nascimento: r.dataNascimento || '',
-      idade: r.idade || null,
-      nome_mae: r.nomeMae || '',
-      nome_pai: r.nomePai || '',
-      situacao_rf: r.situacaoCadastral || '',
-      obito: r.possuiObito || false,
-      classe_social: r.classeSocial || '',
-      renda_estimada: r.rendaEstimada || '',
-      faixa_salarial: r.rendaFaixaSalarial || '',
-      telefones: (r.telefones || []).slice(0, 5).map(t => ({
-        numero: t.telefoneComDDD || '',
-        tipo: t.tipoTelefone || '',
-        operadora: t.operadora || '',
-        whatsapp: t.whatsApp || false
-      })),
-      enderecos: (r.enderecos || []).slice(0, 3).map(e => ({
-        logradouro: e.logradouro || '',
-        numero: e.numero || '',
-        bairro: e.bairro || '',
-        cidade: e.cidade || '',
-        uf: e.uf || '',
-        cep: e.cep || ''
-      })),
-      emails: (r.emails || []).slice(0, 3).map(e => e.enderecoEmail || e),
-      fonte: 'Direct Data',
-      consultado_em: new Date().toISOString()
-    };
-  } catch (e) {
-    return {
-      cpf: doc,
-      cpf_formatado: formatarCPF(doc),
-      erro: 'Falha na consulta Direct Data',
-      detalhes: e.response?.data?.mensagem || e.message,
-      consultado_em: new Date().toISOString()
-    };
+
+  // Fallback: CPF.CNPJ (pacote 9)
+  if (process.env.CPFCNPJ_API_KEY) {
+    try {
+      const res = await axios.get(
+        `https://api.cpfcnpj.com.br/${process.env.CPFCNPJ_API_KEY}/9/${doc}`,
+        { timeout: 60000 }
+      );
+      const d = res.data;
+      if (d.status !== 0 && d.nome) {
+        return {
+          cpf: doc, cpf_formatado: d.cpf || formatarCPF(doc),
+          nome: d.nome || '',
+          sexo: d.genero === 'M' ? 'Masculino' : d.genero === 'F' ? 'Feminino' : d.genero || '',
+          data_nascimento: d.nascimento || '', nome_mae: d.mae || '',
+          situacao_rf: d.situacao || '',
+          telefones: (d.telefones || []).slice(0, 5).map(t => ({
+            numero: t.ddd ? `(${t.ddd}) ${t.numero}` : t.numero || '',
+            tipo: '', operadora: '', whatsapp: false
+          })),
+          enderecos: d.endereco ? [{
+            logradouro: d.endereco || '', numero: d.numero || '',
+            bairro: d.bairro || '', cidade: d.cidade || '', uf: d.uf || '', cep: d.cep || ''
+          }] : [],
+          emails: (d.emails || []).slice(0, 3),
+          fonte: 'Receita Federal via CPF.CNPJ', consultado_em: new Date().toISOString()
+        };
+      }
+    } catch (e) {
+      console.error(`[CPF.CNPJ] Erro: ${e.response?.status || e.message}`);
+    }
   }
+
+  // Nenhuma API disponível ou todas falharam
+  return {
+    cpf: doc, cpf_formatado: formatarCPF(doc),
+    aviso: 'Nenhuma API de CPF retornou dados.',
+    instrucao: 'Verifique DIRECTD_TOKEN ou CPFCNPJ_API_KEY',
+    fonte: 'Indisponivel', consultado_em: new Date().toISOString()
+  };
 }
 
 // ─────────────────────────────────────────────
