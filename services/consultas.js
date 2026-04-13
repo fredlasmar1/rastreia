@@ -368,7 +368,104 @@ async function consultarSerasa(documento) {
 }
 
 // ─────────────────────────────────────────────
-// 6. ONR — RI Digital (matrícula de imóveis)
+// 6. SCORE DE CRÉDITO — Direct Data (substitui Serasa)
+// Endpoint: /api/Score | R$ 1,98
+// ─────────────────────────────────────────────
+
+async function consultarScore(documento) {
+  if (!process.env.DIRECTD_TOKEN) {
+    return { disponivel: false, fonte: 'Direct Data Score' };
+  }
+  try {
+    const res = await axios.get('https://apiv3.directd.com.br/api/Score', {
+      params: { Documento: limparDoc(documento), Token: process.env.DIRECTD_TOKEN },
+      timeout: 20000
+    });
+    const r = res.data?.retorno || res.data || {};
+    return {
+      score: r.score || r.Score || null,
+      faixa: r.faixa || r.Faixa || '',
+      probabilidade_inadimplencia: r.probabilidadeInadimplencia || null,
+      detalhes: r,
+      fonte: 'Direct Data Score (QUOD)',
+      consultado_em: new Date().toISOString()
+    };
+  } catch (e) {
+    console.error(`[Score] Erro: ${e.response?.status || e.message}`);
+    return { disponivel: false, erro: e.response?.status || e.message, fonte: 'Direct Data Score' };
+  }
+}
+
+// ─────────────────────────────────────────────
+// 7. DETALHAMENTO NEGATIVO — Direct Data
+// Protestos, ações judiciais, falência, cheques
+// Endpoint: /api/DetalhamentoNegativo | R$ 2,38
+// ─────────────────────────────────────────────
+
+async function consultarNegativacoes(documento) {
+  if (!process.env.DIRECTD_TOKEN) {
+    return { disponivel: false, fonte: 'Direct Data Negativacoes' };
+  }
+  try {
+    const res = await axios.get('https://apiv3.directd.com.br/api/DetalhamentoNegativo', {
+      params: { Documento: limparDoc(documento), Token: process.env.DIRECTD_TOKEN },
+      timeout: 20000
+    });
+    const r = res.data?.retorno || res.data || {};
+    return {
+      total_pendencias: r.totalPendencias || r.quantidadeTotal || 0,
+      valor_total: r.valorTotal || 0,
+      protestos: (r.protestos || []).map(p => ({
+        valor: p.valor || 0, data: p.data || '', cartorio: p.cartorio || '', cidade: p.cidade || ''
+      })),
+      acoes_judiciais: (r.acoesJudiciais || r.acoes || []).map(a => ({
+        tipo: a.tipo || '', valor: a.valor || 0, data: a.data || '', vara: a.vara || ''
+      })),
+      cheques_sem_fundo: (r.chequesSemFundo || []).map(c => ({
+        banco: c.banco || '', agencia: c.agencia || '', data: c.data || ''
+      })),
+      falencias: r.falencias || [],
+      fonte: 'Direct Data (Detalhamento Negativo)',
+      consultado_em: new Date().toISOString()
+    };
+  } catch (e) {
+    console.error(`[Negativacoes] Erro: ${e.response?.status || e.message}`);
+    return { disponivel: false, erro: e.response?.status || e.message, fonte: 'Direct Data Negativacoes' };
+  }
+}
+
+// ─────────────────────────────────────────────
+// 8. PROTESTOS — Direct Data
+// Endpoint: /api/Protestos | R$ 0,72
+// ─────────────────────────────────────────────
+
+async function consultarProtestos(documento) {
+  if (!process.env.DIRECTD_TOKEN) {
+    return { disponivel: false, fonte: 'Direct Data Protestos' };
+  }
+  try {
+    const res = await axios.get('https://apiv3.directd.com.br/api/Protestos', {
+      params: { Documento: limparDoc(documento), Token: process.env.DIRECTD_TOKEN },
+      timeout: 20000
+    });
+    const r = res.data?.retorno || res.data || {};
+    return {
+      total: r.quantidade || r.total || 0,
+      protestos: (r.protestos || r.itens || []).map(p => ({
+        valor: p.valor || 0, data: p.data || p.dataProtesto || '',
+        cartorio: p.cartorio || p.nomeCartorio || '', cidade: p.cidade || ''
+      })),
+      fonte: 'Direct Data Protestos',
+      consultado_em: new Date().toISOString()
+    };
+  } catch (e) {
+    console.error(`[Protestos] Erro: ${e.response?.status || e.message}`);
+    return { disponivel: false, erro: e.response?.status || e.message, fonte: 'Direct Data Protestos' };
+  }
+}
+
+// ─────────────────────────────────────────────
+// 9. ONR — RI Digital (matrícula de imóveis)
 // Docs: integracao.registrodeimoveis.org.br
 // ─────────────────────────────────────────────
 
@@ -497,7 +594,8 @@ async function executarConsultaCompleta(pedido) {
     alvo_tipo === 'PJ' ? consultarCNPJ(alvo_documento) : consultarCPF(alvo_documento),
     consultarProcessos(alvo_documento, alvo_tipo, alvo_nome),
     alvo_tipo === 'PJ' ? consultarTransparencia(alvo_documento, alvo_nome) : Promise.resolve(null),
-    consultarSerasa(alvo_documento)
+    consultarScore(alvo_documento),
+    consultarNegativacoes(alvo_documento)
   ];
 
   // Consultas extras para Investigação Patrimonial e Due Diligence Imobiliária
@@ -508,8 +606,8 @@ async function executarConsultaCompleta(pedido) {
   if (precisaVeiculos) promises.push(consultarVeiculos(alvo_documento));
 
   const resultados = await Promise.all(promises);
-  const [cadastral, processos, transparencia, serasa] = resultados;
-  let idx = 4;
+  const [cadastral, processos, transparencia, score_credito, negativacoes] = resultados;
+  let idx = 5;
   const imoveis = precisaImoveis ? resultados[idx++] : null;
   const veiculos = precisaVeiculos ? resultados[idx++] : null;
 
@@ -531,7 +629,8 @@ async function executarConsultaCompleta(pedido) {
     receita_federal: cadastral,
     processos,
     ...(transparencia ? { transparencia } : {}),
-    serasa,
+    ...(score_credito?.score ? { score_credito } : {}),
+    ...(negativacoes?.total_pendencias !== undefined ? { negativacoes } : {}),
     ...(imoveis ? { imoveis } : {}),
     ...(veiculos ? { veiculos } : {}),
     ...(cadastral2 ? { receita_federal_2: cadastral2 } : {}),
@@ -541,16 +640,9 @@ async function executarConsultaCompleta(pedido) {
 }
 
 module.exports = {
-  consultarCNPJ,
-  consultarCPF,
-  consultarProcessos,
-  consultarEscavador,
-  consultarDatajud,
-  consultarTransparencia,
-  consultarSerasa,
-  consultarONR,
-  consultarMatricula,
-  consultarVeiculos,
-  gerarLinkJusBrasil,
-  executarConsultaCompleta
+  consultarCNPJ, consultarCPF, consultarProcessos,
+  consultarEscavador, consultarDatajud, consultarTransparencia,
+  consultarSerasa, consultarScore, consultarNegativacoes, consultarProtestos,
+  consultarONR, consultarMatricula, consultarVeiculos,
+  gerarLinkJusBrasil, executarConsultaCompleta
 };
