@@ -4,7 +4,7 @@ const path = require('path');
 const { PRODUTOS, calcularScore, gerarChecklist } = require('./produtos');
 
 const COR = {
-  azul: '#1a3a5c', azul_claro: '#2563eb', verde: '#16a34a',
+  azul: '#1a3a8a', azul_claro: '#2563eb', verde: '#16a34a',
   vermelho: '#dc2626', laranja: '#ea580c', cinza: '#6b7280',
   fundo: '#f9fafb', borda: '#e5e7eb', branco: '#ffffff'
 };
