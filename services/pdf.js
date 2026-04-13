@@ -100,15 +100,18 @@ function gerarDossie(pedido, dadosDB) {
       // ════ CABECALHO ════
       doc.rect(0, 0, 595, 90).fill(COR.azul);
       // Logo Recobro
-      try {
-        const logoPath = path.join(__dirname, '../public/img/logo-recobro.jpg');
-        if (fs.existsSync(logoPath)) {
-          doc.image(logoPath, MARGEM, 14, { height: 36 });
-          doc.fillColor('#ffffff').fontSize(22).font('Helvetica-Bold').text('RASTREIA', MARGEM + 44, 20);
-        } else {
+      const logoPath = path.join(__dirname, '../public/img/logo-recobro.jpg');
+      const logoExists = fs.existsSync(logoPath);
+      console.log('[PDF] Logo path:', logoPath, '| Existe:', logoExists);
+      if (logoExists) {
+        try {
+          doc.image(logoPath, MARGEM, 16, { height: 32 });
+          doc.fillColor('#ffffff').fontSize(20).font('Helvetica-Bold').text('RASTREIA', MARGEM + 40, 20);
+        } catch (imgErr) {
+          console.error('[PDF] Erro ao carregar logo:', imgErr.message);
           doc.fillColor('#ffffff').fontSize(22).font('Helvetica-Bold').text('RASTREIA', MARGEM, 20);
         }
-      } catch {
+      } else {
         doc.fillColor('#ffffff').fontSize(22).font('Helvetica-Bold').text('RASTREIA', MARGEM, 20);
       }
       doc.fillColor('#ffffff').fontSize(9).font('Helvetica').text('Sistema de Consultas e Dossies | Recobro Recuperacao de Credito', MARGEM, 46);
