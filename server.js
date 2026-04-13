@@ -195,7 +195,8 @@ app.get('/api/health/apis/teste', async (req, res) => {
         params: { Cnpj: '00000000000191', Token: process.env.DIRECTD_TOKEN },
         timeout: 20000
       });
-      results.DD_SCORE = { ok: true, status: r.status, keys: r.data ? Object.keys(r.data) : 'vazio', retorno_keys: r.data?.retorno ? Object.keys(r.data.retorno) : null };
+      const scoreData = r.data?.retorno?.pessoaJuridica || r.data?.retorno?.pessoaFisica || {};
+      results.DD_SCORE = { ok: true, status: r.status, score_keys: Object.keys(scoreData), amostra: JSON.stringify(scoreData).substring(0, 300) };
     } catch (e) {
       results.DD_SCORE = { ok: false, status: e.response?.status, msg: e.response?.data?.metaDados?.mensagem || e.message };
     }
@@ -208,7 +209,8 @@ app.get('/api/health/apis/teste', async (req, res) => {
         params: { Cnpj: '00000000000191', Token: process.env.DIRECTD_TOKEN },
         timeout: 20000
       });
-      results.DD_NEGATIVACOES = { ok: true, status: r.status, keys: r.data ? Object.keys(r.data) : 'vazio', retorno_keys: r.data?.retorno ? Object.keys(r.data.retorno) : null };
+      const negData = r.data?.retorno?.pessoaJuridica || r.data?.retorno?.pessoaFisica || {};
+      results.DD_NEGATIVACOES = { ok: true, status: r.status, neg_keys: Object.keys(negData), amostra: JSON.stringify(negData).substring(0, 300) };
     } catch (e) {
       results.DD_NEGATIVACOES = { ok: false, status: e.response?.status, msg: e.response?.data?.metaDados?.mensagem || e.message };
     }

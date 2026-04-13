@@ -383,12 +383,13 @@ async function consultarScore(documento, tipo) {
       params: { ...paramDoc, Token: process.env.DIRECTD_TOKEN },
       timeout: 20000
     });
-    console.log('[Score] Retorno:', JSON.stringify(res.data).substring(0, 500));
-    const r = res.data?.retorno || res.data || {};
+    const retorno = res.data?.retorno || {};
+    const r = retorno.pessoaFisica || retorno.pessoaJuridica || retorno || {};
+    console.log('[Score] Retorno keys:', Object.keys(r), JSON.stringify(r).substring(0, 300));
     return {
-      score: r.score || r.Score || r.scoreCredito || r.valor || null,
-      faixa: r.faixa || r.Faixa || '',
-      probabilidade_inadimplencia: r.probabilidadeInadimplencia || null,
+      score: r.score || r.Score || r.scoreCredito || r.valor || r.pontuacao || null,
+      faixa: r.faixa || r.Faixa || r.classificacao || r.risco || '',
+      probabilidade_inadimplencia: r.probabilidadeInadimplencia || r.probabilidade || null,
       detalhes: r,
       fonte: 'Direct Data Score (QUOD)',
       consultado_em: new Date().toISOString()
@@ -416,12 +417,13 @@ async function consultarNegativacoes(documento) {
       params: { ...paramDoc, Token: process.env.DIRECTD_TOKEN },
       timeout: 20000
     });
-    console.log('[Negativacoes] Retorno:', JSON.stringify(res.data).substring(0, 500));
-    const r = res.data?.retorno || res.data || {};
+    const retorno = res.data?.retorno || {};
+    const r = retorno.pessoaFisica || retorno.pessoaJuridica || retorno || {};
+    console.log('[Negativacoes] Retorno keys:', Object.keys(r), JSON.stringify(r).substring(0, 300));
     return {
-      total_pendencias: r.totalPendencias || r.quantidadeTotal || r.totalOcorrencias || 0,
-      valor_total: r.valorTotal || 0,
-      protestos: (r.protestos || []).map(p => ({
+      total_pendencias: r.totalPendencias || r.quantidadeTotal || r.totalOcorrencias || r.quantidade || 0,
+      valor_total: r.valorTotal || r.valor || 0,
+      protestos: (r.protestos || r.cartorioProtestos || []).map(p => ({
         valor: p.valor || 0, data: p.data || '', cartorio: p.cartorio || '', cidade: p.cidade || ''
       })),
       acoes_judiciais: (r.acoesJudiciais || r.acoes || []).map(a => ({
