@@ -99,21 +99,21 @@ function gerarDossie(pedido, dadosDB) {
 
       // ════ CABECALHO ════
       doc.rect(0, 0, 595, 100).fill(COR.azul);
-      // Logo Recobro (PNG com fundo transparente)
+      // Logo Recobro (branca para fundo azul)
+      const logoWhite = path.join(__dirname, '../public/img/logo-recobro-white.png');
       const logoPng = path.join(__dirname, '../public/img/logo-recobro.png');
-      const logoJpg = path.join(__dirname, '../public/img/logo-recobro.jpg');
-      const logoPath = fs.existsSync(logoPng) ? logoPng : (fs.existsSync(logoJpg) ? logoJpg : null);
+      const logoPath = fs.existsSync(logoWhite) ? logoWhite : (fs.existsSync(logoPng) ? logoPng : null);
       if (logoPath) {
         try {
-          doc.image(logoPath, 175, 10, { width: 245, height: 50 });
+          doc.image(logoPath, 148, 8, { width: 300 });
         } catch (e) {
           console.error('[PDF] Erro logo:', e.message);
         }
       }
-      // RASTREIA + subtitulo
-      doc.fillColor('#ffffff').fontSize(14).font('Helvetica-Bold').text('RASTREIA', 0, 64, { width: 595, align: 'center' });
-      doc.fillColor('#93c5fd').fontSize(7).font('Helvetica').text('Sistema de Inteligencia de Dados', 0, 80, { width: 595, align: 'center' });
-      doc.fillColor('#93c5fd').fontSize(6.5).text(`Emitido em: ${new Date().toLocaleString('pt-BR')}  |  Protocolo: #${pedido.numero || pedido.id.substring(0,8).toUpperCase()}`, 0, 90, { width: 595, align: 'center' });
+      // RASTREIA + subtitulo abaixo da logo
+      doc.fillColor('#ffffff').fontSize(13).font('Helvetica-Bold').text('RASTREIA', 0, 62, { width: 595, align: 'center' });
+      doc.fillColor('#93c5fd').fontSize(7).font('Helvetica').text('Sistema de Inteligencia de Dados', 0, 78, { width: 595, align: 'center' });
+      doc.fillColor('#93c5fd').fontSize(6.5).text(`Emitido em: ${new Date().toLocaleString('pt-BR')}  |  Protocolo: #${pedido.numero || pedido.id.substring(0,8).toUpperCase()}`, 0, 89, { width: 595, align: 'center' });
 
       doc.rect(0, 100, 595, 28).fill('#0f2660');
       doc.fillColor('#ffffff').fontSize(12).font('Helvetica-Bold').text((produto.nome || pedido.tipo).toUpperCase(), 0, 106, { width: 595, align: 'center' });
