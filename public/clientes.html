@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Rastreia - Clientes</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+<nav class="nav">
+  <a href="/dashboard.html" class="nav-logo"><img src="/img/logo-recobro.jpg" alt="Recobro"><div><div class="nav-brand">RASTREIA</div></div></a>
+  <div class="nav-links">
+    <a href="/dashboard.html">Dashboard</a>
+    <a href="/novo-pedido.html">+ Novo Pedido</a>
+    <a href="/clientes.html" class="ativo">Clientes</a>
+    <a href="#" onclick="logout()">Sair</a>
+  </div>
+  <div class="nav-user" id="nav-user"></div>
+</nav>
+
+<div class="container">
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;flex-wrap:wrap;gap:10px">
+    <h1 class="page-title" style="margin:0">Clientes</h1>
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+      <input type="text" id="busca" placeholder="Buscar por nome, CNPJ ou empresa..." style="padding:8px 12px;border:1px solid #d1d5db;border-radius:8px;font-size:14px;min-width:260px" oninput="debounceBusca()">
+      <button class="btn btn-primary" onclick="abrirForm()">+ Novo Cliente</button>
+    </div>
+  </div>
+
+  <div id="alerta"></div>
+
+  <!-- Tabela de Clientes -->
+  <div class="card">
+    <div class="card-header">
+      <span class="card-title">Lista de Clientes</span>
+      <button class="btn btn-sm btn-outline" onclick="carregarClientes()">&#8635; Atualizar</button>
+    </div>
+    <div id="tabela-content">
+      <div class="loading"><div class="spinner"></div>Carregando...</div>
+    </div>
+  </div>
+</div>
+
+<!-- Modal do Formulario -->
+<div id="modal-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:1000;display:none;align-items:center;justify-content:center">
+  <div style="background:#fff;border-radius:12px;padding:24px;max-width:600px;width:95%;max-height:90vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,0.3)">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+      <h2 style="margin:0;font-size:18px;color:#1a3a5c" id="form-titulo">Novo Cliente</h2>
+      <button onclick="fecharForm()" style="background:none;border:none;font-size:24px;cursor:pointer;color:#6b7280">&times;</button>
+    </div>
+    <input type="hidden" id="form-id">
+    <div class="form-grid">
+      <div class="form-group full">
+        <label>Nome *</label>
+        <input type="text" id="f-nome" placeholder="Nome completo ou responsavel">
+      </div>
+      <div class="form-group">
+        <label>Email</label>
+        <input type="email" id="f-email" placeholder="email@empresa.com">
+      </div>
+      <div class="form-group">
+        <label>WhatsApp</label>
+        <input type="tel" id="f-whatsapp" placeholder="(62) 99999-9999">
+      </div>
+      <div class="form-group">
+        <label>CNPJ</label>
+        <input type="text" id="f-cnpj" placeholder="00.000.000/0000-00">
+      </div>
+      <div class="form-group">
+        <label>Empresa</label>
+        <input type="text" id="f-empresa" placeholder="Razao Social">
+      </div>
+      <div class="form-group full">
+        <label>Nicho</label>
+        <input type="text" id="f-nicho" placeholder="Ex: Advocacia, Imobiliaria, Comercio">
+      </div>
+      <div class="form-group full">
+        <label>Endereco</label>
+        <input type="text" id="f-endereco" placeholder="Rua, numero, bairro, cidade - UF">
+      </div>
+      <div class="form-group full">
+        <label>Observacoes</label>
+        <textarea id="f-observacoes" rows="3" placeholder="Anotacoes sobre o cliente" style="width:100%;padding:8px 12px;border:1px solid #d1d5db;border-radius:8px;font-size:14px;font-family:inherit;resize:vertical"></textarea>
+      </div>
+    </div>
+    <div style="display:flex;gap:10px;margin-top:16px;justify-content:flex-end">
+      <button class="btn btn-outline" onclick="fecharForm()">Cancelar</button>
+      <button class="btn btn-primary" onclick="salvarCliente()">Salvar</button>
+    </div>
+  </div>
+</div>
+
+<div class="footer">
+  Recobro Recuperacao de Credito | Anapolis - GO |
+  <a href="/termos.html" target="_blank">Termos de Uso</a> |
+  <a href="/privacidade.html" target="_blank">Privacidade</a>
+</div>
+
+<script>
+  const token = localStorage.getItem('rastreia_token');
+  if (!token) window.location.href = '/';
+  const usuario = JSON.parse(localStorage.getItem('rastreia_usuario') || '{}');
+  document.getElementById('nav-user').textContent = usuario.nome || '';
+
+  function esc(str) { if (str == null) return ''; const d = document.createElement('div'); d.textContent = str; return d.innerHTML; }
+
+  let buscaTimer = null;
+  function debounceBusca() {
+    clearTimeout(buscaTimer);
+    buscaTimer = setTimeout(carregarClientes, 300);
+  }
+
+  async function apiJson(url, opts) {
+    const res = await fetch(url, { headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }, ...opts });
+    if (res.status === 401) { logout(); return null; }
+    return res.json();
+  }
+
+  async function carregarClientes() {
+    const busca = document.getElementById('busca').value.trim();
+    const url = '/api/clientes' + (busca ? '?busca=' + encodeURIComponent(busca) : '');
+    const data = await apiJson(url);
+    if (!data) return;
+    const el = document.getElementById('tabela-content');
+    if (!data.clientes || !data.clientes.length) {
+      el.innerHTML = '<div class="loading">Nenhum cliente encontrado</div>';
+      return;
+    }
+    el.innerHTML = `
+      <table>
+        <thead><tr>
+          <th>Nome</th><th>Email</th><th>WhatsApp</th><th>Empresa</th><th>CNPJ</th><th>Nicho</th><th>Acoes</th>
+        </tr></thead>
+        <tbody>
+          ${data.clientes.map(c => `
+            <tr>
+              <td><strong>${esc(c.nome)}</strong></td>
+              <td>${esc(c.email) || '<span style="color:#9ca3af">-</span>'}</td>
+              <td>${esc(c.whatsapp) || '<span style="color:#9ca3af">-</span>'}</td>
+              <td>${esc(c.empresa) || '<span style="color:#9ca3af">-</span>'}</td>
+              <td><code>${esc(c.cnpj) || '-'}</code></td>
+              <td>${esc(c.nicho) || '<span style="color:#9ca3af">-</span>'}</td>
+              <td style="white-space:nowrap">
+                <button class="btn btn-sm btn-outline" onclick="editarCliente('${c.id}')">Editar</button>
+                <button class="btn btn-sm btn-outline" style="color:#dc2626;border-color:#dc2626" onclick="excluirCliente('${c.id}', '${esc(c.nome).replace(/'/g, "\\'")}')">Excluir</button>
+              </td>
+            </tr>
+          `).join('')}
+        </tbody>
+      </table>`;
+  }
+
+  function abrirForm(cliente) {
+    document.getElementById('form-id').value = cliente ? cliente.id : '';
+    document.getElementById('form-titulo').textContent = cliente ? 'Editar Cliente' : 'Novo Cliente';
+    document.getElementById('f-nome').value = cliente ? cliente.nome || '' : '';
+    document.getElementById('f-email').value = cliente ? cliente.email || '' : '';
+    document.getElementById('f-whatsapp').value = cliente ? cliente.whatsapp || '' : '';
+    document.getElementById('f-cnpj').value = cliente ? cliente.cnpj || '' : '';
+    document.getElementById('f-empresa').value = cliente ? cliente.empresa || '' : '';
+    document.getElementById('f-nicho').value = cliente ? cliente.nicho || '' : '';
+    document.getElementById('f-endereco').value = cliente ? cliente.endereco || '' : '';
+    document.getElementById('f-observacoes').value = cliente ? cliente.observacoes || '' : '';
+    const overlay = document.getElementById('modal-overlay');
+    overlay.style.display = 'flex';
+  }
+
+  function fecharForm() {
+    document.getElementById('modal-overlay').style.display = 'none';
+  }
+
+  async function salvarCliente() {
+    const id = document.getElementById('form-id').value;
+    const payload = {
+      nome: document.getElementById('f-nome').value.trim(),
+      email: document.getElementById('f-email').value.trim(),
+      whatsapp: document.getElementById('f-whatsapp').value.trim(),
+      cnpj: document.getElementById('f-cnpj').value.trim(),
+      empresa: document.getElementById('f-empresa').value.trim(),
+      nicho: document.getElementById('f-nicho').value.trim(),
+      endereco: document.getElementById('f-endereco').value.trim(),
+      observacoes: document.getElementById('f-observacoes').value.trim()
+    };
+    if (!payload.nome) return alerta('Nome e obrigatorio', 'error');
+
+    const url = id ? `/api/clientes/${id}` : '/api/clientes';
+    const method = id ? 'PATCH' : 'POST';
+    const data = await apiJson(url, { method, body: JSON.stringify(payload) });
+    if (!data) return;
+    if (data.erro) return alerta(data.erro, 'error');
+    fecharForm();
+    alerta(id ? 'Cliente atualizado com sucesso' : 'Cliente criado com sucesso', 'success');
+    carregarClientes();
+  }
+
+  async function editarCliente(id) {
+    const data = await apiJson(`/api/clientes/${id}`);
+    if (!data || data.erro) return alerta('Erro ao carregar cliente', 'error');
+    abrirForm(data);
+  }
+
+  async function excluirCliente(id, nome) {
+    if (!confirm(`Deseja realmente excluir o cliente "${nome}"?`)) return;
+    const data = await apiJson(`/api/clientes/${id}`, { method: 'DELETE' });
+    if (!data) return;
+    if (data.erro) return alerta(data.erro, 'error');
+    alerta('Cliente excluido com sucesso', 'success');
+    carregarClientes();
+  }
+
+  function alerta(msg, tipo) {
+    document.getElementById('alerta').innerHTML = `<div class="alert alert-${tipo === 'error' ? 'error' : 'success'}">${esc(msg)}</div>`;
+    setTimeout(() => { document.getElementById('alerta').innerHTML = ''; }, 4000);
+  }
+
+  function logout() { localStorage.clear(); window.location.href = '/'; }
+
+  // Fechar modal ao clicar fora
+  document.getElementById('modal-overlay').addEventListener('click', function(e) {
+    if (e.target === this) fecharForm();
+  });
+
+  carregarClientes();
+</script>
+</body>
+</html>

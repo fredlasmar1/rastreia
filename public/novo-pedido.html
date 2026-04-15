@@ -12,6 +12,7 @@
   <div class="nav-links">
     <a href="/dashboard.html">Dashboard</a>
     <a href="/novo-pedido.html" class="ativo">+ Novo Pedido</a>
+    <a href="/clientes.html">Clientes</a>
     <a href="#" onclick="logout()">Sair</a>
   </div>
   <div class="nav-user" id="nav-user"></div>
@@ -108,8 +109,19 @@
     <div class="section-title">3. Dados de Quem Solicitou</div>
     <div class="form-grid">
       <div class="form-group full">
+        <label>Selecionar Cliente Cadastrado</label>
+        <div style="position:relative">
+          <input type="text" id="cliente_busca" placeholder="Digite para buscar cliente cadastrado..." oninput="buscarClientes()" autocomplete="off">
+          <div id="cliente-dropdown" style="display:none;position:absolute;top:100%;left:0;right:0;background:#fff;border:1px solid #d1d5db;border-top:none;border-radius:0 0 8px 8px;max-height:200px;overflow-y:auto;z-index:100;box-shadow:0 4px 12px rgba(0,0,0,0.1)"></div>
+        </div>
+        <div id="cliente-selecionado" style="display:none;margin-top:6px;padding:8px 12px;background:#eff6ff;border:1px solid #2563eb;border-radius:8px;font-size:13px;display:none;align-items:center;justify-content:space-between">
+          <span id="cliente-sel-nome"></span>
+          <button onclick="limparClienteSelecionado()" style="background:none;border:none;cursor:pointer;color:#dc2626;font-size:16px">&times;</button>
+        </div>
+      </div>
+      <div class="form-group full">
         <label>Nome do Cliente *</label>
-        <input type="text" id="cliente_nome" placeholder="Nome de quem está comprando">
+        <input type="text" id="cliente_nome" placeholder="Nome de quem esta comprando">
       </div>
       <div class="form-group">
         <label>WhatsApp</label>
@@ -313,6 +325,65 @@
   }
 
   function logout() { localStorage.clear(); window.location.href = '/'; }
+
+  // --- Busca de clientes cadastrados ---
+  let clienteBuscaTimer = null;
+  function buscarClientes() {
+    clearTimeout(clienteBuscaTimer);
+    const termo = document.getElementById('cliente_busca').value.trim();
+    if (termo.length < 2) {
+      document.getElementById('cliente-dropdown').style.display = 'none';
+      return;
+    }
+    clienteBuscaTimer = setTimeout(async () => {
+      try {
+        const res = await fetch('/api/clientes?busca=' + encodeURIComponent(termo), {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        if (!res.ok) return;
+        const data = await res.json();
+        const dd = document.getElementById('cliente-dropdown');
+        if (!data.clientes || !data.clientes.length) {
+          dd.innerHTML = '<div style="padding:10px;color:#6b7280;font-size:13px">Nenhum cliente encontrado</div>';
+          dd.style.display = 'block';
+          return;
+        }
+        dd.innerHTML = data.clientes.map(c => `
+          <div onclick="selecionarCliente('${c.id}','${esc(c.nome).replace(/'/g,"\\'")}','${esc(c.email||"").replace(/'/g,"\\'")}','${esc(c.whatsapp||"").replace(/'/g,"\\'")}')
+          " style="padding:10px 12px;cursor:pointer;border-bottom:1px solid #f3f4f6;font-size:13px;transition:background 0.15s" onmouseover="this.style.background='#eff6ff'" onmouseout="this.style.background='#fff'">
+            <strong>${esc(c.nome)}</strong>
+            ${c.empresa ? ' <span style="color:#6b7280">- ' + esc(c.empresa) + '</span>' : ''}
+            ${c.cnpj ? ' <code style="font-size:11px;color:#9ca3af">' + esc(c.cnpj) + '</code>' : ''}
+          </div>
+        `).join('');
+        dd.style.display = 'block';
+      } catch(e) { /* ignore */ }
+    }, 300);
+  }
+
+  function selecionarCliente(id, nome, email, whatsapp) {
+    document.getElementById('cliente_nome').value = nome;
+    document.getElementById('cliente_email').value = email;
+    document.getElementById('cliente_whatsapp').value = whatsapp;
+    document.getElementById('cliente-dropdown').style.display = 'none';
+    document.getElementById('cliente_busca').value = '';
+    document.getElementById('cliente-sel-nome').textContent = nome;
+    document.getElementById('cliente-selecionado').style.display = 'flex';
+  }
+
+  function limparClienteSelecionado() {
+    document.getElementById('cliente_nome').value = '';
+    document.getElementById('cliente_email').value = '';
+    document.getElementById('cliente_whatsapp').value = '';
+    document.getElementById('cliente-selecionado').style.display = 'none';
+  }
+
+  // Fechar dropdown ao clicar fora
+  document.addEventListener('click', function(e) {
+    if (!e.target.closest('#cliente_busca') && !e.target.closest('#cliente-dropdown')) {
+      document.getElementById('cliente-dropdown').style.display = 'none';
+    }
+  });
 
   // Inicializar
   renderProdutos();

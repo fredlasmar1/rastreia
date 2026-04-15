@@ -142,3 +142,21 @@ CREATE INDEX IF NOT EXISTS idx_pedidos_mp ON pedidos(mp_payment_id);
 CREATE INDEX IF NOT EXISTS idx_pedidos_token ON pedidos(token_publico);
 CREATE INDEX IF NOT EXISTS idx_dados_pedido ON dados_consulta(pedido_id);
 CREATE INDEX IF NOT EXISTS idx_assinaturas_ativo ON assinaturas(ativo);
+
+-- Clientes (CRM)
+CREATE TABLE IF NOT EXISTS clientes (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  nome VARCHAR(255) NOT NULL,
+  email VARCHAR(255),
+  whatsapp VARCHAR(20),
+  cnpj VARCHAR(20),
+  empresa VARCHAR(255),
+  nicho VARCHAR(100),
+  endereco TEXT,
+  observacoes TEXT,
+  ativo BOOLEAN DEFAULT true,
+  criado_em TIMESTAMP DEFAULT NOW(),
+  atualizado_em TIMESTAMP DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_clientes_nome ON clientes(nome);
+CREATE INDEX IF NOT EXISTS idx_clientes_cnpj ON clientes(cnpj);
