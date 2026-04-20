@@ -124,7 +124,7 @@ async function consultarCPF(cpf) {
     try {
       const res = await axios.get('https://apiv3.directd.com.br/api/CadastroPessoaFisicaPlus', {
         params: { Cpf: doc, Token: process.env.DIRECTD_TOKEN },
-        timeout: 15000
+        timeout: 30000
       });
       const r = res.data?.retorno || {};
       console.log('[DirectData PF] Keys:', Object.keys(r).join(', '));
@@ -168,7 +168,12 @@ async function consultarCPF(cpf) {
         };
       }
     } catch (e) {
-      console.error(`[Direct Data] Erro: ${e.response?.status || e.message}`);
+      const status = e.response?.status;
+      const msg = e.response?.data?.metaDados?.mensagem
+        || e.response?.data?.mensagem
+        || e.response?.data?.message
+        || e.message;
+      console.error(`[Direct Data PF] Erro ${status || ''}: ${msg}`);
     }
   }
 
@@ -446,7 +451,7 @@ async function consultarScore(documento, tipo) {
     const paramDoc = doc.length <= 11 ? { Cpf: doc } : { Cnpj: doc };
     const res = await axios.get('https://apiv3.directd.com.br/api/Score', {
       params: { ...paramDoc, Token: process.env.DIRECTD_TOKEN },
-      timeout: 20000
+      timeout: 30000
     });
     const retorno = res.data?.retorno || {};
     const r = retorno.pessoaFisica || retorno.pessoaJuridica || retorno || {};
@@ -459,8 +464,13 @@ async function consultarScore(documento, tipo) {
       consultado_em: new Date().toISOString()
     };
   } catch (e) {
-    console.error(`[Score] Erro: ${e.response?.status || e.message}`);
-    return { disponivel: false, erro: e.response?.status || e.message, fonte: 'Direct Data Score' };
+    const status = e.response?.status;
+    const msg = e.response?.data?.metaDados?.mensagem
+      || e.response?.data?.mensagem
+      || e.response?.data?.message
+      || e.message;
+    console.error(`[Score] Erro ${status || ''}: ${msg}`);
+    return { disponivel: false, erro: status || e.message, detalhes: msg, fonte: 'Direct Data Score' };
   }
 }
 
@@ -479,7 +489,7 @@ async function consultarNegativacoes(documento) {
     const paramDoc = doc.length <= 11 ? { Cpf: doc } : { Cnpj: doc };
     const res = await axios.get('https://apiv3.directd.com.br/api/DetalhamentoNegativo', {
       params: { ...paramDoc, Token: process.env.DIRECTD_TOKEN },
-      timeout: 20000
+      timeout: 30000
     });
     const retorno = res.data?.retorno || {};
     const r = retorno.pessoaFisica || retorno.pessoaJuridica || retorno || {};
@@ -513,8 +523,13 @@ async function consultarNegativacoes(documento) {
       consultado_em: new Date().toISOString()
     };
   } catch (e) {
-    console.error(`[Negativacoes] Erro: ${e.response?.status || e.message}`);
-    return { disponivel: false, erro: e.response?.status || e.message, fonte: 'Direct Data Negativacoes' };
+    const status = e.response?.status;
+    const msg = e.response?.data?.metaDados?.mensagem
+      || e.response?.data?.mensagem
+      || e.response?.data?.message
+      || e.message;
+    console.error(`[Negativacoes] Erro ${status || ''}: ${msg}`);
+    return { disponivel: false, erro: status || e.message, detalhes: msg, fonte: 'Direct Data Negativacoes' };
   }
 }
 
@@ -532,7 +547,7 @@ async function consultarProtestos(documento) {
     const paramDoc = doc.length <= 11 ? { Cpf: doc } : { Cnpj: doc };
     const res = await axios.get('https://apiv3.directd.com.br/api/Protestos', {
       params: { ...paramDoc, Token: process.env.DIRECTD_TOKEN },
-      timeout: 20000
+      timeout: 30000
     });
     const r = res.data?.retorno || res.data || {};
     return {
@@ -545,8 +560,13 @@ async function consultarProtestos(documento) {
       consultado_em: new Date().toISOString()
     };
   } catch (e) {
-    console.error(`[Protestos] Erro: ${e.response?.status || e.message}`);
-    return { disponivel: false, erro: e.response?.status || e.message, fonte: 'Direct Data Protestos' };
+    const status = e.response?.status;
+    const msg = e.response?.data?.metaDados?.mensagem
+      || e.response?.data?.mensagem
+      || e.response?.data?.message
+      || e.message;
+    console.error(`[Protestos] Erro ${status || ''}: ${msg}`);
+    return { disponivel: false, erro: status || e.message, detalhes: msg, fonte: 'Direct Data Protestos' };
   }
 }
 
@@ -560,7 +580,7 @@ async function consultarPerfilEconomico(cpf) {
   try {
     const res = await axios.get('https://apiv3.directd.com.br/api/NivelSocioEconomico', {
       params: { Cpf: limparDoc(cpf), Token: process.env.DIRECTD_TOKEN },
-      timeout: 20000
+      timeout: 30000
     });
     const retorno = res.data?.retorno || {};
     const r = retorno.pessoaFisica || retorno || {};
@@ -576,7 +596,12 @@ async function consultarPerfilEconomico(cpf) {
       consultado_em: new Date().toISOString()
     };
   } catch (e) {
-    console.error(`[NivelSocio] Erro: ${e.response?.status || e.message}`);
+    const status = e.response?.status;
+    const msg = e.response?.data?.metaDados?.mensagem
+      || e.response?.data?.mensagem
+      || e.response?.data?.message
+      || e.message;
+    console.error(`[NivelSocio] Erro ${status || ''}: ${msg}`);
     return null;
   }
 }
@@ -595,7 +620,7 @@ async function consultarVinculos(documento) {
     const paramDoc = doc.length <= 11 ? { Cpf: doc } : { Cnpj: doc };
     const res = await axios.get('https://apiv3.directd.com.br/api/VinculosSocietarios', {
       params: { ...paramDoc, Token: process.env.DIRECTD_TOKEN },
-      timeout: 20000
+      timeout: 30000
     });
     const r = res.data?.retorno || res.data || {};
     const empresas = r.empresas || r.participacoes || r.vinculos || [];
@@ -614,8 +639,13 @@ async function consultarVinculos(documento) {
       consultado_em: new Date().toISOString()
     };
   } catch (e) {
-    console.error(`[Vinculos] Erro: ${e.response?.status || e.message}`);
-    return { disponivel: false, erro: e.response?.status || e.message, fonte: 'Direct Data Vinculos' };
+    const status = e.response?.status;
+    const msg = e.response?.data?.metaDados?.mensagem
+      || e.response?.data?.mensagem
+      || e.response?.data?.message
+      || e.message;
+    console.error(`[Vinculos] Erro ${status || ''}: ${msg}`);
+    return { disponivel: false, erro: status || e.message, detalhes: msg, fonte: 'Direct Data Vinculos' };
   }
 }
 

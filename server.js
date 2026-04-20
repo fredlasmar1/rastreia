@@ -2,10 +2,15 @@ require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const path = require('path');
+const fs = require('fs');
 const rateLimit = require('express-rate-limit');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
+
+// Railway e outros proxies colocam o IP real em X-Forwarded-For.
+// Sem trust proxy, express-rate-limit joga erro e conta todos os usuários como o IP do proxy.
+app.set('trust proxy', 1);
 
 // Limpar variáveis de ambiente (remover espaços e = no início/fim)
 function limparEnv(nome) {
@@ -13,11 +18,11 @@ function limparEnv(nome) {
     process.env[nome] = process.env[nome].replace(/^[\s=]+|[\s]+$/g, '');
   }
 }
-// Limpar todas as API keys
+// Limpar todas as API keys + NODE_ENV (Railway às vezes injeta com '=' no valor)
 ['CNPJA_API_KEY', 'DIRECTD_TOKEN', 'ESCAVADOR_API_KEY', 'DATAJUD_API_KEY', 'DATAJUS_API_KEY',
  'TRANSPARENCIA_TOKEN', 'MP_ACCESS_TOKEN', 'MERCADOPAGO_ACCESS_TOKEN', 'CPFCNPJ_API_KEY',
  'CNPJWS_API_KEY', 'INFOSIMPLES_TOKEN', 'INFOSIMPLES_CALLBACK_SECRET', 'ONR_API_KEY',
- 'SERASA_API_KEY', 'JWT_SECRET'
+ 'SERASA_API_KEY', 'JWT_SECRET', 'NODE_ENV'
 ].forEach(limparEnv);
 
 // Compatibilizar nomes alternativos de variáveis
@@ -273,7 +278,9 @@ app.post('/webhook/mp', express.json(), async (req, res) => {
 
 // Servir PDF — regenera se arquivo não existir (Railway ephemeral storage)
 app.get('/relatorios/:filename', async (req, res) => {
-  const filePath = path.join(__dirname, 'public', 'relatorios', req.params.filename);
+  // Bloquear path traversal (../../ etc)
+  const fname = path.basename(req.params.filename);
+  const filePath = path.join(__dirname, 'public', 'relatorios', fname);
   if (fs.existsSync(filePath)) {
     return res.sendFile(filePath);
   }
@@ -306,7 +313,6 @@ app.get('*', (req, res) => {
 });
 
 // Inicializar banco e subir servidor
-const fs = require('fs');
 const { pool } = require('./db');
 
 async function iniciar() {

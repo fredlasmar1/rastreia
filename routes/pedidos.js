@@ -348,7 +348,17 @@ router.post('/demo', autenticar, async (req, res) => {
         valor, finalidade, ip_solicitante, aceite_termos, token_publico, operador_id
       ) VALUES ('dossie_pf', 'demonstracao', $1, $2, $3, $4, $5, 0, $6, $7, true, $8, $9)
       RETURNING *`,
-      [cliente_nome, cliente_cnpj, alvo_nome.trim(), alvo_documento.replace(/\D/g, ''), alvo_tipo || 'PF', finalidade, ip, tokenPublico, req.usuario.id]
+      [
+        cliente_nome,
+        cliente_cnpj,
+        alvo_nome.trim(),
+        alvo_documento.replace(/\D/g, ''),
+        alvo_tipo || 'PF',
+        finalidade,
+        ip,
+        tokenPublico,
+        req.usuario.id
+      ]
     );
     res.json(result.rows[0]);
   } catch (e) {
