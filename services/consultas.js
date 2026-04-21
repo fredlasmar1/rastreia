@@ -126,46 +126,75 @@ async function consultarCPF(cpf) {
         params: { Cpf: doc, Token: process.env.DIRECTD_TOKEN },
         timeout: 30000
       });
-      const r = res.data?.retorno || {};
+      // DirectData às vezes retorna {retorno: {...}} e às vezes {retorno: [{...}]}
+      let r = res.data?.retorno || {};
+      if (Array.isArray(r)) r = r[0] || {};
       console.log('[DirectData PF] Keys:', Object.keys(r).join(', '));
-      console.log('[DirectData PF] sexo:', r.sexo, '| genero:', r.genero, '| situacao:', r.situacaoCadastral, '| situacaoRF:', r.situacaoReceitaFederal);
-      if (r.nome) {
-        // Mapear sexo corretamente
-        let sexo = r.sexo || r.genero || '';
-        if (sexo === 'M' || sexo === 'm') sexo = 'Masculino';
-        else if (sexo === 'F' || sexo === 'f') sexo = 'Feminino';
-        // Formatar data sem hora
-        let dataNasc = r.dataNascimento || r.nascimento || '';
-        if (dataNasc && dataNasc.includes(' ')) dataNasc = dataNasc.split(' ')[0];
-        if (dataNasc && dataNasc.includes('T')) dataNasc = dataNasc.split('T')[0];
-        // Formatar renda
-        const renda = r.rendaEstimada || r.renda || '';
-        const rendaFormatada = renda ? `R$ ${Number(renda).toLocaleString('pt-BR', {minimumFractionDigits:2})}` : '';
-        return {
-          cpf: doc, cpf_formatado: formatarCPF(doc),
-          nome: r.nome || '', sexo: sexo,
-          data_nascimento: dataNasc, idade: r.idade || null,
-          nome_mae: r.nomeMae || r.mae || '', nome_pai: r.nomePai || r.pai || '',
-          situacao_rf: r.situacaoCadastral || r.situacaoReceitaFederal || r.situacao || '',
-          obito: r.possuiObito || r.obito || false,
-          classe_social: r.classeSocial || '', renda_estimada: rendaFormatada,
-          faixa_salarial: r.rendaFaixaSalarial || '',
-          profissao: r.cbo || r.codigoCBO || '',
-          signo: r.signo || '',
-          parentescos: (r.parentescos || []).slice(0, 10).map(p => ({
-            nome: p.nome || '', cpf: p.cpf || '', tipo: p.tipoVinculo || p.parentesco || p.tipo || ''
-          })),
-          telefones: (r.telefones || []).slice(0, 5).map(t => ({
-            numero: t.telefoneComDDD || '', tipo: t.tipoTelefone || '',
-            operadora: t.operadora || '', whatsapp: t.whatsApp || false
-          })),
-          enderecos: (r.enderecos || []).slice(0, 3).map(e => ({
-            logradouro: e.logradouro || '', numero: e.numero || '',
-            bairro: e.bairro || '', cidade: e.cidade || '', uf: e.uf || '', cep: e.cep || ''
-          })),
-          emails: (r.emails || []).slice(0, 3).map(e => e.enderecoEmail || e),
-          fonte: 'Direct Data', consultado_em: new Date().toISOString()
-        };
+      console.log('[DirectData PF] nome:', JSON.stringify(r.nome), '| cpf:', JSON.stringify(r.cpf), '| sexo:', r.sexo, '| genero:', r.genero, '| situacao:', r.situacaoCadastral, '| situacaoRF:', r.situacaoReceitaFederal);
+      // Aceita se tiver nome OU cpf (algumas respostas vem com nome vazio mas cpf preenchido)
+      if (r.nome || r.cpf) {
+        try {
+          // Mapear sexo corretamente
+          let sexo = r.sexo || r.genero || '';
+          if (sexo === 'M' || sexo === 'm') sexo = 'Masculino';
+          else if (sexo === 'F' || sexo === 'f') sexo = 'Feminino';
+          // Formatar data sem hora (blindado contra null/undefined/número)
+          let dataNasc = r.dataNascimento || r.nascimento || '';
+          if (typeof dataNasc === 'string') {
+            if (dataNasc.includes(' ')) dataNasc = dataNasc.split(' ')[0];
+            if (dataNasc.includes('T')) dataNasc = dataNasc.split('T')[0];
+          } else {
+            dataNasc = '';
+          }
+          // Formatar renda (aceita string BR '3.000,50' também)
+          const rendaRaw = r.rendaEstimada || r.renda || '';
+          let rendaFormatada = '';
+          if (rendaRaw) {
+            const rendaNum = typeof rendaRaw === 'number'
+              ? rendaRaw
+              : Number(String(rendaRaw).replace(/\./g, '').replace(',', '.'));
+            if (!isNaN(rendaNum) && rendaNum > 0) {
+              rendaFormatada = `R$ ${rendaNum.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`;
+            }
+          }
+          // Normaliza arrays (DirectData às vezes retorna objeto único)
+          const toArray = (v) => Array.isArray(v) ? v : (v && typeof v === 'object' ? [v] : []);
+          const parentescosArr = toArray(r.parentescos);
+          const telefonesArr  = toArray(r.telefones);
+          const enderecosArr  = toArray(r.enderecos);
+          const emailsArr     = toArray(r.emails);
+          return {
+            cpf: doc, cpf_formatado: formatarCPF(doc),
+            nome: r.nome || '', sexo: sexo,
+            data_nascimento: dataNasc, idade: r.idade || null,
+            nome_mae: r.nomeMae || r.mae || '', nome_pai: r.nomePai || r.pai || '',
+            situacao_rf: r.situacaoCadastral || r.situacaoReceitaFederal || r.situacao || '',
+            obito: r.possuiObito || r.obito || false,
+            classe_social: r.classeSocial || '', renda_estimada: rendaFormatada,
+            faixa_salarial: r.rendaFaixaSalarial || '',
+            profissao: r.cbo || r.codigoCBO || '',
+            signo: r.signo || '',
+            parentescos: parentescosArr.slice(0, 10).map(p => ({
+              nome: p.nome || '', cpf: p.cpf || '', tipo: p.tipoVinculo || p.parentesco || p.tipo || ''
+            })),
+            telefones: telefonesArr.slice(0, 5).map(t => ({
+              numero: t.telefoneComDDD || t.numero || t.telefone || '',
+              tipo: t.tipoTelefone || '',
+              operadora: t.operadora || '', whatsapp: t.whatsApp || false
+            })),
+            enderecos: enderecosArr.slice(0, 3).map(e => ({
+              logradouro: e.logradouro || '', numero: e.numero || '',
+              bairro: e.bairro || '', cidade: e.cidade || '', uf: e.uf || '', cep: e.cep || ''
+            })),
+            emails: emailsArr.slice(0, 3).map(e => typeof e === 'string' ? e : (e?.enderecoEmail || '')).filter(Boolean),
+            fonte: 'Direct Data', consultado_em: new Date().toISOString()
+          };
+        } catch (mapErr) {
+          console.error('[Direct Data PF] Erro no mapeamento:', mapErr.message, '| stack:', mapErr.stack?.split('\n')[1]);
+          // Deixa cair no próximo try/catch ou fallback
+        }
+      } else {
+        console.warn('[Direct Data PF] Retorno sem nome nem CPF. Payload:', JSON.stringify(r).slice(0, 500));
       }
     } catch (e) {
       const status = e.response?.status;
