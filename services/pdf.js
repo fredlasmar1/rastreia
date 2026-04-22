@@ -63,6 +63,53 @@ function avisoBox(doc, y, msg, cor) {
   return y + 28;
 }
 
+// Normaliza alerta (aceita string legada ou objeto com severidade)
+function normalizarAlerta(a) {
+  if (typeof a === 'string') return { texto: a, severidade: 'atencao' };
+  return { texto: a.texto || String(a), severidade: a.severidade || 'atencao' };
+}
+
+// Estilo por severidade — fundo, cor do texto e rótulo
+const ESTILO_SEV = {
+  critico:  { fundo: '#fee2e2', texto: '#991b1b', rotulo: 'CRÍTICO' },
+  atencao:  { fundo: '#fef3c7', texto: '#92400e', rotulo: 'ATENÇÃO' },
+  observar: { fundo: '#f3f4f6', texto: '#374151', rotulo: 'OBSERVAR' },
+  positivo: { fundo: '#dcfce7', texto: '#14532d', rotulo: 'POSITIVO' }
+};
+
+function renderAlerta(doc, y, alerta) {
+  const { texto, severidade } = normalizarAlerta(alerta);
+  const est = ESTILO_SEV[severidade] || ESTILO_SEV.atencao;
+  const larguraRot = 52;
+  const larguraTxt = LARGURA - larguraRot - 8;
+  // altura dinâmica
+  doc.font('Helvetica').fontSize(7.5);
+  const h = Math.max(15, doc.heightOfString(texto, { width: larguraTxt }) + 6);
+  y = verificarPagina(doc, y, h + 3);
+  doc.rect(MARGEM, y, LARGURA, h).fill(est.fundo);
+  // Faixa de rótulo à esquerda
+  doc.rect(MARGEM, y, larguraRot, h).fill(est.texto);
+  doc.fillColor('#ffffff').fontSize(6.5).font('Helvetica-Bold').text(est.rotulo, MARGEM, y + (h / 2) - 3, { width: larguraRot, align: 'center' });
+  doc.fillColor(est.texto).fontSize(7.5).font('Helvetica').text(texto, MARGEM + larguraRot + 6, y + 3, { width: larguraTxt });
+  return y + h + 3;
+}
+
+// Ordena alertas por severidade (crítico > atenção > observar > positivo)
+function ordenarAlertas(alertas) {
+  const ordem = { critico: 0, atencao: 1, observar: 2, positivo: 3 };
+  return [...(alertas || [])].map(normalizarAlerta).sort((a, b) =>
+    (ordem[a.severidade] ?? 1) - (ordem[b.severidade] ?? 1)
+  );
+}
+
+function contarPorSeveridade(alertas) {
+  const contagem = { critico: 0, atencao: 0, observar: 0, positivo: 0 };
+  (alertas || []).map(normalizarAlerta).forEach(a => {
+    if (contagem[a.severidade] !== undefined) contagem[a.severidade]++;
+  });
+  return contagem;
+}
+
 function rodape(doc) {
   const y = doc.page.height - RODAPE_H;
   doc.rect(0, y, 595, RODAPE_H).fill('#f3f4f6');
@@ -206,6 +253,57 @@ function gerarDossie(pedido, dadosDB) {
         return;
       }
 
+      // ════ RESUMO EXECUTIVO (topo — decisão em 10s) ════
+      const corS = corScore(score.classificacao);
+      const alertasOrd = ordenarAlertas(score.alertas || []);
+      const contSev = contarPorSeveridade(score.alertas || []);
+      const top3Criticos = alertasOrd.filter(a => a.severidade === 'critico').slice(0, 3);
+
+      // Caixa com borda azul grossa
+      y = verificarPagina(doc, y, 120);
+      const boxTopY = y;
+      doc.save();
+      doc.rect(MARGEM, y, LARGURA, 3).fill(COR.azul);
+      y += 6;
+      doc.fillColor(COR.cinza).fontSize(6.5).font('Helvetica-Bold').text('RESUMO EXECUTIVO', MARGEM, y, { characterSpacing: 1.2 });
+      y += 10;
+
+      // Score grande + classificação + decisão
+      const scoreText = score.score === '-' ? '?' : `${score.score}`;
+      doc.fillColor(corS).fontSize(32).font('Helvetica-Bold').text(scoreText, MARGEM, y, { width: 80, align: 'left' });
+      doc.fillColor(COR.cinza).fontSize(8).font('Helvetica').text('/100', MARGEM + 56, y + 22);
+      doc.fillColor(corS).fontSize(12).font('Helvetica-Bold').text(score.classificacao, MARGEM + 90, y + 2, { width: LARGURA - 90 });
+      doc.fillColor('#111827').fontSize(9).font('Helvetica-Bold').text(score.recomendacao, MARGEM + 90, y + 20, { width: LARGURA - 90 });
+      y += 46;
+
+      // Linha de contagem por severidade
+      const partes = [];
+      if (contSev.critico > 0) partes.push(`${contSev.critico} crítico(s)`);
+      if (contSev.atencao > 0) partes.push(`${contSev.atencao} atenção`);
+      if (contSev.observar > 0) partes.push(`${contSev.observar} observar`);
+      if (contSev.positivo > 0) partes.push(`${contSev.positivo} positivo(s)`);
+      const resumoTxt = partes.length > 0 ? `Alertas: ${partes.join(' · ')}` : 'Nenhum alerta gerado';
+      doc.fillColor(COR.cinza).fontSize(8).font('Helvetica').text(resumoTxt, MARGEM, y);
+      y += 14;
+
+      // Top-3 alertas críticos inline
+      if (top3Criticos.length > 0) {
+        doc.fillColor(COR.vermelho).fontSize(7.5).font('Helvetica-Bold').text('PRINCIPAIS PONTOS CRÍTICOS', MARGEM, y);
+        y += 10;
+        top3Criticos.forEach(a => {
+          doc.font('Helvetica').fontSize(7.5);
+          const hT = doc.heightOfString(a.texto, { width: LARGURA - 12 });
+          y = verificarPagina(doc, y, hT + 4);
+          doc.fillColor('#111827').text(`• ${a.texto}`, MARGEM + 6, y, { width: LARGURA - 12 });
+          y += hT + 2;
+        });
+      }
+      y += 6;
+      // Borda inferior do resumo
+      doc.rect(MARGEM, y, LARGURA, 1).fill(COR.borda);
+      doc.restore();
+      y += 12;
+
       // ════ ALVO ════
       y = secao(doc, 'ALVO DA CONSULTA', y);
       linha(doc, 'Nome', pedido.alvo_nome, y); y += 16;
@@ -213,23 +311,11 @@ function gerarDossie(pedido, dadosDB) {
       linha(doc, 'Tipo', pedido.alvo_tipo === 'PF' ? 'Pessoa Fisica' : 'Pessoa Juridica', y); y += 16;
       linha(doc, 'Solicitante', pedido.cliente_nome, y); y += 20;
 
-      // ════ SCORE ════
-      y = secao(doc, 'SCORE DE RISCO', y);
-      const corS = corScore(score.classificacao);
-      doc.rect(MARGEM, y, LARGURA, 60).fill('#f8fafc').stroke(COR.borda);
-      const scoreText = score.score === '-' ? '?' : `${score.score}`;
-      doc.fillColor(corS).fontSize(28).font('Helvetica-Bold').text(scoreText, 70, y + 8, { width: 50, align: 'center' });
-      doc.fontSize(9).font('Helvetica').fillColor(COR.cinza).text('/100', 122, y + 18);
-      doc.fillColor(corS).fontSize(13).font('Helvetica-Bold').text(score.classificacao, 170, y + 10);
-      doc.fillColor('#111827').fontSize(8).font('Helvetica').text(score.recomendacao, 170, y + 28, { width: 360 });
-      y += 68;
-
-      if (score.alertas.length > 0) {
-        score.alertas.forEach(a => {
-          y = verificarPagina(doc, y, 18);
-          doc.rect(MARGEM, y, LARGURA, 15).fill('#fef3c7');
-          doc.fillColor('#92400e').fontSize(7.5).font('Helvetica').text(`! ${a}`, MARGEM + 6, y + 3, { width: LARGURA - 12 });
-          y += 18;
+      // ════ ALERTAS DETALHADOS (por severidade) ════
+      if (alertasOrd.length > 0) {
+        y = secao(doc, 'ALERTAS E SINAIS', y);
+        alertasOrd.forEach(a => {
+          y = renderAlerta(doc, y, a);
         });
         y += 4;
       }
@@ -334,15 +420,19 @@ function gerarDossie(pedido, dadosDB) {
           // Parentescos (inline)
           if (cadastral.parentescos?.length > 0) {
             const nomes = cadastral.parentescos.map(p => p.nome + (p.tipo ? ` (${p.tipo})` : '')).join('  |  ');
+            const h = doc.heightOfString(nomes, { width: LARGURA - 12, fontSize: 7 });
+            y = verificarPagina(doc, y, h + 16);
             y += 2;
             doc.fillColor(COR.azul).fontSize(8).font('Helvetica-Bold').text('VINCULOS FAMILIARES', MARGEM, y); y += 10;
             doc.fillColor('#111827').fontSize(7).font('Helvetica').text(nomes, MARGEM + 6, y, { width: LARGURA - 12 });
-            y += doc.heightOfString(nomes, { width: LARGURA - 12 }) + 4;
+            y += h + 4;
           }
           // Enderecos (inline)
           if (cadastral.enderecos?.length > 0) {
+            y = verificarPagina(doc, y, 12 + cadastral.enderecos.length * 10);
             doc.fillColor(COR.azul).fontSize(8).font('Helvetica-Bold').text('ENDERECOS', MARGEM, y); y += 10;
             cadastral.enderecos.forEach((e, i) => {
+              y = verificarPagina(doc, y, 11);
               const end = [e.logradouro, e.numero, e.bairro, e.cidade, e.uf, e.cep].filter(Boolean).join(', ');
               doc.fillColor('#111827').fontSize(7).font('Helvetica').text(`${i + 1}. ${end}`, MARGEM + 6, y, { width: LARGURA - 12 });
               y += 10;
@@ -351,8 +441,10 @@ function gerarDossie(pedido, dadosDB) {
           }
           // Telefones (inline, separados por |)
           if (cadastral.telefones?.length > 0) {
+            y = verificarPagina(doc, y, 12 + cadastral.telefones.length * 9);
             doc.fillColor(COR.azul).fontSize(8).font('Helvetica-Bold').text('TELEFONES', MARGEM, y); y += 10;
             cadastral.telefones.forEach(t => {
+              y = verificarPagina(doc, y, 10);
               const wpp = t.whatsapp ? ' [WPP]' : '';
               const info = [t.numero, t.tipo, t.operadora].filter(Boolean).join(' - ');
               doc.fillColor('#111827').fontSize(7).font('Helvetica').text(`- ${info}${wpp}`, MARGEM + 6, y);
@@ -362,6 +454,7 @@ function gerarDossie(pedido, dadosDB) {
           }
           // Emails (inline)
           if (cadastral.emails?.length > 0) {
+            y = verificarPagina(doc, y, 12);
             const emailsTxt = cadastral.emails.join('  |  ');
             doc.fillColor(COR.azul).fontSize(8).font('Helvetica-Bold').text('EMAILS', MARGEM, y);
             doc.fillColor('#111827').font('Helvetica').fontSize(7).text(emailsTxt, MARGEM + 50, y);
@@ -547,12 +640,7 @@ function gerarDossie(pedido, dadosDB) {
         const scoreQ = Number(scoreCredito.score || 0);
         const totalProcessos = processos.total || 0;
 
-        // Tabela de perfil
-        if (cadastral.renda_estimada) {
-          const r = cadastral.renda_inconsistente ? `${cadastral.renda_estimada} (inconsistente)` : cadastral.renda_estimada;
-          linha(doc, 'Renda Estimada', r, y); y += 12;
-        }
-        if (cadastral.faixa_salarial) { linha(doc, 'Faixa Salarial', cadastral.faixa_salarial, y); y += 12; }
+        // Perfil econômico complementar — renda já foi exibida em DADOS CADASTRAIS, não repetir aqui
         if (perfilEco.nivel_socioeconomico) { linha(doc, 'Nivel Socioeconomico', perfilEco.nivel_socioeconomico, y); y += 12; }
         if (perfilEco.poder_aquisitivo) { linha(doc, 'Poder Aquisitivo', perfilEco.poder_aquisitivo, y); y += 12; }
         if (perfilEco.renda_presumida) { linha(doc, 'Renda Presumida', `R$ ${Number(perfilEco.renda_presumida).toLocaleString('pt-BR', {minimumFractionDigits:2})}`, y); y += 12; }

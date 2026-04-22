@@ -245,8 +245,8 @@ function calcularScore(tipo, dados) {
   const fontesConsultadas = (temDadosCadastrais ? 1 : 0) + (temDadosProcessos ? 1 : 0) + (transparencia.em_lista_negra !== undefined ? 1 : 0);
 
   if (fontesConsultadas === 0) {
-    alertas.push('Nenhuma fonte de dados retornou informações — score não calculado');
-    alertas.push('Verifique se as APIs estão configuradas (DIRECTD_TOKEN, ESCAVADOR_API_KEY)');
+    alertas.push({ texto: 'Nenhuma fonte de dados retornou informações — score não calculado', severidade: 'critico' });
+    alertas.push({ texto: 'Verifique se as APIs estão configuradas (DIRECTD_TOKEN, ESCAVADOR_API_KEY)', severidade: 'observar' });
     return {
       score: '-',
       classificacao: 'INDISPONÍVEL',
@@ -259,6 +259,11 @@ function calcularScore(tipo, dados) {
   }
 
   let score = 100;
+  // alertas agora podem ser strings (compat) ou objetos { texto, severidade }
+  // severidade: 'critico' | 'atencao' | 'observar' | 'positivo'
+  const alertar = (texto, severidade) => {
+    alertas.push({ texto, severidade: severidade || 'observar' });
+  };
   const aplicar = (dim, delta, motivo) => {
     if (delta === 0) return;
     score += delta;
@@ -270,11 +275,11 @@ function calcularScore(tipo, dados) {
   // ============================================================
   if (!temDadosCadastrais) {
     aplicar('Dados cadastrais', -15, 'Dados cadastrais indisponíveis');
-    alertas.push('Dados cadastrais indisponíveis — score parcial');
+    alertar('Dados cadastrais indisponíveis — score parcial', 'atencao');
   }
   if (cadastral.aviso || cadastral.erro) {
     aplicar('Dados cadastrais', -10, 'Retorno incompleto da API de dados cadastrais');
-    alertas.push('API de dados cadastrais não retornou informações completas');
+    alertar('API de dados cadastrais não retornou informações completas', 'observar');
   }
 
   // ============================================================
@@ -295,10 +300,13 @@ function calcularScore(tipo, dados) {
     penalQuod = Math.round(penalQuod * reducao);
     if (penalQuod > 0) {
       aplicar('QUOD', -penalQuod, `Score QUOD ${sq}/1000 (${scoreQuod.faixa || 'sem faixa'})${reducao < 1 ? ' - peso reduzido por sinal judicial' : ''}`);
-      alertas.push(`Score QUOD: ${sq}/1000 — ${scoreQuod.faixa || ''}`);
+      const sevQ = sq < 300 ? 'critico' : sq < 500 ? 'atencao' : 'observar';
+      alertar(`Score QUOD: ${sq}/1000 — ${scoreQuod.faixa || ''}`, sevQ);
+    } else if (sq >= 800) {
+      alertar(`Score QUOD: ${sq}/1000 — ${scoreQuod.faixa || 'Excelente'}`, 'positivo');
     }
     if (scoreQuod.motivos?.length > 0) {
-      scoreQuod.motivos.slice(0, 2).forEach(m => alertas.push(`QUOD: ${m}`));
+      scoreQuod.motivos.slice(0, 2).forEach(m => alertar(`QUOD: ${m}`, 'observar'));
     }
   }
 
@@ -307,11 +315,11 @@ function calcularScore(tipo, dados) {
   // ============================================================
   if (negativacoes.total_pendencias > 0) {
     const valorPend = Number(negativacoes.total_pendencias);
-    let penal = 10;
-    if (valorPend > 100000) penal = 30;
-    else if (valorPend > 10000) penal = 20;
+    let penal = 10, sev = 'atencao';
+    if (valorPend > 100000) { penal = 30; sev = 'critico'; }
+    else if (valorPend > 10000) { penal = 20; sev = 'atencao'; }
     aplicar('Pendências', -penal, `Pendências R$ ${valorPend.toLocaleString('pt-BR', {minimumFractionDigits:2})}`);
-    alertas.push(`Pendências financeiras: R$ ${valorPend.toLocaleString('pt-BR', {minimumFractionDigits:2})} — ${negativacoes.status || ''}`);
+    alertar(`Pendências financeiras: R$ ${valorPend.toLocaleString('pt-BR', {minimumFractionDigits:2})} — ${negativacoes.status || ''}`, sev);
   }
 
   // ============================================================
@@ -322,12 +330,10 @@ function calcularScore(tipo, dados) {
   const processosInativos = totalProcessos - processosAtivos;
 
   if (processosAtivos > 0) {
-    // Penalidade base por quantidade (ativos)
     const penalBase = Math.min(processosAtivos * 6, 30);
     aplicar('Processos ativos', -penalBase, `${processosAtivos} processo(s) ativo(s)`);
-    alertas.push(`${processosAtivos} processo(s) ativo(s) encontrado(s)`);
+    alertar(`${processosAtivos} processo(s) ativo(s) encontrado(s)`, processosAtivos >= 3 ? 'critico' : 'atencao');
 
-    // Penalidade extra por recência — processos <180 dias
     let recentes180 = 0;
     let recentes90 = 0;
     let maisRecenteDias = null;
@@ -341,22 +347,21 @@ function calcularScore(tipo, dados) {
     });
     if (recentes90 > 0) {
       aplicar('Recência judicial', -20, `${recentes90} processo(s) ativo(s) ajuizado(s) nos últimos 90 dias`);
-      alertas.push(`CRÍTICO: ${recentes90} processo(s) ajuizado(s) há menos de 90 dias`);
+      alertar(`${recentes90} processo(s) ajuizado(s) há menos de 90 dias`, 'critico');
     } else if (recentes180 > 0) {
       aplicar('Recência judicial', -12, `${recentes180} processo(s) ativo(s) ajuizado(s) nos últimos 180 dias`);
-      alertas.push(`ATENÇÃO: ${recentes180} processo(s) ajuizado(s) há menos de 180 dias`);
+      alertar(`${recentes180} processo(s) ajuizado(s) há menos de 180 dias`, 'atencao');
     }
     if (maisRecenteDias !== null && maisRecenteDias < 60) {
-      alertas.push(`Processo mais recente ajuizado há ${maisRecenteDias} dias`);
+      alertar(`Processo mais recente ajuizado há ${maisRecenteDias} dias`, 'critico');
     }
   }
   if (processosInativos > 0) {
-    // Processos históricos não zeram o risco, mas impactam pouco
     if (processosInativos >= 3) {
       aplicar('Histórico judicial', -5, `${processosInativos} processo(s) histórico(s) (recorrência)`);
-      alertas.push(`Recorrência: ${processosInativos} processo(s) baixado(s)/arquivado(s) no histórico`);
+      alertar(`Recorrência: ${processosInativos} processo(s) baixado(s)/arquivado(s) no histórico`, 'atencao');
     } else {
-      alertas.push(`${processosInativos} processo(s) baixado(s)/arquivado(s) no histórico`);
+      alertar(`${processosInativos} processo(s) baixado(s)/arquivado(s) no histórico`, 'observar');
     }
   }
 
@@ -365,7 +370,7 @@ function calcularScore(tipo, dados) {
   // ============================================================
   if (transparencia.em_lista_negra) {
     aplicar('Lista negra', -40, 'Consta em CEIS/CNEP');
-    alertas.push('CRÍTICO: Empresa/Pessoa consta em lista negra federal (CEIS/CNEP)');
+    alertar('Empresa/Pessoa consta em lista negra federal (CEIS/CNEP)', 'critico');
   }
 
   // ============================================================
@@ -374,7 +379,7 @@ function calcularScore(tipo, dados) {
   const situacao = (cadastral.situacao || cadastral.situacao_rf || '').toLowerCase();
   if (situacao && !situacao.includes('ativ') && !situacao.includes('regular')) {
     aplicar('Situação RF', -25, `Irregular: ${situacao}`);
-    alertas.push(`Situação irregular na Receita Federal: ${situacao}`);
+    alertar(`Situação irregular na Receita Federal: ${situacao}`, 'critico');
   }
 
   // ============================================================
@@ -382,7 +387,7 @@ function calcularScore(tipo, dados) {
   // ============================================================
   if (cadastral.obito === true) {
     aplicar('Óbito', -50, 'Registro de óbito no CPF');
-    alertas.push('CRÍTICO: Registro de óbito encontrado para este CPF');
+    alertar('Registro de óbito encontrado para este CPF', 'critico');
   }
 
   // ============================================================
@@ -393,7 +398,9 @@ function calcularScore(tipo, dados) {
     if (anos >= 5) aplicar('Tempo de empresa', +5, `Empresa com ${anos} anos de existência`);
     if (anos < 1) {
       aplicar('Tempo de empresa', -10, 'Empresa com menos de 1 ano');
-      alertas.push('Empresa com menos de 1 ano de existência');
+      alertar('Empresa com menos de 1 ano de existência', 'atencao');
+    } else if (anos >= 5) {
+      alertar(`Empresa consolidada (${anos} anos de existência)`, 'positivo');
     }
   }
 
@@ -404,21 +411,21 @@ function calcularScore(tipo, dados) {
   const enderecos = Array.isArray(cadastral.enderecos) ? cadastral.enderecos : [];
   if (telefones.length >= 5) {
     aplicar('Multiplicidade', -8, `${telefones.length} telefones cadastrados`);
-    alertas.push(`Sinal antifraude: ${telefones.length} telefones cadastrados`);
+    alertar(`Sinal antifraude: ${telefones.length} telefones cadastrados`, 'atencao');
   } else if (telefones.length >= 4) {
     aplicar('Multiplicidade', -4, `${telefones.length} telefones cadastrados`);
+    alertar(`${telefones.length} telefones cadastrados`, 'observar');
   }
   if (enderecos.length >= 3) {
     aplicar('Multiplicidade', -6, `${enderecos.length} endereços cadastrados`);
-    alertas.push(`Sinal antifraude: ${enderecos.length} endereços cadastrados`);
+    alertar(`Sinal antifraude: ${enderecos.length} endereços cadastrados`, 'atencao');
   }
 
   // ============================================================
   // 10. RENDA INCONSISTENTE
   // ============================================================
   if (cadastral.renda_inconsistente) {
-    // Não penaliza o score, mas registra o alerta de qualidade
-    alertas.push(cadastral.renda_motivo_inconsistencia || 'Renda estimada inconsistente - desconsiderada');
+    alertar(cadastral.renda_motivo_inconsistencia || 'Renda estimada inconsistente - desconsiderada', 'observar');
   }
 
   score = Math.max(0, Math.min(100, Math.round(score)));
