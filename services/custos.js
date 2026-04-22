@@ -18,11 +18,17 @@ async function listarCustos() {
 }
 
 // Atualiza o valor de um custo (admin)
+// Marca confianca='manual' para que o seed do schema.sql nao sobrescreva no proximo boot
 async function atualizarCusto(chave, valor_brl, fonte = null) {
   const v = Number(valor_brl);
   if (!isFinite(v) || v < 0) throw new Error('Valor inválido');
   await pool.query(
-    `UPDATE api_custos SET valor_brl = $1, fonte = COALESCE($2, fonte), atualizado_em = NOW() WHERE chave = $3`,
+    `UPDATE api_custos
+        SET valor_brl = $1,
+            fonte = COALESCE($2, fonte),
+            confianca = 'manual',
+            atualizado_em = NOW()
+      WHERE chave = $3`,
     [v, fonte, chave]
   );
 }

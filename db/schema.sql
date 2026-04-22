@@ -173,19 +173,29 @@ CREATE TABLE IF NOT EXISTS api_custos (
   atualizado_em TIMESTAMP DEFAULT NOW()
 );
 
--- Seed com valores conservadores (edite em /custos-api.html)
+-- Seed com valores OFICIAIS do Cardapio DirectData V4.1 (2026)
+-- Atualize manualmente em /custos-api.html quando os precos mudarem
 INSERT INTO api_custos (chave, rotulo, valor_brl, fonte, confianca) VALUES
-  ('escavador_processos',    'Escavador — Processos por CPF/CNPJ',        4.5000, 'Tabela publica Escavador',          'oficial'),
-  ('datajud',                'Datajud CNJ (TJGO/TRF1/STJ/TST)',           0.0000, 'API publica gratuita',              'oficial'),
-  ('cnpja',                  'CNPJa — Receita Federal CNPJ',              0.0000, 'Plano gratuito',                     'oficial'),
-  ('directd_pf_plus',        'DirectData — Cadastro PF Plus',             0.5000, 'Estimativa conservadora',            'estimado'),
-  ('directd_cnpj',           'DirectData — Cadastro PJ',                  0.5000, 'Estimativa conservadora',            'estimado'),
-  ('directd_score_quod',     'DirectData — Score QUOD',                   1.2000, 'Estimativa conservadora',            'estimado'),
-  ('directd_negativacoes',   'DirectData — Protestos e Negativacoes',     0.8000, 'Estimativa conservadora',            'estimado'),
-  ('directd_perfil_economico','DirectData — Perfil Economico',            0.6000, 'Estimativa conservadora',            'estimado'),
-  ('directd_vinculos',       'DirectData — Vinculos Societarios',         0.5000, 'Estimativa conservadora',            'estimado'),
-  ('directd_veiculos',       'DirectData — Veiculos',                     0.3000, 'Estimativa conservadora',            'estimado'),
-  ('transparencia',          'Portal da Transparencia (CGU)',             0.0000, 'API publica gratuita',              'oficial'),
-  ('infosimples_detran_go',  'InfoSimples DETRAN-GO',                     0.2600, 'Tabela publica InfoSimples',        'oficial'),
-  ('onr_matricula',          'ONR — Matricula de imovel',                 0.0000, 'Depende do cartorio, variavel',     'estimado')
-ON CONFLICT (chave) DO NOTHING;
+  ('escavador_processos',    'Escavador — Processos por CPF/CNPJ',        4.5000, 'Tabela publica Escavador',                              'oficial'),
+  ('datajud',                'Datajud CNJ (TJGO/TRF1/STJ/TST)',           0.0000, 'API publica gratuita',                                  'oficial'),
+  ('cnpja',                  'CNPJa — Receita Federal CNPJ',              0.0000, 'Plano gratuito',                                        'oficial'),
+  ('directd_pf_plus',        'DirectData — Cadastro PF Plus',             0.3600, 'Cardapio DirectData V4.1 (Cadastral)',                  'oficial'),
+  ('directd_cnpj',           'DirectData — Cadastro PJ Plus',             0.3600, 'Cardapio DirectData V4.1 (Cadastral)',                  'oficial'),
+  ('directd_score_quod',     'DirectData — Score QUOD',                   1.9800, 'Cardapio DirectData V4.1 (Credito)',                    'oficial'),
+  ('directd_negativacoes',   'DirectData — Detalhamento Negativo',        2.3800, 'Cardapio DirectData V4.1 (Credito)',                    'oficial'),
+  ('directd_perfil_economico','DirectData — Nivel Socioeconomico e Renda', 0.3600, 'Cardapio DirectData V4.1 (Credito)',                   'oficial'),
+  ('directd_vinculos',       'DirectData — Vinculos Societarios',         1.8400, 'Cardapio DirectData V4.1 (Cadastral)',                  'oficial'),
+  ('directd_veiculos',       'DirectData — Consulta Veicular (placa)',    5.4000, 'Cardapio DirectData V4.1 (Veicular)',                   'oficial'),
+  ('directd_protestos',      'DirectData — Protestos Nacional',           0.7200, 'Cardapio DirectData V4.1 (Credito)',                    'oficial'),
+  ('directd_obito',          'DirectData — Obito (PF)',                   0.3600, 'Cardapio DirectData V4.1 (Cadastral)',                  'oficial'),
+  ('directd_beneficiario_final','DirectData — Beneficiario Final (UBO)',  1.4400, 'Cardapio DirectData V4.1 (Societario)',                 'oficial'),
+  ('transparencia',          'Portal da Transparencia (CGU)',             0.0000, 'API publica gratuita',                                  'oficial'),
+  ('infosimples_detran_go',  'InfoSimples DETRAN-GO',                     0.2600, 'Tabela publica InfoSimples',                            'oficial'),
+  ('onr_matricula',          'ONR — Matricula de imovel',                 0.0000, 'Depende do cartorio, variavel',                         'estimado')
+ON CONFLICT (chave) DO UPDATE SET
+  rotulo = EXCLUDED.rotulo,
+  valor_brl = EXCLUDED.valor_brl,
+  fonte = EXCLUDED.fonte,
+  confianca = EXCLUDED.confianca,
+  atualizado_em = NOW()
+WHERE api_custos.confianca != 'manual';  -- preserva edicoes manuais feitas em /custos-api.html
