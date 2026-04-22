@@ -287,22 +287,101 @@ function gerarDossie(pedido, dadosDB) {
             y += 6;
           }
 
-          y = secao(doc, 'SITUACAO E RESTRICOES', y);
-          y = linha(doc, 'Situacao', v.situacao || 'Sem informacao', y, 13);
-          if (v.restricoes && v.restricoes.length > 0) {
+          y = secao(doc, 'SITUAÇÃO E RESTRIÇÕES', y);
+          y = linha(doc, 'Situação', v.situacao || 'Sem informação', y, 13);
+
+          // Mapeamento de indicadores DirectData → alertas estruturados
+          const ind = v.indicadores || {};
+          const restricoesEstruturadas = [];
+          if (ind.rouboFurto) restricoesEstruturadas.push({
+            tipo: 'ROUBO/FURTO', severidade: 'critico',
+            texto: 'Veículo consta em registro de roubo ou furto. NÃO NEGOCIAR. Risco de apreensão e responsabilização criminal (art. 180 CP - receptação).'
+          });
+          if (ind.renajud) restricoesEstruturadas.push({
+            tipo: 'RENAJUD', severidade: 'critico',
+            texto: 'Restrição judicial ativa (RENAJUD). Veículo penhorado ou sob ordem judicial. Transferência bloqueada até liberação pelo juízo.'
+          });
+          if (ind.rfb) restricoesEstruturadas.push({
+            tipo: 'RECEITA FEDERAL', severidade: 'critico',
+            texto: 'Restrição da Receita Federal. Normalmente relacionada a dívida ativa, apreensão aduaneira ou pendência fiscal. Impede transferência.'
+          });
+          if (ind.leilao) restricoesEstruturadas.push({
+            tipo: 'LEILÃO', severidade: 'critico',
+            texto: 'Veículo atualmente ou anteriormente em leilão. Verificar laudo de sinistro e categoria (avariado, recuperado, destinação especial).'
+          });
+          if (ind.pendenciaEmissao) restricoesEstruturadas.push({
+            tipo: 'DOCUMENTO PENDENTE', severidade: 'atencao',
+            texto: 'Pendência de emissão de documento (CRLV). Pode indicar atraso no licenciamento, IPVA não quitado ou transferência não concretizada.'
+          });
+          if (ind.comunicadoVenda) restricoesEstruturadas.push({
+            tipo: 'COMUNICADO DE VENDA', severidade: 'atencao',
+            texto: 'Vendedor anterior comunicou a venda ao DETRAN, mas transferência ainda não foi finalizada. Confirmar proprietário real antes da negociação.'
+          });
+          if (ind.renainf) restricoesEstruturadas.push({
+            tipo: 'INFRAÇÕES', severidade: 'atencao',
+            texto: 'Infrações registradas no RENAINF. Multas podem gerar débito herdado ao novo proprietário — exigir comprovante de quitação.'
+          });
+          if (ind.alarme) restricoesEstruturadas.push({
+            tipo: 'ALARME', severidade: 'atencao',
+            texto: 'Alarme registrado na base veicular. Investigar origem (b.o. não concluído, suspeita de clonagem, etc).'
+          });
+          if (ind.recall) restricoesEstruturadas.push({
+            tipo: 'RECALL', severidade: 'observar',
+            texto: 'Veículo tem recall registrado pela montadora. Não impede negócio, mas convém confirmar se o reparo foi realizado junto à concessionária.'
+          });
+          // Restrições textuais livres (vindas em v.restricoes como strings)
+          if (Array.isArray(v.restricoes)) {
+            v.restricoes.forEach(r => {
+              if (!r) return;
+              const txt = String(r).trim();
+              if (!txt) return;
+              // Evita duplicar indicadores já mapeados (heurística simples)
+              const jaCapturado = restricoesEstruturadas.some(x => txt.toUpperCase().includes(x.tipo));
+              if (!jaCapturado) {
+                restricoesEstruturadas.push({
+                  tipo: 'OUTRA RESTRIÇÃO', severidade: 'atencao',
+                  texto: txt
+                });
+              }
+            });
+          }
+
+          if (restricoesEstruturadas.length > 0) {
+            // Contador por severidade
+            const contSevV = { critico: 0, atencao: 0, observar: 0 };
+            restricoesEstruturadas.forEach(r => { if (contSevV[r.severidade] !== undefined) contSevV[r.severidade]++; });
+            const resumoSev = [];
+            if (contSevV.critico) resumoSev.push(`${contSevV.critico} crítico(s)`);
+            if (contSevV.atencao) resumoSev.push(`${contSevV.atencao} atenção`);
+            if (contSevV.observar) resumoSev.push(`${contSevV.observar} observação`);
             y += 2;
-            doc.fillColor(COR.vermelho).fontSize(9).font('Helvetica-Bold').text('RESTRICOES ENCONTRADAS', MARGEM, y); y += 14;
-            v.restricoes.forEach((r, i) => {
-              y = verificarPagina(doc, y, 18);
-              doc.rect(MARGEM, y, LARGURA, 16).fill('#fee2e2');
-              doc.fillColor(COR.vermelho).fontSize(8).font('Helvetica').text(`${i + 1}. ${String(r)}`, MARGEM + 6, y + 4, { width: LARGURA - 12 });
-              y += 18;
+            y = verificarPagina(doc, y, 24);
+            doc.rect(MARGEM, y, LARGURA, 20).fill(contSevV.critico > 0 ? '#fee2e2' : '#fef3c7');
+            doc.fillColor(contSevV.critico > 0 ? '#991b1b' : '#92400e').fontSize(9.5).font('Helvetica-Bold')
+              .text(`${restricoesEstruturadas.length} restrição(ões) identificada(s)`, MARGEM + 8, y + 5, { lineBreak: false });
+            doc.fillColor(contSevV.critico > 0 ? '#991b1b' : '#92400e').fontSize(7.5).font('Helvetica')
+              .text(resumoSev.join(' | '), MARGEM + LARGURA - 200, y + 7, { width: 190, align: 'right', lineBreak: false });
+            y += 24;
+
+            // Ordenar: críticos primeiro, depois atenção, depois observar
+            const ordem = { critico: 0, atencao: 1, observar: 2 };
+            const ordenadas = [...restricoesEstruturadas].sort((a, b) => (ordem[a.severidade] ?? 9) - (ordem[b.severidade] ?? 9));
+
+            // Renderizar cada restrição como alerta (tipo em negrito no início do texto)
+            ordenadas.forEach(r => {
+              y = renderAlerta(doc, y, {
+                texto: `${r.tipo}: ${r.texto}`,
+                severidade: r.severidade
+              });
             });
           } else {
-            y = verificarPagina(doc, y, 18);
-            doc.rect(MARGEM, y, LARGURA, 16).fill('#d1fae5');
-            doc.fillColor('#065f46').fontSize(8).font('Helvetica-Bold').text('Nenhuma restricao identificada', MARGEM + 6, y + 4);
-            y += 20;
+            y = verificarPagina(doc, y, 32);
+            doc.rect(MARGEM, y, LARGURA, 28).fill('#d1fae5');
+            doc.fillColor('#065f46').fontSize(9.5).font('Helvetica-Bold')
+              .text('Nenhuma restrição identificada', MARGEM + 8, y + 5, { lineBreak: false });
+            doc.fillColor('#065f46').fontSize(7).font('Helvetica')
+              .text('RENAJUD, roubo/furto, Receita Federal, leilão, recall e RENAINF negativos', MARGEM + 8, y + 17, { width: LARGURA - 16, lineBreak: false });
+            y += 32;
           }
           y += 6;
 
