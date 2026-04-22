@@ -293,12 +293,15 @@ async function consultarEscavador(doc, tipo, nome) {
       // Match por nome: tenta nome completo OU primeiro+ultimo sobrenome
       if (nomeLower && (poloA.includes(nomeLower) || poloP.includes(nomeLower))) return true;
       if (nomeLower) {
-        const tokens = nomeLower.split(/\s+/).filter(Boolean);
+        // Stopwords que nao contam como sobrenome significativo
+        const stop = new Set(['de','da','do','das','dos','e']);
+        const tokens = nomeLower.split(/\s+/).filter(t => t && !stop.has(t));
         if (tokens.length >= 2) {
           const primeiro = tokens[0];
-          const ultimo = tokens[tokens.length - 1];
-          if ((poloA.includes(primeiro) && poloA.includes(ultimo)) ||
-              (poloP.includes(primeiro) && poloP.includes(ultimo))) return true;
+          // Match se primeiro nome + pelo menos UM outro sobrenome aparecem
+          const sobrenomes = tokens.slice(1);
+          const bateu = (polo) => polo.includes(primeiro) && sobrenomes.some(s => s.length >= 3 && polo.includes(s));
+          if (bateu(poloA) || bateu(poloP)) return true;
         }
       }
       // Verificar envolvimentos
