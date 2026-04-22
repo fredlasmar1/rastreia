@@ -51,9 +51,14 @@ function secao(doc, titulo, y) {
   return y + 10;
 }
 
-function linha(doc, label, valor, y) {
-  doc.font('Helvetica-Bold').fontSize(9).fillColor(COR.cinza).text(label + ':', MARGEM, y, { width: 140 });
-  doc.font('Helvetica').fillColor('#111827').text(String(valor || '-'), 195, y, { width: 350 });
+// Renderiza linha label: valor. Garante paginação correta e retorna novo y.
+// altura default = 13. Compactado para caber mais no A4.
+function linha(doc, label, valor, y, altura) {
+  const h = altura || 13;
+  y = verificarPagina(doc, y, h);
+  doc.font('Helvetica-Bold').fontSize(8.5).fillColor(COR.cinza).text(label + ':', MARGEM, y, { width: 140, lineBreak: false });
+  doc.font('Helvetica').fontSize(8.5).fillColor('#111827').text(String(valor || '-'), 195, y, { width: 350, lineBreak: false });
+  return y + h;
 }
 
 function avisoBox(doc, y, msg, cor) {
@@ -174,8 +179,8 @@ function gerarDossie(pedido, dadosDB) {
         const v = dados.veiculo_placa || {};
 
         y = secao(doc, 'ALVO DA CONSULTA', y);
-        linha(doc, 'Placa', pedido.alvo_placa || v.placa || '-', y); y += 16;
-        linha(doc, 'Solicitante', pedido.cliente_nome, y); y += 20;
+        y = linha(doc, 'Placa', pedido.alvo_placa || v.placa || '-', y, 14);
+        y = linha(doc, 'Solicitante', pedido.cliente_nome, y, 20);
 
         if (!v.disponivel) {
           // Montar mensagem de erro detalhada
@@ -195,32 +200,32 @@ function gerarDossie(pedido, dadosDB) {
           }
         } else {
           y = secao(doc, 'IDENTIFICACAO DO VEICULO', y);
-          linha(doc, 'Marca / Modelo', v.marca_modelo || [v.marca, v.modelo].filter(Boolean).join(' ') || '-', y); y += 15;
+          y = linha(doc, 'Marca / Modelo', v.marca_modelo || [v.marca, v.modelo].filter(Boolean).join(' ') || '-', y, 13);
           if (v.ano_modelo || v.ano_fabricacao) {
-            linha(doc, 'Ano', `${v.ano_fabricacao || '?'}/${v.ano_modelo || '?'}`, y); y += 15;
+            y = linha(doc, 'Ano', `${v.ano_fabricacao || '?'}/${v.ano_modelo || '?'}`, y, 13);
           }
-          if (v.cor) { linha(doc, 'Cor', v.cor, y); y += 15; }
-          if (v.combustivel) { linha(doc, 'Combustivel', v.combustivel, y); y += 15; }
-          if (v.chassi) { linha(doc, 'Chassi', v.chassi, y); y += 15; }
-          if (v.renavam) { linha(doc, 'Renavam', v.renavam, y); y += 15; }
-          if (v.tipo_veiculo) { linha(doc, 'Tipo', v.tipo_veiculo, y); y += 15; }
-          if (v.categoria) { linha(doc, 'Categoria', v.categoria, y); y += 15; }
-          if (v.especie) { linha(doc, 'Especie', v.especie, y); y += 15; }
-          if (v.potencia) { linha(doc, 'Potencia', String(v.potencia), y); y += 15; }
-          if (v.municipio || v.uf) { linha(doc, 'Registro', [v.municipio, v.uf].filter(Boolean).join(' / '), y); y += 15; }
+          if (v.cor) { y = linha(doc, 'Cor', v.cor, y, 13); }
+          if (v.combustivel) { y = linha(doc, 'Combustivel', v.combustivel, y, 13); }
+          if (v.chassi) { y = linha(doc, 'Chassi', v.chassi, y, 13); }
+          if (v.renavam) { y = linha(doc, 'Renavam', v.renavam, y, 13); }
+          if (v.tipo_veiculo) { y = linha(doc, 'Tipo', v.tipo_veiculo, y, 13); }
+          if (v.categoria) { y = linha(doc, 'Categoria', v.categoria, y, 13); }
+          if (v.especie) { y = linha(doc, 'Especie', v.especie, y, 13); }
+          if (v.potencia) { y = linha(doc, 'Potencia', String(v.potencia), y, 13); }
+          if (v.municipio || v.uf) { y = linha(doc, 'Registro', [v.municipio, v.uf].filter(Boolean).join(' / '), y, 13); }
           y += 6;
 
           // Proprietário (só admin vê documento completo; cliente vê nome)
           if (v.proprietario || v.proprietario_documento) {
             y = secao(doc, 'PROPRIETARIO', y);
-            if (v.proprietario) { linha(doc, 'Nome', v.proprietario, y); y += 15; }
-            if (v.proprietario_documento) { linha(doc, 'Documento', v.proprietario_documento, y); y += 15; }
-            if (v.ano_exercicio) { linha(doc, 'Exercicio', String(v.ano_exercicio), y); y += 15; }
+            if (v.proprietario) { y = linha(doc, 'Nome', v.proprietario, y, 13); }
+            if (v.proprietario_documento) { y = linha(doc, 'Documento', v.proprietario_documento, y, 13); }
+            if (v.ano_exercicio) { y = linha(doc, 'Exercicio', String(v.ano_exercicio), y, 13); }
             y += 6;
           }
 
           y = secao(doc, 'SITUACAO E RESTRICOES', y);
-          linha(doc, 'Situacao', v.situacao || 'Sem informacao', y); y += 15;
+          y = linha(doc, 'Situacao', v.situacao || 'Sem informacao', y, 13);
           if (v.restricoes && v.restricoes.length > 0) {
             y += 2;
             doc.fillColor(COR.vermelho).fontSize(9).font('Helvetica-Bold').text('RESTRICOES ENCONTRADAS', MARGEM, y); y += 14;
@@ -240,9 +245,9 @@ function gerarDossie(pedido, dadosDB) {
 
           if (v.fipe_valor || v.fipe_codigo) {
             y = secao(doc, 'AVALIACAO FIPE', y);
-            if (v.fipe_valor) { linha(doc, 'Valor FIPE', typeof v.fipe_valor === 'number' ? `R$ ${Number(v.fipe_valor).toLocaleString('pt-BR', {minimumFractionDigits: 2})}` : String(v.fipe_valor), y); y += 15; }
-            if (v.fipe_codigo) { linha(doc, 'Codigo FIPE', v.fipe_codigo, y); y += 15; }
-            if (v.fipe_mes_referencia) { linha(doc, 'Mes referencia', v.fipe_mes_referencia, y); y += 15; }
+            if (v.fipe_valor) { y = linha(doc, 'Valor FIPE', typeof v.fipe_valor === 'number' ? `R$ ${Number(v.fipe_valor).toLocaleString('pt-BR', {minimumFractionDigits: 2})}` : String(v.fipe_valor), y, 13); }
+            if (v.fipe_codigo) { y = linha(doc, 'Codigo FIPE', v.fipe_codigo, y, 13); }
+            if (v.fipe_mes_referencia) { y = linha(doc, 'Mes referencia', v.fipe_mes_referencia, y, 13); }
             y += 6;
           }
         }
@@ -306,10 +311,10 @@ function gerarDossie(pedido, dadosDB) {
 
       // ════ ALVO ════
       y = secao(doc, 'ALVO DA CONSULTA', y);
-      linha(doc, 'Nome', pedido.alvo_nome, y); y += 16;
-      linha(doc, 'CPF / CNPJ', formatarDoc(pedido.alvo_documento), y); y += 16;
-      linha(doc, 'Tipo', pedido.alvo_tipo === 'PF' ? 'Pessoa Fisica' : 'Pessoa Juridica', y); y += 16;
-      linha(doc, 'Solicitante', pedido.cliente_nome, y); y += 20;
+      y = linha(doc, 'Nome', pedido.alvo_nome, y, 14);
+      y = linha(doc, 'CPF / CNPJ', formatarDoc(pedido.alvo_documento), y, 14);
+      y = linha(doc, 'Tipo', pedido.alvo_tipo === 'PF' ? 'Pessoa Fisica' : 'Pessoa Juridica', y, 14);
+      y = linha(doc, 'Solicitante', pedido.cliente_nome, y, 20);
 
       // ════ ALERTAS DETALHADOS (por severidade) ════
       if (alertasOrd.length > 0) {
@@ -358,18 +363,18 @@ function gerarDossie(pedido, dadosDB) {
       if (pedido.alvo_tipo === 'PJ') {
         y = secao(doc, 'DADOS CADASTRAIS - RECEITA FEDERAL', y);
         if (cadastral.razao_social) {
-          linha(doc, 'Razao Social', cadastral.razao_social, y); y += 15;
-          if (cadastral.nome_fantasia) { linha(doc, 'Nome Fantasia', cadastral.nome_fantasia, y); y += 15; }
-          linha(doc, 'CNPJ', cadastral.cnpj_formatado || cadastral.cnpj, y); y += 15;
-          linha(doc, 'Situacao RF', cadastral.situacao || '-', y); y += 15;
-          linha(doc, 'Abertura', cadastral.data_abertura || '-', y); y += 15;
-          linha(doc, 'Porte', cadastral.porte || '-', y); y += 15;
-          linha(doc, 'Capital Social', cadastral.capital_social ? `R$ ${Number(cadastral.capital_social).toLocaleString('pt-BR')}` : '-', y); y += 15;
-          linha(doc, 'Atividade', cadastral.atividade_principal || '-', y); y += 15;
-          if (cadastral.simples_nacional) { linha(doc, 'Simples Nacional', cadastral.simples_nacional, y); y += 15; }
-          linha(doc, 'Endereco', cadastral.endereco || '-', y); y += 15;
-          if (cadastral.email) { linha(doc, 'Email', cadastral.email, y); y += 15; }
-          if (cadastral.telefone) { linha(doc, 'Telefone', cadastral.telefone, y); y += 15; }
+          y = linha(doc, 'Razao Social', cadastral.razao_social, y, 13);
+          if (cadastral.nome_fantasia) { y = linha(doc, 'Nome Fantasia', cadastral.nome_fantasia, y, 13); }
+          y = linha(doc, 'CNPJ', cadastral.cnpj_formatado || cadastral.cnpj, y, 13);
+          y = linha(doc, 'Situacao RF', cadastral.situacao || '-', y, 13);
+          y = linha(doc, 'Abertura', cadastral.data_abertura || '-', y, 13);
+          y = linha(doc, 'Porte', cadastral.porte || '-', y, 13);
+          y = linha(doc, 'Capital Social', cadastral.capital_social ? `R$ ${Number(cadastral.capital_social).toLocaleString('pt-BR')}` : '-', y, 13);
+          y = linha(doc, 'Atividade', cadastral.atividade_principal || '-', y, 13);
+          if (cadastral.simples_nacional) { y = linha(doc, 'Simples Nacional', cadastral.simples_nacional, y, 13); }
+          y = linha(doc, 'Endereco', cadastral.endereco || '-', y, 13);
+          if (cadastral.email) { y = linha(doc, 'Email', cadastral.email, y, 13); }
+          if (cadastral.telefone) { y = linha(doc, 'Telefone', cadastral.telefone, y, 13); }
 
           if (cadastral.socios?.length > 0) {
             y += 4;
@@ -395,26 +400,26 @@ function gerarDossie(pedido, dadosDB) {
         if (cadastral.aviso) {
           y = avisoBox(doc, y, `${cadastral.aviso} ${cadastral.instrucao || ''}`);
         } else if (cadastral.nome) {
-          linha(doc, 'Nome', cadastral.nome, y); y += 15;
-          linha(doc, 'CPF', cadastral.cpf_formatado || formatarDoc(cadastral.cpf), y); y += 15;
-          if (cadastral.data_nascimento) { linha(doc, 'Nascimento', cadastral.data_nascimento, y); y += 15; }
-          if (cadastral.idade) { linha(doc, 'Idade', `${cadastral.idade} anos`, y); y += 15; }
-          if (cadastral.sexo) { linha(doc, 'Sexo', cadastral.sexo, y); y += 15; }
-          if (cadastral.nome_mae) { linha(doc, 'Mae', cadastral.nome_mae, y); y += 15; }
-          if (cadastral.nome_pai) { linha(doc, 'Pai', cadastral.nome_pai, y); y += 15; }
-          linha(doc, 'Situacao RF', cadastral.situacao_rf || '-', y); y += 15;
+          y = linha(doc, 'Nome', cadastral.nome, y, 13);
+          y = linha(doc, 'CPF', cadastral.cpf_formatado || formatarDoc(cadastral.cpf), y, 13);
+          if (cadastral.data_nascimento) { y = linha(doc, 'Nascimento', cadastral.data_nascimento, y, 13); }
+          if (cadastral.idade) { y = linha(doc, 'Idade', `${cadastral.idade} anos`, y, 13); }
+          if (cadastral.sexo) { y = linha(doc, 'Sexo', cadastral.sexo, y, 13); }
+          if (cadastral.nome_mae) { y = linha(doc, 'Mae', cadastral.nome_mae, y, 13); }
+          if (cadastral.nome_pai) { y = linha(doc, 'Pai', cadastral.nome_pai, y, 13); }
+          y = linha(doc, 'Situacao RF', cadastral.situacao_rf || '-', y, 13);
           if (cadastral.obito) {
             y = verificarPagina(doc, y, 18);
             doc.rect(MARGEM, y, LARGURA, 16).fill('#fee2e2');
             doc.fillColor(COR.vermelho).fontSize(9).font('Helvetica-Bold').text('REGISTRO DE OBITO ENCONTRADO', MARGEM + 6, y + 3);
             y += 20;
           }
-          if (cadastral.profissao) { linha(doc, 'Profissao (CBO)', cadastral.profissao, y); y += 15; }
-          if (cadastral.classe_social) { linha(doc, 'Classe Social', cadastral.classe_social, y); y += 15; }
+          if (cadastral.profissao) { y = linha(doc, 'Profissao (CBO)', cadastral.profissao, y, 13); }
+          if (cadastral.classe_social) { y = linha(doc, 'Classe Social', cadastral.classe_social, y, 13); }
           if (cadastral.renda_estimada) {
             const rotulo = cadastral.renda_inconsistente ? 'Renda Estimada (inconsistente)' : 'Renda Estimada';
             const valor = cadastral.renda_inconsistente ? `${cadastral.renda_estimada} - descartada do score` : cadastral.renda_estimada;
-            linha(doc, rotulo, valor, y); y += 15;
+            y = linha(doc, rotulo, valor, y, 13);
           }
 
           // Parentescos (inline)
@@ -641,9 +646,9 @@ function gerarDossie(pedido, dadosDB) {
         const totalProcessos = processos.total || 0;
 
         // Perfil econômico complementar — renda já foi exibida em DADOS CADASTRAIS, não repetir aqui
-        if (perfilEco.nivel_socioeconomico) { linha(doc, 'Nivel Socioeconomico', perfilEco.nivel_socioeconomico, y); y += 12; }
-        if (perfilEco.poder_aquisitivo) { linha(doc, 'Poder Aquisitivo', perfilEco.poder_aquisitivo, y); y += 12; }
-        if (perfilEco.renda_presumida) { linha(doc, 'Renda Presumida', `R$ ${Number(perfilEco.renda_presumida).toLocaleString('pt-BR', {minimumFractionDigits:2})}`, y); y += 12; }
+        if (perfilEco.nivel_socioeconomico) { y = linha(doc, 'Nivel Socioeconomico', perfilEco.nivel_socioeconomico, y, 12); }
+        if (perfilEco.poder_aquisitivo) { y = linha(doc, 'Poder Aquisitivo', perfilEco.poder_aquisitivo, y, 12); }
+        if (perfilEco.renda_presumida) { y = linha(doc, 'Renda Presumida', `R$ ${Number(perfilEco.renda_presumida).toLocaleString('pt-BR', {minimumFractionDigits:2})}`, y, 12); }
         y += 2;
 
         // Nivel de endividamento calculado
@@ -720,21 +725,8 @@ function gerarDossie(pedido, dadosDB) {
         y += doc.heightOfString(pedido.observacoes, { width: LARGURA }) + 10;
       }
 
-      // ════ ALERTA LGPD ════
-      y = verificarPagina(doc, y, 40);
-      y += 6;
-      doc.rect(MARGEM, y, LARGURA, 36).fill('#fef3c7').stroke('#f59e0b');
-      doc.fillColor('#92400e').fontSize(7).font('Helvetica-Bold').text('AVISO LEGAL — LGPD (Lei 13.709/2018)', MARGEM + 8, y + 4);
-      doc.fillColor('#92400e').fontSize(6).font('Helvetica')
-        .text('Este documento contem dados pessoais protegidos pela Lei Geral de Protecao de Dados. E PROIBIDO compartilhar, reproduzir ou repassar este relatorio a terceiros sem autorizacao. O uso indevido sujeita o responsavel as sancoes previstas nos artigos 42 a 45 da LGPD, incluindo multa de ate 2% do faturamento. Uso exclusivo para a finalidade declarada no momento da contratacao.', MARGEM + 8, y + 14, { width: LARGURA - 16 });
-      y += 42;
-
-      // ════ FONTES DE DADOS + RODAPE ════
-      y += 6;
-      doc.fillColor(COR.azul).fontSize(7).font('Helvetica-Bold').text('FONTES DE DADOS CONSULTADAS', MARGEM, y); y += 10;
-      doc.fillColor(COR.cinza).fontSize(6).font('Helvetica')
-        .text('As informacoes deste relatorio foram extraidas das seguintes bases de dados publicas e privadas:', MARGEM, y, { width: LARGURA });
-      y += 10;
+      // ════ BLOCO FINAL: LGPD + FONTES + RODAPE (mantidos juntos) ════
+      // Pre-calcular altura total do bloco final para evitar quebras no meio
       const fontes = [
         'Receita Federal do Brasil (CPF/CNPJ)',
         'Direct Data - Cadastro, Score QUOD, Protestos e Negativacoes',
@@ -743,14 +735,46 @@ function gerarDossie(pedido, dadosDB) {
         'Portal da Transparencia (CGU) - Listas CEIS/CNEP',
         'CNPJa / CNPJ.ws - Dados empresariais'
       ];
+      const fontesJoin = fontes.join('  |  ');
+      const textoLgpd = 'Este documento contem dados pessoais protegidos pela Lei Geral de Protecao de Dados. E PROIBIDO compartilhar, reproduzir ou repassar este relatorio a terceiros sem autorizacao. O uso indevido sujeita o responsavel as sancoes previstas nos artigos 42 a 45 da LGPD, incluindo multa de ate 2% do faturamento. Uso exclusivo para a finalidade declarada no momento da contratacao.';
+      const textoRessalva = 'Caso alguma informacao esteja incorreta ou desatualizada, solicitamos que o titular entre em contato diretamente com a base de dados de origem para solicitar a correcao. A Recobro Recuperacao de Credito nao se responsabiliza por inexatidoes ou desatualizacoes nas bases consultadas.';
+
+      // Medir altura dos textos com wrap
+      doc.font('Helvetica').fontSize(6);
+      const hLgpdTexto = doc.heightOfString(textoLgpd, { width: LARGURA - 16 });
+      doc.fontSize(5.5);
+      const hFontes = doc.heightOfString(fontesJoin, { width: LARGURA });
+      doc.font('Helvetica-Bold');
+      const hRessalva = doc.heightOfString(textoRessalva, { width: LARGURA });
+
+      const hLgpdBox = Math.max(36, hLgpdTexto + 22);
+      const alturaBlocoFinal = 6 + hLgpdBox + 6 + 10 + 10 + hFontes + 6 + hRessalva + 10 + 12;
+
+      y = verificarPagina(doc, y, alturaBlocoFinal);
+
+      // LGPD
+      y += 6;
+      doc.rect(MARGEM, y, LARGURA, hLgpdBox).fill('#fef3c7').stroke('#f59e0b');
+      doc.fillColor('#92400e').fontSize(7).font('Helvetica-Bold').text('AVISO LEGAL — LGPD (Lei 13.709/2018)', MARGEM + 8, y + 4);
+      doc.fillColor('#92400e').fontSize(6).font('Helvetica')
+        .text(textoLgpd, MARGEM + 8, y + 14, { width: LARGURA - 16 });
+      y += hLgpdBox + 6;
+
+      // FONTES
+      doc.fillColor(COR.azul).fontSize(7).font('Helvetica-Bold').text('FONTES DE DADOS CONSULTADAS', MARGEM, y); y += 10;
+      doc.fillColor(COR.cinza).fontSize(6).font('Helvetica')
+        .text('As informacoes deste relatorio foram extraidas das seguintes bases de dados publicas e privadas:', MARGEM, y, { width: LARGURA });
+      y += 10;
       doc.fillColor(COR.cinza).fontSize(5.5).font('Helvetica')
-        .text(fontes.join('  |  '), MARGEM, y, { width: LARGURA });
-      y += doc.heightOfString(fontes.join('  |  '), { width: LARGURA }) + 6;
+        .text(fontesJoin, MARGEM, y, { width: LARGURA });
+      y += hFontes + 6;
 
+      // RESSALVA
       doc.fillColor('#92400e').fontSize(5.5).font('Helvetica-Bold')
-        .text('Caso alguma informacao esteja incorreta ou desatualizada, solicitamos que o titular entre em contato diretamente com a base de dados de origem para solicitar a correcao. A Recobro Recuperacao de Credito nao se responsabiliza por inexatidoes ou desatualizacoes nas bases consultadas.', MARGEM, y, { width: LARGURA });
-      y += doc.heightOfString('placeholder', { width: LARGURA }) + 10;
+        .text(textoRessalva, MARGEM, y, { width: LARGURA });
+      y += hRessalva + 6;
 
+      // RODAPE DO DOCUMENTO
       doc.fillColor(COR.cinza).fontSize(5.5).font('Helvetica')
         .text('Documento gerado pelo sistema Rastreia. Nao substitui consulta juridica especializada. Recobro Recuperacao de Credito | Anapolis - GO', MARGEM, y, { align: 'center', width: LARGURA });
 
