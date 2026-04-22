@@ -253,7 +253,13 @@ function gerarDossie(pedido, dadosDB) {
       // ════ PROCESSOS JUDICIAIS ════
       y = secao(doc, 'PROCESSOS JUDICIAIS', y);
       const totalP = processos.total || 0;
-      if (totalP === 0) {
+      if (totalP === 0 && processos.escavador_falhou) {
+        // Escavador falhou, fallback Datajud tambem vazio -> nao e NADA CONSTA, e indisponibilidade
+        doc.rect(MARGEM, y, LARGURA, 30).fill('#fef3c7');
+        doc.fillColor('#92400e').fontSize(9).font('Helvetica-Bold').text('Consulta de processos indisponivel.', MARGEM + 8, y + 4);
+        doc.fillColor('#92400e').fontSize(7).font('Helvetica').text(`Escavador retornou ${processos.escavador_status_http || 'erro'}: ${processos.escavador_detalhes || 'falha na autenticacao/token'}. Datajud (TJGO/TRF1/STJ/TST) tambem vazio. Recomenda-se reexecutar a consulta apos corrigir o token do Escavador.`, MARGEM + 8, y + 16, { width: LARGURA - 16 });
+        y += 40;
+      } else if (totalP === 0) {
         doc.rect(MARGEM, y, LARGURA, 24).fill('#dcfce7');
         doc.fillColor('#14532d').fontSize(9).font('Helvetica').text('Nenhum processo encontrado nas bases consultadas.', MARGEM + 8, y + 6);
         y += 30;
@@ -285,9 +291,14 @@ function gerarDossie(pedido, dadosDB) {
         });
       }
 
+      if (processos.aviso) {
+        doc.fillColor(COR.vermelho).fontSize(7).font('Helvetica-Bold').text(`Atencao: ${processos.aviso}`, MARGEM, y, { width: LARGURA });
+        y += 14;
+      }
       if (processos.nota) {
-        doc.fillColor(COR.cinza).fontSize(7).font('Helvetica-Oblique').text(processos.nota, MARGEM, y);
-        y += 12;
+        doc.fillColor(COR.cinza).fontSize(7).font('Helvetica-Oblique').text(processos.nota, MARGEM, y, { width: LARGURA });
+        const h = doc.heightOfString(processos.nota, { width: LARGURA, fontSize: 7 });
+        y += h + 4;
       }
       y += 6;
 

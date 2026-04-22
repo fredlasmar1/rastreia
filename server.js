@@ -238,6 +238,39 @@ app.get('/api/health/apis/teste', async (req, res) => {
   res.json(results);
 });
 
+// Diagnostico do Escavador: roda a chamada real e devolve status/raw.
+// Uso: /api/health/apis/escavador-debug?cpf=39067621811&nome=Victoria%20Farias
+app.get('/api/health/apis/escavador-debug', async (req, res) => {
+  const axios = require('axios');
+  const cpf = (req.query.cpf || '').replace(/\D/g, '');
+  const nome = req.query.nome || '';
+  if (!cpf) return res.status(400).json({ erro: 'Passe ?cpf=numeros' });
+  if (!process.env.ESCAVADOR_API_KEY) return res.status(400).json({ erro: 'ESCAVADOR_API_KEY nao configurada' });
+  try {
+    const r = await axios.get(`https://api.escavador.com/api/v2/envolvido/processos?cpf_cnpj=${cpf}`, {
+      headers: { Authorization: `Bearer ${process.env.ESCAVADOR_API_KEY}`, Accept: 'application/json' },
+      timeout: 20000,
+      maxRedirects: 0,
+      validateStatus: () => true
+    });
+    const items = r.data?.items || [];
+    const preview = items.slice(0, 5).map(p => ({
+      numero_cnj: p.numero_cnj, classe: p.classe?.nome, polo_ativo: p.titulo_polo_ativo, polo_passivo: p.titulo_polo_passivo, tribunal: p.fontes?.[0]?.nome || p.tribunal?.sigla
+    }));
+    res.json({
+      cpf, nome, status: r.status,
+      content_type: r.headers['content-type'],
+      total_items: items.length,
+      data_keys: typeof r.data === 'object' ? Object.keys(r.data || {}) : typeof r.data,
+      raw_preview: typeof r.data === 'string' ? r.data.slice(0, 500) : null,
+      items_preview: preview,
+      token_prefix: (process.env.ESCAVADOR_API_KEY || '').slice(0, 24) + '...'
+    });
+  } catch (e) {
+    res.status(500).json({ erro: e.message, status: e.response?.status, data: e.response?.data });
+  }
+});
+
 // Rotas API
 app.use('/api/auth', require('./routes/auth'));
 app.use('/api/pedidos', require('./routes/pedidos'));

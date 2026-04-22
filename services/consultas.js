@@ -255,49 +255,80 @@ async function consultarCPF(cpf) {
 
 async function consultarProcessos(documento, tipo, nome) {
   const doc = limparDoc(documento);
+  let escavadorResult = null;
   if (process.env.ESCAVADOR_API_KEY) {
-    const r = await consultarEscavador(doc, tipo, nome);
-    if (!r.erro) return r;
+    escavadorResult = await consultarEscavador(doc, tipo, nome);
+    if (!escavadorResult.erro) return escavadorResult;
   }
-  return await consultarDatajud(doc, tipo, nome);
+  // Escavador falhou ou nao configurado -> tenta Datajud, mas preserva diagnostico do Escavador
+  const datajud = await consultarDatajud(doc, tipo, nome);
+  if (escavadorResult?.erro) {
+    datajud.escavador_falhou = true;
+    datajud.escavador_detalhes = escavadorResult.detalhes;
+    datajud.escavador_status_http = escavadorResult.status_http;
+    if (datajud.total === 0) {
+      datajud.nota = `Escavador indisponivel (${escavadorResult.status_http || 'erro'}): ${escavadorResult.detalhes}. Datajud consultado como fallback (cobertura limitada a TJGO/TRF1/STJ/TST) — nenhum processo encontrado.`;
+    }
+  }
+  return datajud;
 }
 
 async function consultarEscavador(doc, tipo, nome) {
+  const url = `https://api.escavador.com/api/v2/envolvido/processos?cpf_cnpj=${doc}`;
   try {
-    const res = await axios.get(
-      `https://api.escavador.com/api/v2/envolvido/processos?cpf_cnpj=${doc}`,
-      {
-        headers: { Authorization: `Bearer ${process.env.ESCAVADOR_API_KEY}` },
-        timeout: 20000
-      }
-    );
+    const res = await axios.get(url, {
+      headers: { Authorization: `Bearer ${process.env.ESCAVADOR_API_KEY}`, Accept: 'application/json' },
+      timeout: 20000,
+      maxRedirects: 0,
+      validateStatus: s => s >= 200 && s < 300
+    });
     const items = res.data?.items || [];
-    // Filtrar: manter apenas processos onde a pessoa é PARTE, nao advogado
+    console.log(`[Escavador] doc=${doc} nome="${nome}" status=${res.status} items=${items.length}`);
+
+    // Filtrar: manter apenas processos onde a pessoa e PARTE (nao advogado)
     const comoParte = items.filter(p => {
       const poloA = (p.titulo_polo_ativo || '').toLowerCase();
       const poloP = (p.titulo_polo_passivo || '').toLowerCase();
-      const nomeLower = (nome || '').toLowerCase();
-      const docLower = doc;
-      // Se o nome ou doc aparece no polo ativo/passivo = é parte
+      const nomeLower = (nome || '').toLowerCase().trim();
+      // Match por nome: tenta nome completo OU primeiro+ultimo sobrenome
       if (nomeLower && (poloA.includes(nomeLower) || poloP.includes(nomeLower))) return true;
+      if (nomeLower) {
+        const tokens = nomeLower.split(/\s+/).filter(Boolean);
+        if (tokens.length >= 2) {
+          const primeiro = tokens[0];
+          const ultimo = tokens[tokens.length - 1];
+          if ((poloA.includes(primeiro) && poloA.includes(ultimo)) ||
+              (poloP.includes(primeiro) && poloP.includes(ultimo))) return true;
+        }
+      }
       // Verificar envolvimentos
       const envolvimentos = p.envolvimentos || p.partes || [];
       const ehParte = envolvimentos.some(e => {
-        const tipo = (e.tipo_envolvimento || e.tipo || e.polo || '').toLowerCase();
+        const tipoEnv = (e.tipo_envolvimento || e.tipo || e.polo || '').toLowerCase();
         const cpfEnv = (e.cpf || e.documento || '').replace(/\D/g, '');
-        return cpfEnv === docLower && !tipo.includes('advog') && !tipo.includes('repres');
+        return cpfEnv === doc && !tipoEnv.includes('advog') && !tipoEnv.includes('repres');
       });
       if (ehParte) return true;
       // Se nao conseguiu determinar, incluir (melhor mostrar do que esconder)
       if (!nomeLower) return true;
       return false;
     });
+
+    // Se filtrou 100% mas havia items, loga e devolve todos como "revisar"
+    let processosFinal = comoParte;
+    let aviso = null;
+    if (items.length > 0 && comoParte.length === 0) {
+      console.warn(`[Escavador] Filtro excluiu todos os ${items.length} processos do doc=${doc}. Retornando sem filtro com flag revisar.`);
+      processosFinal = items;
+      aviso = `${items.length} processo(s) encontrado(s) - revisar manualmente se a pessoa figura como parte ou apenas como advogada.`;
+    }
+
     return {
-      total: comoParte.length,
+      total: processosFinal.length,
       total_geral: items.length,
       excluidos_advogado: items.length - comoParte.length,
-      processos: comoParte.slice(0, 30).map(p => {
-        // Determinar status: ativo, arquivado, baixado
+      aviso,
+      processos: processosFinal.slice(0, 30).map(p => {
         const ultMov = p.data_ultima_movimentacao || '';
         const anoUltMov = ultMov ? new Date(ultMov).getFullYear() : 0;
         const anoAtual = new Date().getFullYear();
@@ -325,7 +356,16 @@ async function consultarEscavador(doc, tipo, nome) {
       consultado_em: new Date().toISOString()
     };
   } catch (e) {
-    return { erro: 'Escavador indisponível', detalhes: e.response?.data?.message || e.message, processos: [] };
+    const status = e.response?.status;
+    const msg = e.response?.data?.error || e.response?.data?.message || e.message;
+    console.error(`[Escavador] FALHA doc=${doc} status=${status} msg=${msg}`);
+    return {
+      erro: 'Escavador indisponível',
+      status_http: status,
+      detalhes: msg,
+      processos: [],
+      fonte: 'Escavador (falha)'
+    };
   }
 }
 
