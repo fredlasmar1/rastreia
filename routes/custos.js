@@ -3,7 +3,7 @@ const express = require('express');
 const router = express.Router();
 const { pool } = require('../db');
 const { autenticar, admin } = require('./auth');
-const { listarCustos, atualizarCusto, calcularCustoPedido } = require('../services/custos');
+const { listarCustos, atualizarCusto, calcularCustoPedido, estimarCustoProduto, APIS_POR_PRODUTO } = require('../services/custos');
 
 // GET /api/admin/custos  -> lista todos os custos cadastrados
 router.get('/', autenticar, admin, async (req, res) => {
@@ -41,6 +41,34 @@ router.get('/pedido/:id', autenticar, async (req, res) => {
   } catch (e) {
     console.error('[custos] custo pedido:', e);
     res.status(500).json({ erro: 'Erro ao calcular custo do pedido' });
+  }
+});
+
+// GET /api/admin/custos/estimativa  -> estimativa de custo para TODOS os produtos
+// Usado no /novo-pedido.html para mostrar custo ao lado do preço sugerido
+router.get('/estimativa', autenticar, async (req, res) => {
+  try {
+    const tipos = Object.keys(APIS_POR_PRODUTO);
+    const out = {};
+    for (const tipo of tipos) {
+      out[tipo] = await estimarCustoProduto(tipo);
+    }
+    res.json({ estimativas: out });
+  } catch (e) {
+    console.error('[custos] estimativa:', e);
+    res.status(500).json({ erro: 'Erro ao calcular estimativas' });
+  }
+});
+
+// GET /api/admin/custos/estimativa/:tipo  -> estimativa de um produto específico
+router.get('/estimativa/:tipo', autenticar, async (req, res) => {
+  try {
+    const est = await estimarCustoProduto(req.params.tipo);
+    if (!est) return res.status(404).json({ erro: 'Produto desconhecido' });
+    res.json(est);
+  } catch (e) {
+    console.error('[custos] estimativa produto:', e);
+    res.status(500).json({ erro: 'Erro ao calcular estimativa' });
   }
 });
 

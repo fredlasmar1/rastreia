@@ -109,4 +109,41 @@ async function calcularCustoPedido(rows) {
   };
 }
 
-module.exports = { listarCustos, atualizarCusto, mapaCustos, calcularCustoPedido };
+// Mapa: tipo de produto → APIs que serão consumidas em um cenário típico.
+// Usado para ESTIMATIVA antes da consulta rodar (exibido no /novo-pedido.html).
+// Os valores reais são calculados em calcularCustoPedido() após a consulta.
+const APIS_POR_PRODUTO = {
+  dossie_pf: ['directd_pf_plus', 'escavador_processos', 'directd_score_quod', 'directd_negativacoes', 'transparencia'],
+  dossie_pj: ['cnpja', 'escavador_processos', 'directd_negativacoes', 'transparencia'],
+  due_diligence: ['cnpja', 'escavador_processos', 'directd_negativacoes', 'directd_perfil_economico', 'directd_vinculos', 'transparencia'],
+  analise_devedor: ['directd_pf_plus', 'escavador_processos', 'directd_negativacoes', 'directd_veiculos', 'directd_vinculos'],
+  investigacao_patrimonial: ['directd_pf_plus', 'escavador_processos', 'directd_vinculos', 'directd_veiculos', 'infosimples_detran_go'],
+  due_diligence_imobiliaria: [
+    'directd_pf_plus', 'escavador_processos', 'directd_score_quod', 'directd_negativacoes', // comprador
+    'directd_pf_plus', 'escavador_processos', 'directd_negativacoes', 'directd_veiculos', 'directd_vinculos', // vendedor
+    'onr_matricula' // imóvel
+  ]
+};
+
+async function estimarCustoProduto(tipo) {
+  const chaves = APIS_POR_PRODUTO[tipo];
+  if (!chaves) return null;
+  const tabela = await mapaCustos();
+  const breakdown = [];
+  let total = 0;
+  // Agrega chaves repetidas (ex: imobiliária chama directd_pf_plus 2x)
+  const contador = {};
+  for (const c of chaves) contador[c] = (contador[c] || 0) + 1;
+  for (const [chave, qtd] of Object.entries(contador)) {
+    const valor_unit = tabela[chave] ?? 0;
+    const valor = valor_unit * qtd;
+    breakdown.push({ api: chave, qtd, valor_unit, valor_brl: valor });
+    total += valor;
+  }
+  return {
+    total_brl: Math.round(total * 10000) / 10000,
+    breakdown
+  };
+}
+
+module.exports = { listarCustos, atualizarCusto, mapaCustos, calcularCustoPedido, estimarCustoProduto, APIS_POR_PRODUTO };

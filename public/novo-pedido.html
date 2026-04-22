@@ -28,6 +28,7 @@
     <div class="produtos-grid" id="produtos-grid"></div>
     <div id="produto-detalhe" style="display:none;background:#eff6ff;border:1.5px solid #2563eb;border-radius:10px;padding:16px;margin-top:8px">
       <div style="font-weight:700;font-size:13px;color:#1a3a5c;margin-bottom:6px" id="detalhe-nome"></div>
+      <div id="detalhe-custo" style="display:none;background:#fafafa;border:1px dashed #d1d5db;border-radius:6px;padding:8px 10px;margin-bottom:10px;font-size:11px"></div>
       <div style="font-size:12px;color:#374151;margin-bottom:10px;font-style:italic" id="detalhe-argumento"></div>
       <div style="font-size:11px;color:#6b7280;font-weight:700;margin-bottom:4px">📦 O QUE ESTE RELATÓRIO ENTREGA:</div>
       <div id="detalhe-dados" style="font-size:11px;color:#374151;line-height:1.7"></div>
@@ -159,6 +160,8 @@
     <div class="section-title">Resumo do Pedido</div>
     <div class="info-row"><span class="info-label">Produto</span><span id="r-produto" class="info-valor"></span></div>
     <div class="info-row"><span class="info-label">Valor</span><span id="r-valor" class="info-valor" style="color:#16a34a;font-weight:800"></span></div>
+    <div class="info-row" id="r-custo-row" style="display:none"><span class="info-label">Custo bruto (interno)</span><span id="r-custo" class="info-valor"></span></div>
+    <div class="info-row" id="r-margem-row" style="display:none"><span class="info-label">Margem</span><span id="r-margem" class="info-valor"></span></div>
     <div class="info-row"><span class="info-label">Prazo de Entrega</span><span id="r-prazo" class="info-valor"></span></div>
     <div style="margin-top:20px;display:flex;gap:10px">
       <button class="btn btn-primary" onclick="criarPedido(false)" style="flex:1;justify-content:center">
@@ -218,17 +221,46 @@
   };
 
   let tipoSelecionado = '';
+  let CUSTOS_ESTIMADOS = {}; // preenchido se admin/operador
+  const MOSTRAR_CUSTO = usuario.perfil === 'admin' || usuario.perfil === 'operador';
+
+  function fmtBRL(v) { return 'R$ ' + Number(v).toLocaleString('pt-BR', { minimumFractionDigits: 2 }); }
+  function corMargem(pct) { return pct >= 70 ? '#16a34a' : pct >= 40 ? '#ea580c' : '#dc2626'; }
 
   // Renderizar cards de produto dinamicamente
   function renderProdutos() {
     const grid = document.getElementById('produtos-grid');
-    grid.innerHTML = Object.entries(PRODUTOS).map(([tipo, p]) => `
+    grid.innerHTML = Object.entries(PRODUTOS).map(([tipo, p]) => {
+      const est = CUSTOS_ESTIMADOS[tipo];
+      const custoBadge = (MOSTRAR_CUSTO && est) ? (() => {
+        const margem = p.preco > 0 ? ((p.preco - est.total_brl) / p.preco * 100) : 0;
+        return `<div style="margin-top:6px;padding:4px 8px;background:#fafafa;border:1px dashed #d1d5db;border-radius:4px;font-size:10px;color:#6b7280;display:flex;justify-content:space-between">
+          <span>custo: <strong style="color:#dc2626">${fmtBRL(est.total_brl)}</strong></span>
+          <span>margem: <strong style="color:${corMargem(margem)}">${margem.toFixed(0)}%</strong></span>
+        </div>`;
+      })() : '';
+      return `
       <div class="produto-card" id="card-${tipo}" onclick="selecionarProduto('${tipo}')">
         <div class="produto-icon">${p.icone}</div>
         <div class="produto-nome">${p.nome}</div>
         <div class="produto-preco">R$ ${p.preco.toLocaleString('pt-BR')}</div>
         <div class="produto-prazo">⏱ Entrega em ${p.prazo}</div>
-      </div>`).join('');
+        ${custoBadge}
+      </div>`;
+    }).join('');
+  }
+
+  async function carregarEstimativasCusto() {
+    if (!MOSTRAR_CUSTO) return;
+    try {
+      const res = await fetch('/api/admin/custos/estimativa', {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (!res.ok) return;
+      const data = await res.json();
+      CUSTOS_ESTIMADOS = data.estimativas || {};
+      renderProdutos(); // re-renderiza com os badges
+    } catch (e) { /* silencioso */ }
   }
 
   function selecionarProduto(tipo) {
@@ -240,6 +272,32 @@
 
     // Mostrar detalhe do produto
     document.getElementById('detalhe-nome').textContent = p.icone + ' ' + p.nome + ' — R$ ' + p.preco.toLocaleString('pt-BR');
+
+    // Custo estimado (só admin/operador)
+    const custoBox = document.getElementById('detalhe-custo');
+    const est = CUSTOS_ESTIMADOS[tipo];
+    if (MOSTRAR_CUSTO && est) {
+      const margem = p.preco > 0 ? ((p.preco - est.total_brl) / p.preco * 100) : 0;
+      const lucro = p.preco - est.total_brl;
+      const linhas = est.breakdown.filter(b => b.valor_brl > 0).map(b =>
+        `<div style="display:flex;justify-content:space-between;padding:2px 0;font-size:11px">
+          <span>${b.api}${b.qtd > 1 ? ' ×' + b.qtd : ''}</span>
+          <span style="font-variant-numeric:tabular-nums">${fmtBRL(b.valor_brl)}</span>
+        </div>`).join('');
+      custoBox.innerHTML = `
+        <div style="font-weight:700;color:#6b7280;font-size:10px;text-transform:uppercase;margin-bottom:6px">💰 Custo bruto estimado (interno — não aparece no PDF)</div>
+        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:6px">
+          <div><div style="font-size:9px;color:#6b7280;text-transform:uppercase">Custo APIs</div><div style="font-size:14px;font-weight:700;color:#dc2626">${fmtBRL(est.total_brl)}</div></div>
+          <div><div style="font-size:9px;color:#6b7280;text-transform:uppercase">Margem</div><div style="font-size:14px;font-weight:700;color:${corMargem(margem)}">${margem.toFixed(1)}%</div></div>
+          <div><div style="font-size:9px;color:#6b7280;text-transform:uppercase">Lucro</div><div style="font-size:14px;font-weight:700;color:#16a34a">${fmtBRL(lucro)}</div></div>
+        </div>
+        ${linhas ? `<details><summary style="cursor:pointer;font-size:10px;color:#6b7280">Detalhar APIs</summary><div style="margin-top:4px">${linhas}</div></details>` : ''}
+      `;
+      custoBox.style.display = 'block';
+    } else {
+      custoBox.style.display = 'none';
+    }
+
     document.getElementById('detalhe-argumento').textContent = p.argumento;
     document.getElementById('detalhe-dados').innerHTML = p.dados.map(d => '✓ ' + esc(d)).join('<br>');
     document.getElementById('detalhe-publico').innerHTML = p.publico.map(d => '• ' + esc(d)).join('<br>');
@@ -253,6 +311,16 @@
     document.getElementById('r-produto').textContent = p.nome;
     document.getElementById('r-valor').textContent = 'R$ ' + p.preco.toLocaleString('pt-BR');
     document.getElementById('r-prazo').textContent = p.prazo;
+
+    // Linhas de custo no resumo (só admin/operador)
+    if (MOSTRAR_CUSTO && est) {
+      const margem = p.preco > 0 ? ((p.preco - est.total_brl) / p.preco * 100) : 0;
+      document.getElementById('r-custo').innerHTML = `<span style="color:#dc2626;font-weight:700">${fmtBRL(est.total_brl)}</span>`;
+      document.getElementById('r-margem').innerHTML = `<span style="color:${corMargem(margem)};font-weight:700">${margem.toFixed(1)}%</span>`;
+      document.getElementById('r-custo-row').style.display = '';
+      document.getElementById('r-margem-row').style.display = '';
+    }
+
     document.getElementById('resumo').style.display = 'block';
     document.getElementById('resumo').scrollIntoView({ behavior: 'smooth' });
   }
@@ -387,6 +455,7 @@
 
   // Inicializar
   renderProdutos();
+  carregarEstimativasCusto();
 </script>
 </body>
 </html>
