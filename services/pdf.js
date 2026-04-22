@@ -287,6 +287,81 @@ function gerarDossie(pedido, dadosDB) {
             y += 6;
           }
 
+          // ══ HISTÓRICO DE PROPRIETÁRIOS (DirectData ProprietariosPlaca) ══
+          // Mostra a cadeia de donos do veículo por exercício, indicando padrões
+          // (rotatividade alta, troca recente de UF, etc).
+          const pp = dados.proprietarios_placa || {};
+          if (pp.disponivel && Array.isArray(pp.proprietarios) && pp.proprietarios.length > 0) {
+            y = secao(doc, 'HISTORICO DE PROPRIETARIOS', y);
+
+            const lista = pp.proprietarios.slice(0, 10); // limite por pedido do padrão
+            const totalOculto = pp.proprietarios.length > 10 ? pp.proprietarios.length - 10 : 0;
+
+            // Sinais analíticos simples: rotatividade e troca de UF
+            const ufsDistintas = new Set(lista.map(p => (p.uf_circulacao || '').toUpperCase()).filter(Boolean));
+            const anos = lista.map(p => parseInt(p.exercicio, 10)).filter(n => n > 0);
+            const janela = anos.length >= 2 ? Math.max(...anos) - Math.min(...anos) + 1 : null;
+            const sinais = [];
+            if (pp.proprietarios.length >= 3) {
+              sinais.push(`${pp.proprietarios.length} proprietários${janela ? ` em ${janela} ano(s)` : ''}`);
+            }
+            if (ufsDistintas.size >= 2) {
+              sinais.push(`circulou em ${ufsDistintas.size} UFs (${Array.from(ufsDistintas).join(', ')})`);
+            }
+            if (sinais.length > 0) {
+              y = verificarPagina(doc, y, 20);
+              doc.rect(MARGEM, y, LARGURA, 16).fill('#eff6ff');
+              doc.fillColor('#1e40af').fontSize(8).font('Helvetica-Bold')
+                .text(`Padrão: ${sinais.join(' | ')}`, MARGEM + 8, y + 4, { width: LARGURA - 16, lineBreak: false });
+              y += 20;
+            }
+
+            // Cabeçalho da tabela
+            const colX = {
+              exercicio: MARGEM + 6,
+              documento: MARGEM + 58,
+              nome: MARGEM + 180,
+              uf: MARGEM + 420,
+              data: MARGEM + 460
+            };
+            y = verificarPagina(doc, y, 16 + lista.length * 14);
+            doc.rect(MARGEM, y, LARGURA, 14).fill(COR.azul);
+            doc.fillColor('#ffffff').fontSize(7.5).font('Helvetica-Bold');
+            doc.text('EXERC.', colX.exercicio, y + 4, { width: 48, lineBreak: false });
+            doc.text('DOCUMENTO', colX.documento, y + 4, { width: 118, lineBreak: false });
+            doc.text('NOME', colX.nome, y + 4, { width: 235, lineBreak: false });
+            doc.text('UF', colX.uf, y + 4, { width: 36, lineBreak: false });
+            doc.text('PAGAMENTO', colX.data, y + 4, { width: 85, lineBreak: false });
+            y += 14;
+
+            // Linhas zebra
+            lista.forEach((p, i) => {
+              y = verificarPagina(doc, y, 14);
+              doc.rect(MARGEM, y, LARGURA, 13).fill(i % 2 === 0 ? '#ffffff' : '#f9fafb');
+              doc.fillColor('#111827').fontSize(7.5).font('Helvetica');
+              doc.text(p.exercicio || '-', colX.exercicio, y + 3, { width: 48, lineBreak: false });
+              doc.text(p.documento_formatado || p.documento || '-', colX.documento, y + 3, { width: 118, lineBreak: false });
+              doc.font('Helvetica-Bold').text(truncar(p.nome || '-', 42), colX.nome, y + 3, { width: 235, lineBreak: false });
+              doc.font('Helvetica').text(p.uf_circulacao || '-', colX.uf, y + 3, { width: 36, lineBreak: false });
+              doc.text(p.data_pagamento || '-', colX.data, y + 3, { width: 85, lineBreak: false });
+              y += 13;
+            });
+
+            if (totalOculto > 0) {
+              y = verificarPagina(doc, y, 14);
+              doc.fillColor(COR.cinza).fontSize(7).font('Helvetica-Oblique')
+                .text(`+${totalOculto} proprietário(s) anteriores não exibidos`, MARGEM + 6, y + 2);
+              y += 12;
+            }
+            y += 8;
+          } else if (pp.fonte && !pp.disponivel && pp.erro && !/DIRECTD_TOKEN|Placa inválida/i.test(pp.erro)) {
+            // Nota discreta se a API respondeu mas sem histórico
+            y = verificarPagina(doc, y, 14);
+            doc.fillColor(COR.cinza).fontSize(7).font('Helvetica-Oblique')
+              .text(`Histórico de proprietários indisponível: ${pp.erro}`, MARGEM, y);
+            y += 14;
+          }
+
           y = secao(doc, 'SITUAÇÃO E RESTRIÇÕES', y);
           y = linha(doc, 'Situação', v.situacao || 'Sem informação', y, 13);
 

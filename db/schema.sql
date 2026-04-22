@@ -183,22 +183,24 @@ CREATE TABLE IF NOT EXISTS api_custos (
   atualizado_em TIMESTAMP DEFAULT NOW()
 );
 
--- Seed com valores OFICIAIS do Cardapio DirectData V4.1 (2026)
+-- Seed com valores OFICIAIS do Cardapio DirectData V4.3 (2026)
+-- Revisado em Abr/2026: todos os precos V4.3 conferem com V4.1 (sem alteracao)
 -- Atualize manualmente em /custos-api.html quando os precos mudarem
 INSERT INTO api_custos (chave, rotulo, valor_brl, fonte, confianca) VALUES
   ('escavador_processos',    'Escavador — Processos por CPF/CNPJ',        4.5000, 'Tabela publica Escavador',                              'oficial'),
   ('datajud',                'Datajud CNJ (TJGO/TRF1/STJ/TST)',           0.0000, 'API publica gratuita',                                  'oficial'),
   ('cnpja',                  'CNPJa — Receita Federal CNPJ',              0.0000, 'Plano gratuito',                                        'oficial'),
-  ('directd_pf_plus',        'DirectData — Cadastro PF Plus',             0.3600, 'Cardapio DirectData V4.1 (Cadastral)',                  'oficial'),
-  ('directd_cnpj',           'DirectData — Cadastro PJ Plus',             0.3600, 'Cardapio DirectData V4.1 (Cadastral)',                  'oficial'),
-  ('directd_score_quod',     'DirectData — Score QUOD',                   1.9800, 'Cardapio DirectData V4.1 (Credito)',                    'oficial'),
-  ('directd_negativacoes',   'DirectData — Detalhamento Negativo',        2.3800, 'Cardapio DirectData V4.1 (Credito)',                    'oficial'),
-  ('directd_perfil_economico','DirectData — Nivel Socioeconomico e Renda', 0.3600, 'Cardapio DirectData V4.1 (Credito)',                   'oficial'),
-  ('directd_vinculos',       'DirectData — Vinculos Societarios',         1.8400, 'Cardapio DirectData V4.1 (Cadastral)',                  'oficial'),
-  ('directd_veiculos',       'DirectData — Consulta Veicular (placa)',    5.4000, 'Cardapio DirectData V4.1 (Veicular)',                   'oficial'),
-  ('directd_protestos',      'DirectData — Protestos Nacional',           0.7200, 'Cardapio DirectData V4.1 (Credito)',                    'oficial'),
-  ('directd_obito',          'DirectData — Obito (PF)',                   0.3600, 'Cardapio DirectData V4.1 (Cadastral)',                  'oficial'),
-  ('directd_beneficiario_final','DirectData — Beneficiario Final (UBO)',  1.4400, 'Cardapio DirectData V4.1 (Societario)',                 'oficial'),
+  ('directd_pf_plus',        'DirectData — Cadastro PF Plus',             0.3600, 'Cardapio DirectData V4.3 (Cadastral)',                  'oficial'),
+  ('directd_cnpj',           'DirectData — Cadastro PJ Plus',             0.3600, 'Cardapio DirectData V4.3 (Cadastral)',                  'oficial'),
+  ('directd_score_quod',     'DirectData — Score QUOD',                   1.9800, 'Cardapio DirectData V4.3 (Credito)',                    'oficial'),
+  ('directd_negativacoes',   'DirectData — Detalhamento Negativo',        2.3800, 'Cardapio DirectData V4.3 (Credito)',                    'oficial'),
+  ('directd_perfil_economico','DirectData — Nivel Socioeconomico e Renda', 0.3600, 'Cardapio DirectData V4.3 (Credito)',                   'oficial'),
+  ('directd_vinculos',       'DirectData — Vinculos Societarios',         1.8400, 'Cardapio DirectData V4.3 (Cadastral)',                  'oficial'),
+  ('directd_veiculos',       'DirectData — Consulta Veicular (placa)',    5.4000, 'Cardapio DirectData V4.3 (Veicular)',                   'oficial'),
+  ('directd_proprietarios_placa','DirectData — Proprietarios Placa (historico)', 0.3600, 'DirectData painel (nao listado no cardapio publico V4.3)', 'estimado'),
+  ('directd_protestos',      'DirectData — Protestos Nacional',           0.7200, 'Cardapio DirectData V4.3 (Credito)',                    'oficial'),
+  ('directd_obito',          'DirectData — Obito (PF)',                   0.3600, 'Cardapio DirectData V4.3 (Cadastral)',                  'oficial'),
+  ('directd_beneficiario_final','DirectData — Beneficiario Final (UBO)',  1.4400, 'Cardapio DirectData V4.3 (Societario)',                 'oficial'),
   ('transparencia',          'Portal da Transparencia (CGU)',             0.0000, 'API publica gratuita',                                  'oficial'),
   ('infosimples_detran_go',  'InfoSimples DETRAN-GO',                     0.2600, 'Tabela publica InfoSimples',                            'oficial'),
   ('onr_matricula',          'ONR — Matricula de imovel',                 0.0000, 'Depende do cartorio, variavel',                         'estimado')

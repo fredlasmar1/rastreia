@@ -986,6 +986,116 @@ async function consultarVeiculoPorPlaca(placa) {
 }
 
 // =============================================
+// Proprietários Placa — Histórico de donos por exercício
+// Endpoint DirectData (não documentado no cardápio V4.3 público,
+// mas disponível no painel). Retorna lista de proprietários com
+// ano de exercício, documento (CPF/CNPJ), UF de circulação e data
+// de pagamento do licenciamento.
+// =============================================
+
+async function consultarProprietariosPlaca(placa) {
+  const placaLimpa = normalizarPlaca(placa);
+  if (!validarPlaca(placaLimpa)) {
+    return { disponivel: false, erro: 'Placa inválida', placa: placaLimpa, fonte: 'DirectData ProprietariosPlaca' };
+  }
+  if (!process.env.DIRECTD_TOKEN) {
+    return { disponivel: false, erro: 'DIRECTD_TOKEN não configurado', fonte: 'DirectData ProprietariosPlaca' };
+  }
+
+  // Permite configurar endpoint via env se DirectData expor outro path.
+  // Default: /api/ProprietariosVeiculo (padrão de nomenclatura observado).
+  const endpoint = process.env.DIRECTD_PROPRIETARIOS_URL
+    || 'https://apiv3.directd.com.br/api/ProprietariosVeiculo';
+
+  try {
+    const resp = await axios.get(endpoint, {
+      params: { Placa: placaLimpa, Token: process.env.DIRECTD_TOKEN },
+      timeout: 45000
+    });
+
+    const meta = resp.data?.metaDados || {};
+    const retorno = resp.data?.retorno || {};
+    const resultadoId = Number(meta.resultadoId);
+
+    // Possíveis formatos de retorno — normaliza para array de proprietários.
+    let lista = [];
+    if (Array.isArray(retorno.proprietarios)) {
+      lista = retorno.proprietarios;
+    } else if (Array.isArray(retorno.listaProprietarios)) {
+      lista = retorno.listaProprietarios;
+    } else if (Array.isArray(retorno.historico)) {
+      lista = retorno.historico;
+    } else if (Array.isArray(retorno.historicoProprietarios)) {
+      lista = retorno.historicoProprietarios;
+    } else if (Array.isArray(retorno)) {
+      lista = retorno;
+    }
+
+    if ((resultadoId && resultadoId !== 1) || lista.length === 0) {
+      return {
+        disponivel: false,
+        erro: meta.mensagem || meta.resultado || 'Sem histórico de proprietários disponível',
+        codigo_api: meta.resultadoId || null,
+        placa: placaLimpa,
+        tempo_ms: meta.tempoExecucaoMs,
+        fonte: 'DirectData ProprietariosPlaca'
+      };
+    }
+
+    // Normaliza cada proprietário para shape estável consumido pelo PDF.
+    const proprietarios = lista.map(p => {
+      const doc = String(p.documento || p.cpfCnpj || p.cpf || p.cnpj || '').replace(/\D/g, '');
+      const tipoDoc = doc.length === 14 ? 'CNPJ' : (doc.length === 11 ? 'CPF' : '');
+      const docFormatado = doc.length === 14 ? formatarCNPJ(doc) : (doc.length === 11 ? formatarCPF(doc) : (p.documento || ''));
+      return {
+        documento: doc || String(p.documento || ''),
+        documento_formatado: docFormatado,
+        tipo_documento: tipoDoc,
+        nome: p.nome || p.proprietario || p.nomeProprietario || '',
+        exercicio: String(p.exercicio || p.anoExercicio || p.ano || '').trim(),
+        data_pagamento: p.dataPagamento || p.dataDoPagamento || p.data_pagamento || '',
+        uf_circulacao: p.ufCirculacao || p.uf || p.estado || ''
+      };
+    }).filter(p => p.documento || p.nome);
+
+    // Ordena por exercício decrescente (mais recente primeiro).
+    proprietarios.sort((a, b) => {
+      const ea = parseInt(a.exercicio, 10) || 0;
+      const eb = parseInt(b.exercicio, 10) || 0;
+      return eb - ea;
+    });
+
+    const chassi = retorno.chassi || retorno.veiculo?.chassi || '';
+    const renavam = retorno.renavam || retorno.veiculo?.renavam || '';
+
+    return {
+      disponivel: true,
+      placa: placaLimpa,
+      chassi,
+      renavam,
+      total: proprietarios.length,
+      proprietarios,
+      raw: retorno,
+      fonte: 'DirectData ProprietariosPlaca',
+      consultado_em: new Date().toISOString()
+    };
+  } catch (e) {
+    const status = e.response?.status;
+    const apiMsg = e.response?.data?.metaDados?.mensagem
+      || e.response?.data?.message
+      || e.message;
+    return {
+      disponivel: false,
+      erro: status ? `DirectData retornou HTTP ${status}` : 'DirectData indisponível',
+      detalhes: apiMsg,
+      status_http: status || null,
+      placa: placaLimpa,
+      fonte: 'DirectData ProprietariosPlaca'
+    };
+  }
+}
+
+// =============================================
 // ORQUESTRADOR — executa tudo em paralelo
 // =============================================
 
@@ -993,9 +1103,13 @@ async function executarConsultaCompleta(pedido) {
   const { alvo_documento, alvo_tipo, alvo_nome, tipo, alvo_placa } = pedido;
 
   // Produto standalone: Consulta Veicular
+  // Chamadas em paralelo para enriquecer com histórico de proprietários
   if (tipo === 'consulta_veicular') {
-    const veiculo_placa = await consultarVeiculoPorPlaca(alvo_placa);
-    return { veiculo_placa };
+    const [veiculo_placa, proprietarios_placa] = await Promise.all([
+      consultarVeiculoPorPlaca(alvo_placa),
+      consultarProprietariosPlaca(alvo_placa)
+    ]);
+    return { veiculo_placa, proprietarios_placa };
   }
 
   // Consultas comuns a todos os produtos
@@ -1062,6 +1176,7 @@ module.exports = {
   consultarSerasa, consultarScore, consultarNegativacoes, consultarProtestos,
   consultarPerfilEconomico, consultarVinculos, consultarObito,
   consultarONR, consultarMatricula, consultarVeiculos,
-  consultarVeiculoPorPlaca, validarPlaca, normalizarPlaca,
+  consultarVeiculoPorPlaca, consultarProprietariosPlaca,
+  validarPlaca, normalizarPlaca,
   executarConsultaCompleta
 };
