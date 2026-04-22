@@ -285,8 +285,8 @@ function gerarDossie(pedido, dadosDB) {
         });
       }
 
-      if (processos.link_jusbrasil) {
-        doc.fillColor(COR.azul_claro).fontSize(7).font('Helvetica').text(`Verificar no JusBrasil: ${processos.link_jusbrasil}`, MARGEM, y);
+      if (processos.nota) {
+        doc.fillColor(COR.cinza).fontSize(7).font('Helvetica-Oblique').text(processos.nota, MARGEM, y);
         y += 12;
       }
       y += 6;

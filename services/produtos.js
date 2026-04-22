@@ -327,14 +327,14 @@ function gerarChecklist(tipo, dadosAutomaticos) {
     dossie_pf: [
       { item: 'Consultar Serasa manualmente', link: 'https://www.serasaexperian.com.br', obrigatorio: false },
       { item: 'Verificar protestos no Cartório de Protesto de Anápolis', link: 'https://www.protestodigital.com.br', obrigatorio: false },
-      { item: 'Confirmar endereço atual no JusBrasil', link: dadosAutomaticos?.processos?.link_jusbrasil || '#', obrigatorio: true },
+      { item: 'Confirmar endereço atual via Escavador/Datajud (verificação automática)', link: 'https://painel.escavador.com', obrigatorio: true },
       { item: 'Verificar se CPF consta no Cadastro de Inadimplentes do Município', link: '', obrigatorio: false },
     ],
     dossie_pj: [
       { item: 'Verificar Certidão Negativa Federal (PGFN)', link: 'https://solucoes.receita.fazenda.gov.br/servicos/certidaointernet/pj/emitir', obrigatorio: true },
       { item: 'Verificar SEFAZ-GO (situação estadual Goiás)', link: 'https://www.sefaz.go.gov.br', obrigatorio: true },
       { item: 'Verificar protestos no Cartório', link: 'https://www.protestodigital.com.br', obrigatorio: false },
-      { item: 'Confirmar processos no JusBrasil', link: dadosAutomaticos?.processos?.link_jusbrasil || '#', obrigatorio: true },
+      { item: 'Revisar detalhes dos processos no painel Escavador', link: 'https://painel.escavador.com', obrigatorio: true },
       { item: 'Verificar Serasa PJ manualmente', link: 'https://www.serasaexperian.com.br', obrigatorio: false },
     ],
     due_diligence: [
@@ -349,7 +349,7 @@ function gerarChecklist(tipo, dadosAutomaticos) {
     ],
     analise_devedor: [
       { item: 'Verificar Serasa Score do devedor', link: 'https://www.serasaexperian.com.br', obrigatorio: false },
-      { item: 'Confirmar endereço para citação no JusBrasil', link: dadosAutomaticos?.processos?.link_jusbrasil || '#', obrigatorio: true },
+      { item: 'Confirmar endereço para citação via Receita Federal / Escavador', link: 'https://painel.escavador.com', obrigatorio: true },
       { item: 'Verificar protestos no Cartório de Anápolis', link: 'https://www.protestodigital.com.br', obrigatorio: false },
       { item: 'Confirmar veículos no DETRAN-GO', link: 'https://www.detran.go.gov.br', obrigatorio: false },
     ],
@@ -359,7 +359,7 @@ function gerarChecklist(tipo, dadosAutomaticos) {
       { item: 'Verificar RENAJUD (restrições judiciais em veículos)', link: 'https://www.cnj.jus.br/sistemas/renajud/', obrigatorio: false },
       { item: 'Verificar BACENJUD/SISBAJUD (bloqueio de contas)', link: 'https://www.cnj.jus.br/sistemas/sisbajud/', obrigatorio: false },
       { item: 'Pesquisar todas as empresas vinculadas no Escavador', link: 'https://www.escavador.com', obrigatorio: true },
-      { item: 'Confirmar possíveis laranjas — pesquisar família no JusBrasil', link: dadosAutomaticos?.processos?.link_jusbrasil || '#', obrigatorio: false },
+      { item: 'Confirmar possíveis laranjas — pesquisar vínculos familiares no Escavador', link: 'https://painel.escavador.com', obrigatorio: false },
     ],
   };
   checklists.due_diligence_imobiliaria = [
@@ -368,7 +368,7 @@ function gerarChecklist(tipo, dadosAutomaticos) {
     { item: 'Confirmar proprietario registrado na matricula x vendedor', link: '', obrigatorio: true },
     { item: 'Verificar certidoes negativas do vendedor (Federal, Estadual, Municipal)', link: 'https://solucoes.receita.fazenda.gov.br/servicos/certidaointernet/pf/emitir', obrigatorio: true },
     { item: 'Confirmar IPTU em dia e inexistencia de debitos municipais', link: '', obrigatorio: true },
-    { item: 'Verificar processos do vendedor no JusBrasil', link: dadosAutomaticos?.processos?.link_jusbrasil || '#', obrigatorio: true },
+    { item: 'Verificar processos do vendedor no Escavador', link: 'https://painel.escavador.com', obrigatorio: true },
     { item: 'Solicitar parecer juridico do Balladao Advogados', link: '', obrigatorio: true },
     { item: 'Verificar se imovel esta em area de protecao ambiental', link: '', obrigatorio: false },
     { item: 'Confirmar inexistencia de inventario/usucapiao sobre o imovel', link: '', obrigatorio: false },

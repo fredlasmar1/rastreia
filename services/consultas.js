@@ -321,7 +321,6 @@ async function consultarEscavador(doc, tipo, nome) {
           status: status
         };
       }),
-      link_jusbrasil: gerarLinkJusBrasil(nome, doc),
       fonte: 'Escavador',
       consultado_em: new Date().toISOString()
     };
@@ -333,7 +332,7 @@ async function consultarEscavador(doc, tipo, nome) {
 async function consultarDatajud(doc, tipo, nome) {
   const API_KEY = process.env.DATAJUD_API_KEY;
   if (!API_KEY) {
-    return { total: 0, processos: [], link_jusbrasil: gerarLinkJusBrasil(nome, doc), fonte: 'Datajud CNJ', nota: 'Configure DATAJUD_API_KEY para consultar processos via Datajud.', consultado_em: new Date().toISOString() };
+    return { total: 0, processos: [], fonte: 'Datajud CNJ', nota: 'Configure DATAJUD_API_KEY para consultar processos via Datajud.', consultado_em: new Date().toISOString() };
   }
   const headers = { Authorization: `ApiKey ${API_KEY}`, 'Content-Type': 'application/json' };
 
@@ -398,8 +397,7 @@ async function consultarDatajud(doc, tipo, nome) {
   return {
     total: processos.length,
     processos: processos.slice(0, 30),
-    link_jusbrasil: gerarLinkJusBrasil(nome, doc),
-    nota: processos.length === 0 ? 'Verificar manualmente no JusBrasil pelo link abaixo.' : null,
+    nota: processos.length === 0 ? 'Escavador e Datajud consultados — nenhum processo encontrado nas bases oficiais.' : null,
     fonte: 'Datajud CNJ (gratuito — TJGO + TRF1 + STJ + TST)',
     consultado_em: new Date().toISOString()
   };
@@ -812,15 +810,6 @@ async function consultarVeiculos(cpf) {
 }
 
 // ─────────────────────────────────────────────
-// 8. LINK JUSBRASIL (consulta manual)
-// ─────────────────────────────────────────────
-
-function gerarLinkJusBrasil(nome, documento) {
-  const query = encodeURIComponent(nome || documento);
-  return `https://www.jusbrasil.com.br/consulta-processual/busca?q=${query}`;
-}
-
-// ─────────────────────────────────────────────
 // ORQUESTRADOR — executa tudo em paralelo
 // ─────────────────────────────────────────────
 
@@ -891,5 +880,5 @@ module.exports = {
   consultarSerasa, consultarScore, consultarNegativacoes, consultarProtestos,
   consultarPerfilEconomico, consultarVinculos, consultarObito,
   consultarONR, consultarMatricula, consultarVeiculos,
-  gerarLinkJusBrasil, executarConsultaCompleta
+  executarConsultaCompleta
 };

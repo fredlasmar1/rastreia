@@ -76,7 +76,7 @@ curl -X POST https://SEU-DOMINIO/api/auth/login \
 3. Operador abre o pedido no sistema
 4. Clica "Iniciar Análise"
 5. Clica "Executar Consultas Automáticas" (puxa Receita Federal + Escavador)
-6. Verifica JusBrasil pelo link gerado automaticamente
+6. Escavador e Datajud consultados como fontes oficiais de processos
 7. Adiciona observações
 8. Clica "Gerar PDF e Concluir"
 9. Sistema envia PDF por WhatsApp para o cliente automaticamente
@@ -89,7 +89,7 @@ curl -X POST https://SEU-DOMINIO/api/auth/login \
 |---|---|---|
 | Receita Federal (CNPJ.ws) | ✅ Grátis | Sem API key necessária |
 | Escavador | ⚙️ Requer API key | Contratar em escavador.com.br |
-| JusBrasil | ✅ Link automático | Consulta manual |
+| Escavador + Datajud | ✅ API oficial | Consulta automática |
 | Serasa | ⚙️ Requer contrato | Placeholder implementado |
 | Mercado Pago | ⚙️ Requer config | Webhook `/webhook/mp` |
 | WhatsApp (Evolution) | ⚙️ Requer Evolution API | Notificações automáticas |
