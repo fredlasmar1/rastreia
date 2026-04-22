@@ -190,6 +190,28 @@ const PRODUTOS = {
       { fator: 'ausencia_penhoras', peso: 15 },
     ],
   },
+
+  consulta_veicular: {
+    nome: 'Consulta Veicular',
+    preco: 97,
+    prazo_horas: 0.5,
+    icone: '🚗',
+    sem_alvo_documento: true,
+    publico_alvo: [
+      'Comprador de veículo usado antes de fechar negócio',
+      'Quem vai receber veículo como pagamento ou garantia',
+      'Locadora verificando situação de veículo',
+      'Credor pesquisando veículos de devedor por placa específica',
+      'Mecânica, revenda, leiloéiro validando procedencia',
+    ],
+    argumento: 'Antes de comprar um veículo usado ou aceitar como pagamento, descubra em 30 minutos: há restrições? Alienacao fiduciária? Roubo/furto? Qual o valor FIPE real? Basta a placa.',
+    dados_entregues: [
+      { secao: 'IDENTIFICAÇÃO DO VEÍCULO', campos: ['Placa', 'Marca e modelo', 'Ano de fabricação e modelo', 'Cor', 'Combustível', 'Chassi', 'Renavam', 'Município e UF de registro'] },
+      { secao: 'SITUAÇÃO E RESTRIÇÕES', campos: ['Situação atual do veículo', 'Restrições administrativas', 'Alienação fiduciária', 'Restrições judiciais', 'Roubo/furto'] },
+      { secao: 'AVALIAÇÃO FIPE', campos: ['Valor FIPE atualizado', 'Código FIPE', 'Mês de referência'] },
+    ],
+    fatores_score: [],
+  },
 };
 
 // ─────────────────────────────────────────────────────────

@@ -119,6 +119,63 @@ function gerarDossie(pedido, dadosDB) {
 
       let y = 118;
 
+      // ════ CONSULTA VEICULAR (fluxo próprio) ════
+      if (pedido.tipo === 'consulta_veicular') {
+        const v = dados.veiculo_placa || {};
+
+        y = secao(doc, 'ALVO DA CONSULTA', y);
+        linha(doc, 'Placa', pedido.alvo_placa || v.placa || '-', y); y += 16;
+        linha(doc, 'Solicitante', pedido.cliente_nome, y); y += 20;
+
+        if (!v.disponivel) {
+          y = avisoBox(doc, y, `Consulta indisponível: ${v.erro || 'sem retorno da API'}${v.detalhes ? ' - ' + v.detalhes : ''}`);
+        } else {
+          y = secao(doc, 'IDENTIFICACAO DO VEICULO', y);
+          linha(doc, 'Marca / Modelo', v.marca_modelo || [v.marca, v.modelo].filter(Boolean).join(' ') || '-', y); y += 15;
+          if (v.ano_modelo || v.ano_fabricacao) {
+            linha(doc, 'Ano', `${v.ano_fabricacao || '?'}/${v.ano_modelo || '?'}`, y); y += 15;
+          }
+          if (v.cor) { linha(doc, 'Cor', v.cor, y); y += 15; }
+          if (v.combustivel) { linha(doc, 'Combustivel', v.combustivel, y); y += 15; }
+          if (v.chassi) { linha(doc, 'Chassi', v.chassi, y); y += 15; }
+          if (v.renavam) { linha(doc, 'Renavam', v.renavam, y); y += 15; }
+          if (v.municipio || v.uf) { linha(doc, 'Registro', [v.municipio, v.uf].filter(Boolean).join(' / '), y); y += 15; }
+          y += 6;
+
+          y = secao(doc, 'SITUACAO E RESTRICOES', y);
+          linha(doc, 'Situacao', v.situacao || 'Sem informacao', y); y += 15;
+          if (v.restricoes && v.restricoes.length > 0) {
+            y += 2;
+            doc.fillColor(COR.vermelho).fontSize(9).font('Helvetica-Bold').text('RESTRICOES ENCONTRADAS', MARGEM, y); y += 14;
+            v.restricoes.forEach((r, i) => {
+              y = verificarPagina(doc, y, 18);
+              doc.rect(MARGEM, y, LARGURA, 16).fill('#fee2e2');
+              doc.fillColor(COR.vermelho).fontSize(8).font('Helvetica').text(`${i + 1}. ${String(r)}`, MARGEM + 6, y + 4, { width: LARGURA - 12 });
+              y += 18;
+            });
+          } else {
+            y = verificarPagina(doc, y, 18);
+            doc.rect(MARGEM, y, LARGURA, 16).fill('#d1fae5');
+            doc.fillColor('#065f46').fontSize(8).font('Helvetica-Bold').text('Nenhuma restricao identificada', MARGEM + 6, y + 4);
+            y += 20;
+          }
+          y += 6;
+
+          if (v.fipe_valor || v.fipe_codigo) {
+            y = secao(doc, 'AVALIACAO FIPE', y);
+            if (v.fipe_valor) { linha(doc, 'Valor FIPE', typeof v.fipe_valor === 'number' ? `R$ ${Number(v.fipe_valor).toLocaleString('pt-BR', {minimumFractionDigits: 2})}` : String(v.fipe_valor), y); y += 15; }
+            if (v.fipe_codigo) { linha(doc, 'Codigo FIPE', v.fipe_codigo, y); y += 15; }
+            if (v.fipe_mes_referencia) { linha(doc, 'Mes referencia', v.fipe_mes_referencia, y); y += 15; }
+            y += 6;
+          }
+        }
+
+        // Pular o resto do pipeline PF/PJ
+        doc.end();
+        stream.on('finish', () => resolve({ path: filepath, url: `/relatorios/${filename}` }));
+        return;
+      }
+
       // ════ ALVO ════
       y = secao(doc, 'ALVO DA CONSULTA', y);
       linha(doc, 'Nome', pedido.alvo_nome, y); y += 16;

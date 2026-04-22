@@ -115,6 +115,12 @@ ALTER TABLE pedidos ADD COLUMN IF NOT EXISTS imovel_estado VARCHAR(2) DEFAULT 'G
 -- Portal público do cliente (P5)
 ALTER TABLE pedidos ADD COLUMN IF NOT EXISTS token_publico VARCHAR(64) UNIQUE;
 
+-- Consulta Veicular (standalone por placa)
+ALTER TABLE pedidos ADD COLUMN IF NOT EXISTS alvo_placa VARCHAR(10);
+ALTER TABLE pedidos ALTER COLUMN alvo_nome DROP NOT NULL;
+ALTER TABLE pedidos ALTER COLUMN alvo_documento DROP NOT NULL;
+ALTER TABLE pedidos ALTER COLUMN alvo_tipo DROP NOT NULL;
+
 -- Tabela de assinaturas (P4)
 CREATE TABLE IF NOT EXISTS assinaturas (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),

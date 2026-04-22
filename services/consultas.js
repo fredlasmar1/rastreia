@@ -852,12 +852,83 @@ async function consultarVeiculos(cpf) {
   }
 }
 
-// ─────────────────────────────────────────────
+// =============================================
+// CONSULTA VEICULAR POR PLACA (DirectData)
+// =============================================
+
+function normalizarPlaca(placa) {
+  if (!placa) return '';
+  return String(placa).toUpperCase().replace(/[^A-Z0-9]/g, '').trim();
+}
+
+function validarPlaca(placa) {
+  const p = normalizarPlaca(placa);
+  // Antiga: AAA9999 | Mercosul: AAA9A99
+  return /^[A-Z]{3}[0-9][A-Z0-9][0-9]{2}$/.test(p);
+}
+
+async function consultarVeiculoPorPlaca(placa) {
+  const placaLimpa = normalizarPlaca(placa);
+  if (!validarPlaca(placaLimpa)) {
+    return { disponivel: false, erro: 'Placa inválida', placa: placaLimpa, fonte: 'DirectData' };
+  }
+  if (!process.env.DIRECTD_TOKEN) {
+    return { disponivel: false, erro: 'DIRECTD_TOKEN não configurado', fonte: 'DirectData' };
+  }
+  try {
+    const resp = await axios.get('https://apiv3.directd.com.br/api/ConsultaVeicular', {
+      params: { Placa: placaLimpa, Token: process.env.DIRECTD_TOKEN },
+      timeout: 30000
+    });
+    const r = resp.data?.retorno || resp.data || {};
+    const restricoes = [r.restricao1, r.restricao2, r.restricao3, r.restricao4]
+      .filter(x => x && String(x).trim() && String(x).toLowerCase() !== 'nao');
+    return {
+      disponivel: true,
+      placa: placaLimpa,
+      marca: r.marca || '',
+      modelo: r.modelo || '',
+      marca_modelo: r.marcaModelo || '',
+      ano_modelo: r.anoModelo || '',
+      ano_fabricacao: r.anoFabricacao || '',
+      cor: r.cor || '',
+      combustivel: r.combustivel || '',
+      chassi: r.chassi || '',
+      renavam: r.renavam || '',
+      situacao: r.situacao || '',
+      municipio: r.municipio || '',
+      uf: r.uf || '',
+      fipe_valor: r.fipe?.valor || '',
+      fipe_codigo: r.fipe?.codigo || '',
+      fipe_mes_referencia: r.fipe?.mesReferencia || '',
+      restricoes,
+      raw: r,
+      fonte: 'DirectData ConsultaVeicular',
+      consultado_em: new Date().toISOString()
+    };
+  } catch (e) {
+    return {
+      disponivel: false,
+      erro: 'DirectData indisponível',
+      detalhes: e.response?.data?.message || e.message,
+      placa: placaLimpa,
+      fonte: 'DirectData ConsultaVeicular'
+    };
+  }
+}
+
+// =============================================
 // ORQUESTRADOR — executa tudo em paralelo
-// ─────────────────────────────────────────────
+// =============================================
 
 async function executarConsultaCompleta(pedido) {
-  const { alvo_documento, alvo_tipo, alvo_nome, tipo } = pedido;
+  const { alvo_documento, alvo_tipo, alvo_nome, tipo, alvo_placa } = pedido;
+
+  // Produto standalone: Consulta Veicular
+  if (tipo === 'consulta_veicular') {
+    const veiculo_placa = await consultarVeiculoPorPlaca(alvo_placa);
+    return { veiculo_placa };
+  }
 
   // Consultas comuns a todos os produtos
   const promises = [
@@ -923,5 +994,6 @@ module.exports = {
   consultarSerasa, consultarScore, consultarNegativacoes, consultarProtestos,
   consultarPerfilEconomico, consultarVinculos, consultarObito,
   consultarONR, consultarMatricula, consultarVeiculos,
+  consultarVeiculoPorPlaca, validarPlaca, normalizarPlaca,
   executarConsultaCompleta
 };

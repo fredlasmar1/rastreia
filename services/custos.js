@@ -69,6 +69,9 @@ function chavesPorFonte(fonte, dados) {
     case 'veiculos':
       if (dados?.total > 0 || dados?.veiculos) c.push('directd_veiculos');
       break;
+    case 'veiculo_placa':
+      if (dados && dados.disponivel !== false) c.push('directd_veiculos');
+      break;
     case 'transparencia':
       if (dados && dados.disponivel !== false) c.push('transparencia');
       break;
@@ -128,7 +131,8 @@ const APIS_POR_PRODUTO = {
     'directd_pf_plus', 'escavador_processos', 'directd_score_quod', 'directd_negativacoes', // comprador
     'directd_pf_plus', 'escavador_processos', 'directd_negativacoes', 'directd_veiculos', 'directd_vinculos', // vendedor
     'onr_matricula' // imóvel
-  ]
+  ],
+  consulta_veicular: ['directd_veiculos']
 };
 
 async function estimarCustoProduto(tipo) {

@@ -15,7 +15,8 @@ const PRECOS = {
   due_diligence: 997,
   due_diligence_imobiliaria: 997,
   analise_devedor: 250,
-  investigacao_patrimonial: 497
+  investigacao_patrimonial: 497,
+  consulta_veicular: 97
 };
 
 const PRAZOS = {
@@ -24,8 +25,11 @@ const PRAZOS = {
   due_diligence: 24,
   due_diligence_imobiliaria: 24,
   analise_devedor: 2,
-  investigacao_patrimonial: 4
+  investigacao_patrimonial: 4,
+  consulta_veicular: 0.5
 };
+
+const PLACA_REGEX = /^[A-Z]{3}[0-9][A-Z0-9][0-9]{2}$/;
 
 const ALVO_TIPOS_VALIDOS = ['PF', 'PJ'];
 const FINALIDADES_VALIDAS = [
@@ -102,7 +106,7 @@ router.post('/', autenticar, async (req, res) => {
   try {
     const {
       tipo, cliente_nome, cliente_email, cliente_whatsapp,
-      alvo_nome, alvo_documento, alvo_tipo,
+      alvo_nome, alvo_documento, alvo_tipo, alvo_placa,
       // LGPD
       finalidade, aceite_termos,
       // Imobiliária
@@ -110,18 +114,34 @@ router.post('/', autenticar, async (req, res) => {
       imovel_matricula, imovel_endereco, imovel_estado
     } = req.body;
 
-    if (!tipo || !cliente_nome || !alvo_documento) {
-      return res.status(400).json({ erro: 'Campos obrigatórios: tipo, cliente_nome, alvo_documento' });
-    }
-    if (!ALVO_TIPOS_VALIDOS.includes(alvo_tipo)) {
-      return res.status(400).json({ erro: 'alvo_tipo deve ser PF ou PJ' });
+    const isVeicular = tipo === 'consulta_veicular';
+
+    if (!tipo || !cliente_nome) {
+      return res.status(400).json({ erro: 'Campos obrigatórios: tipo, cliente_nome' });
     }
     if (cliente_nome.length > 255 || (alvo_nome && alvo_nome.length > 255)) {
       return res.status(400).json({ erro: 'Nome não pode ter mais de 255 caracteres' });
     }
-    const docLimpo = alvo_documento.replace(/\D/g, '');
-    if (docLimpo.length !== 11 && docLimpo.length !== 14) {
-      return res.status(400).json({ erro: 'Documento deve ser CPF (11 dígitos) ou CNPJ (14 dígitos)' });
+
+    let docLimpo = null;
+    let placaLimpa = null;
+
+    if (isVeicular) {
+      placaLimpa = (alvo_placa || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+      if (!PLACA_REGEX.test(placaLimpa)) {
+        return res.status(400).json({ erro: 'Placa inválida. Use formato AAA9999 (antigo) ou AAA9A99 (Mercosul)' });
+      }
+    } else {
+      if (!alvo_documento) {
+        return res.status(400).json({ erro: 'alvo_documento é obrigatório' });
+      }
+      if (!ALVO_TIPOS_VALIDOS.includes(alvo_tipo)) {
+        return res.status(400).json({ erro: 'alvo_tipo deve ser PF ou PJ' });
+      }
+      docLimpo = alvo_documento.replace(/\D/g, '');
+      if (docLimpo.length !== 11 && docLimpo.length !== 14) {
+        return res.status(400).json({ erro: 'Documento deve ser CPF (11 dígitos) ou CNPJ (14 dígitos)' });
+      }
     }
 
     // LGPD: finalidade obrigatória
@@ -149,23 +169,28 @@ router.post('/', autenticar, async (req, res) => {
       alvo2DocLimpo = alvo2_documento.replace(/\D/g, '');
     }
 
+    const nomeAlvoFinal = isVeicular
+      ? ((alvo_nome || '').trim() || `Veículo ${placaLimpa}`)
+      : ((alvo_nome || '').trim() || 'A identificar');
+
     const result = await pool.query(
       `INSERT INTO pedidos (
         tipo, status, cliente_nome, cliente_email, cliente_whatsapp,
         alvo_nome, alvo_documento, alvo_tipo, valor, prazo_entrega, operador_id,
         finalidade, ip_solicitante, aceite_termos, token_publico,
         alvo2_nome, alvo2_documento, alvo2_tipo,
-        imovel_matricula, imovel_endereco, imovel_estado
+        imovel_matricula, imovel_endereco, imovel_estado, alvo_placa
       )
       VALUES ($1, 'aguardando_pagamento', $2, $3, $4, $5, $6, $7, $8, $9, $10,
-              $11, $12, $13, $14, $15, $16, $17, $18, $19, $20)
+              $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21)
       RETURNING *`,
       [
         tipo, cliente_nome.trim(), cliente_email, cliente_whatsapp,
-        (alvo_nome || '').trim() || 'A identificar', docLimpo, alvo_tipo, valor, prazo, req.usuario.id,
+        nomeAlvoFinal, docLimpo, isVeicular ? null : alvo_tipo, valor, prazo, req.usuario.id,
         finalidade, ip, true, tokenPublico,
         alvo2_nome?.trim() || null, alvo2DocLimpo, alvo2_tipo || null,
-        imovel_matricula || null, imovel_endereco || null, imovel_estado || 'GO'
+        imovel_matricula || null, imovel_endereco || null, imovel_estado || 'GO',
+        placaLimpa
       ]
     );
 

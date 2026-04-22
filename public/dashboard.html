@@ -13,6 +13,8 @@
     <a href="/dashboard.html" class="ativo">Dashboard</a>
     <a href="/novo-pedido.html">+ Novo Pedido</a>
     <a href="/clientes.html">Clientes</a>
+    <a href="/usuarios.html" id="nav-usuarios" style="display:none">Usuários</a>
+    <a href="/custos-api.html" id="nav-custos" style="display:none">Custos API</a>
     <a href="#" onclick="logout()">Sair</a>
   </div>
   <div class="nav-user" id="nav-user"></div>
@@ -64,13 +66,21 @@
   if (!token) window.location.href = '/';
   const usuario = JSON.parse(localStorage.getItem('rastreia_usuario') || '{}');
   document.getElementById('nav-user').textContent = usuario.nome || '';
+  if (usuario.perfil === 'admin') {
+    const navU = document.getElementById('nav-usuarios');
+    const navC = document.getElementById('nav-custos');
+    if (navU) navU.style.display = '';
+    if (navC) navC.style.display = '';
+  }
 
   function esc(str) { const d = document.createElement('div'); d.textContent = str; return d.innerHTML; }
 
   const TIPOS = {
     dossie_pf: 'Dossiê PF', dossie_pj: 'Dossiê PJ',
     due_diligence: 'Due Diligence', analise_devedor: 'Análise Devedor',
-    investigacao_patrimonial: 'Inv. Patrimonial'
+    investigacao_patrimonial: 'Inv. Patrimonial',
+    due_diligence_imobiliaria: 'DD Imobiliária',
+    consulta_veicular: 'Consulta Veicular'
   };
 
   const BADGES = {
