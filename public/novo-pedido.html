@@ -274,7 +274,7 @@
     const aceite_termos = document.getElementById('aceite_termos').checked;
 
     if (!tipo) return alerta('Selecione um produto', 'error');
-    if (!alvo_nome) return alerta('Informe o nome do alvo', 'error');
+    // Nome e opcional: se vazio, servico auto-preenche via DirectData/Receita apos consulta
     if (!alvo_documento) return alerta('Informe o CPF ou CNPJ', 'error');
     if (!cliente_nome) return alerta('Informe o nome do cliente', 'error');
     if (!finalidade) return alerta('Selecione a finalidade da consulta (LGPD)', 'error');

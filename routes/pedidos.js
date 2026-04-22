@@ -110,13 +110,13 @@ router.post('/', autenticar, async (req, res) => {
       imovel_matricula, imovel_endereco, imovel_estado
     } = req.body;
 
-    if (!tipo || !cliente_nome || !alvo_nome || !alvo_documento) {
-      return res.status(400).json({ erro: 'Campos obrigatórios: tipo, cliente_nome, alvo_nome, alvo_documento' });
+    if (!tipo || !cliente_nome || !alvo_documento) {
+      return res.status(400).json({ erro: 'Campos obrigatórios: tipo, cliente_nome, alvo_documento' });
     }
     if (!ALVO_TIPOS_VALIDOS.includes(alvo_tipo)) {
       return res.status(400).json({ erro: 'alvo_tipo deve ser PF ou PJ' });
     }
-    if (cliente_nome.length > 255 || alvo_nome.length > 255) {
+    if (cliente_nome.length > 255 || (alvo_nome && alvo_nome.length > 255)) {
       return res.status(400).json({ erro: 'Nome não pode ter mais de 255 caracteres' });
     }
     const docLimpo = alvo_documento.replace(/\D/g, '');
@@ -162,7 +162,7 @@ router.post('/', autenticar, async (req, res) => {
       RETURNING *`,
       [
         tipo, cliente_nome.trim(), cliente_email, cliente_whatsapp,
-        alvo_nome.trim(), docLimpo, alvo_tipo, valor, prazo, req.usuario.id,
+        (alvo_nome || '').trim() || 'A identificar', docLimpo, alvo_tipo, valor, prazo, req.usuario.id,
         finalidade, ip, true, tokenPublico,
         alvo2_nome?.trim() || null, alvo2DocLimpo, alvo2_tipo || null,
         imovel_matricula || null, imovel_endereco || null, imovel_estado || 'GO'
@@ -254,7 +254,21 @@ router.post('/:id/consultar', autenticar, async (req, res) => {
     if (pResult.rows.length === 0) return res.status(404).json({ erro: 'Pedido não encontrado' });
     const pedido = pResult.rows[0];
 
+    // Se alvo_nome for placeholder, tenta auto-preencher depois com nome real
+    const nomePlaceholder = !pedido.alvo_nome || pedido.alvo_nome === 'A identificar';
+    if (nomePlaceholder) pedido.alvo_nome = '';
+
     const resultados = await executarConsultaCompleta(pedido);
+
+    // Auto-fill: se nome estava vazio, extrai da Receita Federal / DirectData
+    if (nomePlaceholder) {
+      const cad = resultados.receita_federal || {};
+      const nomeReal = cad.nome || cad.razao_social || cad.nome_fantasia || null;
+      if (nomeReal) {
+        await pool.query('UPDATE pedidos SET alvo_nome = $1 WHERE id = $2', [nomeReal, pedido.id]);
+        pedido.alvo_nome = nomeReal;
+      }
+    }
 
     // Limpar dados antigos deste pedido antes de salvar novos (evita duplicatas)
     await pool.query('DELETE FROM dados_consulta WHERE pedido_id = $1', [pedido.id]);
@@ -326,8 +340,8 @@ router.post('/:id/dados', autenticar, async (req, res) => {
 router.post('/demo', autenticar, async (req, res) => {
   try {
     const { alvo_documento, alvo_nome, alvo_tipo, cliente_nome, cliente_cnpj, finalidade, aceite_termos } = req.body;
-    if (!alvo_documento || !alvo_nome || !cliente_cnpj) {
-      return res.status(400).json({ erro: 'alvo_documento, alvo_nome e cliente_cnpj são obrigatórios' });
+    if (!alvo_documento || !cliente_cnpj) {
+      return res.status(400).json({ erro: 'alvo_documento e cliente_cnpj são obrigatórios' });
     }
     if (!finalidade || !aceite_termos) {
       return res.status(400).json({ erro: 'Finalidade e aceite dos termos são obrigatórios' });
@@ -351,7 +365,7 @@ router.post('/demo', autenticar, async (req, res) => {
       [
         cliente_nome,
         cliente_cnpj,
-        alvo_nome.trim(),
+        (alvo_nome || '').trim() || 'A identificar',
         alvo_documento.replace(/\D/g, ''),
         alvo_tipo || 'PF',
         finalidade,

@@ -276,6 +276,7 @@ app.use('/api/auth', require('./routes/auth'));
 app.use('/api/pedidos', require('./routes/pedidos'));
 app.use('/api/assinaturas', require('./routes/assinaturas'));
 app.use('/api/clientes', require('./routes/clientes'));
+app.use('/api/admin/custos', require('./routes/custos'));
 
 // Webhook Mercado Pago
 app.post('/webhook/mp', express.json(), async (req, res) => {

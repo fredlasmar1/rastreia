@@ -160,3 +160,32 @@ CREATE TABLE IF NOT EXISTS clientes (
 );
 CREATE INDEX IF NOT EXISTS idx_clientes_nome ON clientes(nome);
 CREATE INDEX IF NOT EXISTS idx_clientes_cnpj ON clientes(cnpj);
+
+-- ─────────────────────────────────────────────
+-- Custos de API (valor que a Recobro paga por consulta)
+-- ─────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS api_custos (
+  chave VARCHAR(100) PRIMARY KEY,       -- ex: 'escavador_processos', 'directd_pf_plus'
+  rotulo VARCHAR(255) NOT NULL,         -- texto exibido na UI
+  valor_brl DECIMAL(10,4) NOT NULL,     -- custo por consulta (4 decimais para centavos finos)
+  fonte VARCHAR(255),                   -- referencia/origem do valor
+  confianca VARCHAR(20) DEFAULT 'estimado', -- oficial | estimado
+  atualizado_em TIMESTAMP DEFAULT NOW()
+);
+
+-- Seed com valores conservadores (edite em /custos-api.html)
+INSERT INTO api_custos (chave, rotulo, valor_brl, fonte, confianca) VALUES
+  ('escavador_processos',    'Escavador — Processos por CPF/CNPJ',        4.5000, 'Tabela publica Escavador',          'oficial'),
+  ('datajud',                'Datajud CNJ (TJGO/TRF1/STJ/TST)',           0.0000, 'API publica gratuita',              'oficial'),
+  ('cnpja',                  'CNPJa — Receita Federal CNPJ',              0.0000, 'Plano gratuito',                     'oficial'),
+  ('directd_pf_plus',        'DirectData — Cadastro PF Plus',             0.5000, 'Estimativa conservadora',            'estimado'),
+  ('directd_cnpj',           'DirectData — Cadastro PJ',                  0.5000, 'Estimativa conservadora',            'estimado'),
+  ('directd_score_quod',     'DirectData — Score QUOD',                   1.2000, 'Estimativa conservadora',            'estimado'),
+  ('directd_negativacoes',   'DirectData — Protestos e Negativacoes',     0.8000, 'Estimativa conservadora',            'estimado'),
+  ('directd_perfil_economico','DirectData — Perfil Economico',            0.6000, 'Estimativa conservadora',            'estimado'),
+  ('directd_vinculos',       'DirectData — Vinculos Societarios',         0.5000, 'Estimativa conservadora',            'estimado'),
+  ('directd_veiculos',       'DirectData — Veiculos',                     0.3000, 'Estimativa conservadora',            'estimado'),
+  ('transparencia',          'Portal da Transparencia (CGU)',             0.0000, 'API publica gratuita',              'oficial'),
+  ('infosimples_detran_go',  'InfoSimples DETRAN-GO',                     0.2600, 'Tabela publica InfoSimples',        'oficial'),
+  ('onr_matricula',          'ONR — Matricula de imovel',                 0.0000, 'Depende do cartorio, variavel',     'estimado')
+ON CONFLICT (chave) DO NOTHING;

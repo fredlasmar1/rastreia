@@ -59,6 +59,7 @@
     if (!data || data.erro) { document.getElementById('conteudo').innerHTML = '<div class="alert alert-error">Pedido não encontrado</div>'; return; }
     pedidoAtual = data;
     renderizar(data);
+    if (usuario.perfil === 'admin' || usuario.perfil === 'operador') carregarCusto(data);
   }
 
   function renderizar(p) {
@@ -100,6 +101,18 @@
         <div class="info-row"><span class="info-label">Criado em</span><span class="info-valor">${new Date(p.criado_em).toLocaleString('pt-BR')}</span></div>
         ${p.operador_nome ? `<div class="info-row"><span class="info-label">Operador</span><span class="info-valor">${p.operador_nome}</span></div>` : ''}
       </div>
+
+      <!-- CUSTO BRUTO (INTERNO — admin/operador) -->
+      ${(usuario.perfil === 'admin' || usuario.perfil === 'operador') ? `
+        <div class="pedido-section" id="secao-custo" style="border:1px dashed #d1d5db;background:#fafafa">
+          <div class="section-title" style="display:flex;align-items:center;justify-content:space-between">
+            <span>Custo Bruto (interno)</span>
+            <a href="/custos-api.html" style="font-size:11px;color:#6b7280;text-decoration:none">editar tabela →</a>
+          </div>
+          <div style="font-size:11px;color:#6b7280;margin-bottom:8px;font-style:italic">Referência para negociação. Não aparece no PDF do cliente.</div>
+          <div id="custo-conteudo">Calculando...</div>
+        </div>
+      ` : ''}
 
       <!-- ALVO -->
       <div class="pedido-section">
@@ -233,6 +246,34 @@
   }
 
   function logout() { localStorage.clear(); window.location.href = '/'; }
+
+  async function carregarCusto(p) {
+    const el = document.getElementById('custo-conteudo');
+    if (!el) return;
+    try {
+      const data = await api(`/api/admin/custos/pedido/${id}`);
+      if (!data || data.erro) { el.innerHTML = '<div style="font-size:12px;color:#6b7280">Sem dados de custo</div>'; return; }
+      const total = Number(data.total_brl || 0);
+      const valor = Number(p.valor || 0);
+      const margem = valor > 0 ? ((valor - total) / valor * 100) : 0;
+      const lucro = valor - total;
+      const breakdown = (data.breakdown || []).map(b => `
+        <div style="display:flex;justify-content:space-between;padding:4px 0;font-size:12px;border-bottom:1px solid #f3f4f6">
+          <span>${esc(b.fonte)} <span style="color:#9ca3af">· ${esc(b.api)}</span></span>
+          <span style="font-variant-numeric:tabular-nums">R$ ${Number(b.valor_brl).toLocaleString('pt-BR',{minimumFractionDigits:2})}</span>
+        </div>`).join('');
+      el.innerHTML = `
+        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:10px">
+          <div><div style="font-size:10px;color:#6b7280;text-transform:uppercase">Custo APIs</div><div style="font-size:18px;font-weight:700;color:#dc2626">R$ ${total.toLocaleString('pt-BR',{minimumFractionDigits:2})}</div></div>
+          <div><div style="font-size:10px;color:#6b7280;text-transform:uppercase">Venda</div><div style="font-size:18px;font-weight:700;color:#111">R$ ${valor.toLocaleString('pt-BR',{minimumFractionDigits:2})}</div></div>
+          <div><div style="font-size:10px;color:#6b7280;text-transform:uppercase">Margem</div><div style="font-size:18px;font-weight:700;color:${margem>=70?'#16a34a':margem>=40?'#ea580c':'#dc2626'}">${margem.toFixed(1)}%</div><div style="font-size:11px;color:#6b7280">Lucro: R$ ${lucro.toLocaleString('pt-BR',{minimumFractionDigits:2})}</div></div>
+        </div>
+        ${breakdown ? `<details style="margin-top:6px"><summary style="cursor:pointer;font-size:12px;color:#6b7280">Detalhamento (${data.breakdown.length} APIs consultadas)</summary><div style="margin-top:6px">${breakdown}</div></details>` : '<div style="font-size:12px;color:#6b7280">Nenhuma consulta registrada ainda.</div>'}
+      `;
+    } catch (e) {
+      el.innerHTML = '<div style="font-size:12px;color:#dc2626">Erro ao calcular custo</div>';
+    }
+  }
 
   carregar();
 </script>

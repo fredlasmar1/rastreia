@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Rastreia — Custos de API</title>
+  <link rel="stylesheet" href="/css/style.css">
+  <style>
+    .tabela-custos { width: 100%; border-collapse: collapse; background: #fff; border-radius: 8px; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.06); }
+    .tabela-custos th, .tabela-custos td { padding: 12px 16px; text-align: left; border-bottom: 1px solid #eef2f7; font-size: 14px; }
+    .tabela-custos th { background: #f8fafc; font-weight: 600; color: #334155; font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px; }
+    .tabela-custos tr:last-child td { border-bottom: none; }
+    .tabela-custos input[type=number] { width: 120px; padding: 6px 10px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 14px; text-align: right; }
+    .tabela-custos input[type=text] { width: 100%; max-width: 260px; padding: 6px 10px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 13px; }
+    .badge-confianca { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 600; text-transform: uppercase; }
+    .badge-oficial { background: #dcfce7; color: #14532d; }
+    .badge-estimado { background: #fef3c7; color: #92400e; }
+    .linha-salva { background: #f0fdf4 !important; transition: background 0.6s; }
+    .linha-erro { background: #fef2f2 !important; transition: background 0.6s; }
+    .header-aviso { background: #fef3c7; border: 1px solid #fcd34d; color: #78350f; padding: 12px 16px; border-radius: 8px; margin-bottom: 20px; font-size: 13px; line-height: 1.5; }
+  </style>
+</head>
+<body>
+<nav class="nav">
+  <a href="/dashboard.html" class="nav-logo"><img src="/img/logo-recobro.jpg" alt="Recobro"><div><div class="nav-brand">RASTREIA</div></div></a>
+  <div class="nav-links">
+    <a href="/dashboard.html">Dashboard</a>
+    <a href="/novo-pedido.html">+ Novo Pedido</a>
+    <a href="/clientes.html">Clientes</a>
+    <a href="/custos-api.html" class="ativo">Custos API</a>
+    <a href="#" onclick="logout()">Sair</a>
+  </div>
+  <div class="nav-user" id="nav-user"></div>
+</nav>
+
+<div class="container">
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px">
+    <h1 class="page-title" style="margin:0">Custos de API — valor que a Recobro paga por consulta</h1>
+  </div>
+
+  <div class="header-aviso">
+    <strong>Uso interno.</strong> Esses valores NÃO aparecem no PDF do cliente.
+    Servem como referência de custo bruto para negociar margem na hora de vender.
+    Valores marcados como <span class="badge-confianca badge-estimado">estimado</span> são conservadores —
+    atualize com os valores reais do painel DirectData conforme você for confirmando.
+  </div>
+
+  <table class="tabela-custos" id="tabela">
+    <thead>
+      <tr>
+        <th style="width: 30%">API / Fonte</th>
+        <th style="width: 15%">Valor por consulta (R$)</th>
+        <th style="width: 12%">Confiança</th>
+        <th>Observação / Fonte</th>
+        <th style="width: 12%">Atualizado</th>
+        <th style="width: 10%"></th>
+      </tr>
+    </thead>
+    <tbody id="tbody">
+      <tr><td colspan="6" style="text-align:center;padding:32px;color:#64748b">Carregando…</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<script>
+const token = localStorage.getItem('rastreia_token');
+if (!token) { location.href = '/index.html'; }
+
+function logout() { localStorage.removeItem('rastreia_token'); location.href = '/index.html'; }
+
+function fmtData(iso) {
+  if (!iso) return '';
+  const d = new Date(iso);
+  return d.toLocaleDateString('pt-BR') + ' ' + d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+}
+
+async function carregar() {
+  try {
+    const r = await fetch('/api/admin/custos', { headers: { Authorization: `Bearer ${token}` } });
+    if (r.status === 403) { alert('Apenas administradores podem gerenciar custos.'); location.href = '/dashboard.html'; return; }
+    if (!r.ok) throw new Error('Falha ao carregar');
+    const { custos } = await r.json();
+    renderizar(custos);
+  } catch (e) {
+    document.getElementById('tbody').innerHTML =
+      `<tr><td colspan="6" style="text-align:center;padding:32px;color:#b91c1c">Erro ao carregar: ${e.message}</td></tr>`;
+  }
+}
+
+function renderizar(custos) {
+  const tbody = document.getElementById('tbody');
+  tbody.innerHTML = '';
+  for (const c of custos) {
+    const tr = document.createElement('tr');
+    tr.dataset.chave = c.chave;
+    const badgeCls = c.confianca === 'oficial' ? 'badge-oficial' : 'badge-estimado';
+    tr.innerHTML = `
+      <td><strong>${c.rotulo}</strong><div style="color:#64748b;font-size:11px;margin-top:2px">${c.chave}</div></td>
+      <td><input type="number" step="0.0001" min="0" value="${Number(c.valor_brl).toFixed(4)}" data-campo="valor_brl"></td>
+      <td><span class="badge-confianca ${badgeCls}">${c.confianca}</span></td>
+      <td><input type="text" value="${(c.fonte || '').replace(/"/g, '&quot;')}" data-campo="fonte" placeholder="Ex: painel DirectData — dez/2025"></td>
+      <td style="color:#64748b;font-size:12px">${fmtData(c.atualizado_em)}</td>
+      <td><button class="btn btn-sm btn-primary" onclick="salvar('${c.chave}')">Salvar</button></td>
+    `;
+    tbody.appendChild(tr);
+  }
+}
+
+async function salvar(chave) {
+  const tr = document.querySelector(`tr[data-chave="${chave}"]`);
+  const valor_brl = tr.querySelector('[data-campo="valor_brl"]').value;
+  const fonte = tr.querySelector('[data-campo="fonte"]').value;
+  const btn = tr.querySelector('button');
+  btn.disabled = true; btn.textContent = 'Salvando…';
+  try {
+    const r = await fetch(`/api/admin/custos/${encodeURIComponent(chave)}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ valor_brl: parseFloat(valor_brl), fonte })
+    });
+    if (!r.ok) throw new Error((await r.json()).erro || 'erro');
+    tr.classList.add('linha-salva');
+    setTimeout(() => tr.classList.remove('linha-salva'), 1500);
+    btn.textContent = 'Salvar';
+  } catch (e) {
+    tr.classList.add('linha-erro');
+    setTimeout(() => tr.classList.remove('linha-erro'), 2500);
+    btn.textContent = 'Erro';
+    alert('Erro ao salvar: ' + e.message);
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+carregar();
+</script>
+</body>
+</html>
