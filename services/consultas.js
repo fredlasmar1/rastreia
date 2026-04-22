@@ -878,39 +878,88 @@ async function consultarVeiculoPorPlaca(placa) {
   try {
     const resp = await axios.get('https://apiv3.directd.com.br/api/ConsultaVeicular', {
       params: { Placa: placaLimpa, Token: process.env.DIRECTD_TOKEN },
-      timeout: 30000
+      timeout: 45000
     });
-    const r = resp.data?.retorno || resp.data || {};
-    const restricoes = [r.restricao1, r.restricao2, r.restricao3, r.restricao4]
-      .filter(x => x && String(x).trim() && String(x).toLowerCase() !== 'nao');
+
+    const meta = resp.data?.metaDados || {};
+    const retorno = resp.data?.retorno || {};
+    // DirectData aninha os dados em retorno.veiculo
+    const v = retorno.veiculo || retorno;
+    const resultadoId = Number(meta.resultadoId);
+
+    // resultadoId !== 1 significa erro da API (saldo, permissão, placa sem dados, etc)
+    const semDados = !v || (!v.placa && !v.marca && !v.modelo && !v.chassi);
+    if ((resultadoId && resultadoId !== 1) || semDados) {
+      return {
+        disponivel: false,
+        erro: meta.mensagem || meta.resultado || 'Sem dados retornados pela DirectData',
+        codigo_api: meta.resultadoId || null,
+        placa: placaLimpa,
+        tempo_ms: meta.tempoExecucaoMs,
+        raw_meta: meta,
+        fonte: 'DirectData ConsultaVeicular'
+      };
+    }
+
+    const indicadores = v.indicadores || {};
+    const restricoesAlertas = [];
+    if (indicadores.rouboFurto) restricoesAlertas.push('ROUBO OU FURTO');
+    if (indicadores.renajud) restricoesAlertas.push('RENAJUD (restrição judicial)');
+    if (indicadores.rfb) restricoesAlertas.push('Restrição Receita Federal');
+    if (indicadores.renainf) restricoesAlertas.push('Infrações RENAINF');
+    if (indicadores.leilao) restricoesAlertas.push('Veículo em/ex leilão');
+    if (indicadores.recall) restricoesAlertas.push('Recall registrado');
+    if (indicadores.comunicadoVenda) restricoesAlertas.push('Comunicado de venda');
+    if (indicadores.pendenciaEmissao) restricoesAlertas.push('Pendência de emissão de documento');
+    if (indicadores.alarme) restricoesAlertas.push('Alarme registrado');
+    // Restrições textuais vindas do objeto
+    if (Array.isArray(v.restricoes)) {
+      v.restricoes.forEach(x => { if (x && String(x).trim()) restricoesAlertas.push(String(x)); });
+    }
+
     return {
       disponivel: true,
-      placa: placaLimpa,
-      marca: r.marca || '',
-      modelo: r.modelo || '',
-      marca_modelo: r.marcaModelo || '',
-      ano_modelo: r.anoModelo || '',
-      ano_fabricacao: r.anoFabricacao || '',
-      cor: r.cor || '',
-      combustivel: r.combustivel || '',
-      chassi: r.chassi || '',
-      renavam: r.renavam || '',
-      situacao: r.situacao || '',
-      municipio: r.municipio || '',
-      uf: r.uf || '',
-      fipe_valor: r.fipe?.valor || '',
-      fipe_codigo: r.fipe?.codigo || '',
-      fipe_mes_referencia: r.fipe?.mesReferencia || '',
-      restricoes,
-      raw: r,
+      placa: v.placa || placaLimpa,
+      marca: v.marca || '',
+      modelo: v.modelo || '',
+      marca_modelo: [v.marca, v.modelo].filter(Boolean).join(' '),
+      ano_modelo: v.anoModelo || '',
+      ano_fabricacao: v.anoFabricacao || '',
+      cor: v.cor || '',
+      combustivel: v.combustivel || '',
+      chassi: v.chassi || '',
+      renavam: v.renavam || '',
+      situacao: v.situacaoVeiculo || v.situacao || '',
+      municipio: v.municipio || '',
+      uf: v.uf || '',
+      tipo_veiculo: v.tipo || '',
+      categoria: v.categoria || '',
+      especie: v.especie || '',
+      potencia: v.potencia || '',
+      proprietario: retorno.proprietario || '',
+      proprietario_documento: retorno.documento || '',
+      ano_exercicio: retorno.anoExercicio || '',
+      fipe_valor: v.fipe?.valor || '',
+      fipe_ano: v.fipe?.ano || '',
+      fipe_mes: v.fipe?.mes || '',
+      fipe_mes_referencia: v.fipe?.mes && v.fipe?.ano ? `${v.fipe.mes}/${v.fipe.ano}` : '',
+      restricoes: restricoesAlertas,
+      indicadores,
+      raw: retorno,
       fonte: 'DirectData ConsultaVeicular',
       consultado_em: new Date().toISOString()
     };
   } catch (e) {
+    const status = e.response?.status;
+    const apiMsg = e.response?.data?.metaDados?.mensagem
+      || e.response?.data?.message
+      || e.response?.data?.erro
+      || e.message;
     return {
       disponivel: false,
-      erro: 'DirectData indisponível',
-      detalhes: e.response?.data?.message || e.message,
+      erro: status ? `DirectData retornou HTTP ${status}` : 'DirectData indisponível',
+      detalhes: apiMsg,
+      status_http: status || null,
       placa: placaLimpa,
       fonte: 'DirectData ConsultaVeicular'
     };

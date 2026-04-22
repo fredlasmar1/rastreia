@@ -128,7 +128,21 @@ function gerarDossie(pedido, dadosDB) {
         linha(doc, 'Solicitante', pedido.cliente_nome, y); y += 20;
 
         if (!v.disponivel) {
-          y = avisoBox(doc, y, `Consulta indisponível: ${v.erro || 'sem retorno da API'}${v.detalhes ? ' - ' + v.detalhes : ''}`);
+          // Montar mensagem de erro detalhada
+          const partes = [];
+          if (v.erro) partes.push(v.erro);
+          if (v.detalhes && v.detalhes !== v.erro) partes.push(v.detalhes);
+          const msgErro = partes.join(' - ') || 'sem retorno da API';
+          y = avisoBox(doc, y, `Consulta indisponível: ${msgErro}`);
+          // Linha de diagnóstico técnico
+          const diag = [];
+          if (v.status_http) diag.push(`HTTP ${v.status_http}`);
+          if (v.codigo_api) diag.push(`Código API: ${v.codigo_api}`);
+          if (v.fonte) diag.push(v.fonte);
+          if (diag.length) {
+            doc.fillColor(COR.cinza).fontSize(7).font('Helvetica').text(diag.join(' | '), MARGEM, y, { width: LARGURA });
+            y += 14;
+          }
         } else {
           y = secao(doc, 'IDENTIFICACAO DO VEICULO', y);
           linha(doc, 'Marca / Modelo', v.marca_modelo || [v.marca, v.modelo].filter(Boolean).join(' ') || '-', y); y += 15;
@@ -139,8 +153,21 @@ function gerarDossie(pedido, dadosDB) {
           if (v.combustivel) { linha(doc, 'Combustivel', v.combustivel, y); y += 15; }
           if (v.chassi) { linha(doc, 'Chassi', v.chassi, y); y += 15; }
           if (v.renavam) { linha(doc, 'Renavam', v.renavam, y); y += 15; }
+          if (v.tipo_veiculo) { linha(doc, 'Tipo', v.tipo_veiculo, y); y += 15; }
+          if (v.categoria) { linha(doc, 'Categoria', v.categoria, y); y += 15; }
+          if (v.especie) { linha(doc, 'Especie', v.especie, y); y += 15; }
+          if (v.potencia) { linha(doc, 'Potencia', String(v.potencia), y); y += 15; }
           if (v.municipio || v.uf) { linha(doc, 'Registro', [v.municipio, v.uf].filter(Boolean).join(' / '), y); y += 15; }
           y += 6;
+
+          // Proprietário (só admin vê documento completo; cliente vê nome)
+          if (v.proprietario || v.proprietario_documento) {
+            y = secao(doc, 'PROPRIETARIO', y);
+            if (v.proprietario) { linha(doc, 'Nome', v.proprietario, y); y += 15; }
+            if (v.proprietario_documento) { linha(doc, 'Documento', v.proprietario_documento, y); y += 15; }
+            if (v.ano_exercicio) { linha(doc, 'Exercicio', String(v.ano_exercicio), y); y += 15; }
+            y += 6;
+          }
 
           y = secao(doc, 'SITUACAO E RESTRICOES', y);
           linha(doc, 'Situacao', v.situacao || 'Sem informacao', y); y += 15;
