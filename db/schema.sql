@@ -46,6 +46,10 @@ CREATE TABLE IF NOT EXISTS pedidos (
   relatorio_url TEXT,
   observacoes TEXT,
 
+  -- Score calculado no momento da geração do relatório (para histórico)
+  score_calculado INT,
+  score_classificacao VARCHAR(50),
+
   criado_em TIMESTAMP DEFAULT NOW(),
   atualizado_em TIMESTAMP DEFAULT NOW()
 );
@@ -205,3 +209,13 @@ ON CONFLICT (chave) DO UPDATE SET
   confianca = EXCLUDED.confianca,
   atualizado_em = NOW()
 WHERE api_custos.confianca != 'manual';  -- preserva edicoes manuais feitas em /custos-api.html
+
+-- ==========================================================================
+-- MIGRATIONS IDEMPOTENTES (ALTER TABLE) - rodam a cada boot, seguras
+-- ==========================================================================
+
+-- Fase 3: armazenar score calculado no momento da geração do PDF, permite
+-- histórico por CPF/CNPJ e tendência de risco entre consultas.
+ALTER TABLE pedidos ADD COLUMN IF NOT EXISTS score_calculado INT;
+ALTER TABLE pedidos ADD COLUMN IF NOT EXISTS score_classificacao VARCHAR(50);
+CREATE INDEX IF NOT EXISTS idx_pedidos_alvo_doc_data ON pedidos(alvo_documento, criado_em DESC);

@@ -115,6 +115,69 @@ function contarPorSeveridade(alertas) {
   return contagem;
 }
 
+function truncar(texto, max) {
+  if (!texto) return '';
+  const s = String(texto);
+  return s.length > max ? s.slice(0, Math.max(1, max - 1)) + '…' : s;
+}
+
+function isAlvoNoPolo(poloStr, cpf, nome) {
+  if (!poloStr) return false;
+  const polo = String(poloStr).toLowerCase();
+  const cpfDigits = String(cpf || '').replace(/\D/g, '');
+  if (cpfDigits && cpfDigits.length >= 11 && polo.replace(/\D/g, '').includes(cpfDigits)) return true;
+  if (nome) {
+    const primeiro = String(nome).toLowerCase().trim().split(/\s+/)[0];
+    if (primeiro && primeiro.length >= 3 && polo.includes(primeiro)) return true;
+  }
+  return false;
+}
+
+function parseValorCausa(valor) {
+  if (valor == null) return 0;
+  if (typeof valor === 'number') return valor;
+  const s = String(valor).replace(/[^\d,\.]/g, '');
+  if (!s) return 0;
+  // Formato BR: "1.234,56" -> remove pontos (milhar) e troca vírgula por ponto
+  const normalizado = s.includes(',') ? s.replace(/\./g, '').replace(',', '.') : s;
+  const n = Number(normalizado);
+  return Number.isFinite(n) ? n : 0;
+}
+
+function construirResumoJudicial(lista, cpf, nome) {
+  if (!lista || !lista.length) return '';
+  const ativos = lista.filter(p => String(p.status || '').toLowerCase() === 'ativo');
+  const inativos = lista.filter(p => String(p.status || '').toLowerCase() !== 'ativo');
+  let autor = 0, reu = 0, valorAtivos = 0;
+  const classes = new Set();
+  let maisRecente = null;
+  ativos.forEach(p => {
+    if (isAlvoNoPolo(p.polo_ativo, cpf, nome)) autor++;
+    else if (isAlvoNoPolo(p.polo_passivo, cpf, nome)) reu++;
+    if (p.classe) classes.add(String(p.classe).trim());
+    valorAtivos += parseValorCausa(p.valor_causa);
+    const dataRef = p.ultima_movimentacao || p.data_inicio;
+    if (dataRef) {
+      const d = new Date(dataRef);
+      if (!isNaN(d) && (!maisRecente || d > maisRecente)) maisRecente = d;
+    }
+  });
+  const partes = [];
+  if (ativos.length) {
+    const papel = reu > autor ? 'réu' : autor > reu ? 'autor' : 'parte';
+    partes.push(`${papel} em ${ativos.length} processo(s) ativo(s)`);
+    if (valorAtivos > 0) partes.push(`somando R$ ${valorAtivos.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} em valores de causa`);
+    if (classes.size > 0) partes.push(`nas áreas ${[...classes].slice(0, 3).join(', ')}`);
+  }
+  if (inativos.length) partes.push(`${inativos.length} processo(s) no histórico (baixados/arquivados)`);
+  if (maisRecente) {
+    const dias = Math.floor((Date.now() - maisRecente.getTime()) / 86400000);
+    if (dias >= 0) partes.push(`movimentação mais recente há ${dias} dia(s)`);
+  }
+  const sujeito = nome ? String(nome).split(' ')[0] : 'O alvo';
+  return partes.length ? `${sujeito} consta como ${partes.join('; ')}.` : '';
+}
+
 function rodape(doc) {
   const y = doc.page.height - RODAPE_H;
   doc.rect(0, y, 595, RODAPE_H).fill('#f3f4f6');
@@ -359,6 +422,54 @@ function gerarDossie(pedido, dadosDB) {
         y += 14;
       }
 
+      // ════ HISTÓRICO DE SCORES DESTE CPF/CNPJ ════
+      const historicoScores = dados.historico_scores || {};
+      const historicoLista = Array.isArray(historicoScores.pedidos) ? historicoScores.pedidos : [];
+      if (historicoLista.length > 0) {
+        y = verificarPagina(doc, y, 50);
+        y = secao(doc, 'HISTÓRICO DE SCORES DESTE ALVO', y);
+        doc.fillColor(COR.cinza).fontSize(7).font('Helvetica').text(`Consultas anteriores do mesmo ${pedido.alvo_tipo === 'PJ' ? 'CNPJ' : 'CPF'} nesta base. Tendência calculada contra o score atual.`, MARGEM, y, { width: LARGURA });
+        y += 12;
+        // Cabeçalho
+        doc.fillColor('#111827').fontSize(7.5).font('Helvetica-Bold');
+        doc.text('Data', MARGEM, y, { width: 80 });
+        doc.text('Pedido', MARGEM + 85, y, { width: 60 });
+        doc.text('Score', MARGEM + 150, y, { width: 50, align: 'right' });
+        doc.text('Classificação', MARGEM + 210, y, { width: 120 });
+        doc.text('Tendência', MARGEM + 335, y, { width: 90 });
+        y += 11;
+        doc.rect(MARGEM, y - 2, LARGURA, 0.5).fill(COR.borda);
+        const scoreAtual = typeof score.score === 'number' ? score.score : null;
+        historicoLista.slice(0, 5).forEach(h => {
+          y = verificarPagina(doc, y, 14);
+          const dt = h.criado_em ? new Date(h.criado_em) : null;
+          const dataTxt = dt && !isNaN(dt) ? dt.toLocaleDateString('pt-BR') : '-';
+          const scoreTxt = h.score_calculado != null ? String(h.score_calculado) : '-';
+          const classifTxt = h.score_classificacao || '-';
+          let tendencia = '—';
+          let corT = COR.cinza;
+          if (scoreAtual != null && h.score_calculado != null) {
+            const delta = scoreAtual - h.score_calculado;
+            // ASCII puro: Helvetica do PDFKit não tem glifos de setas Unicode
+            if (delta > 2) { tendencia = `MELHOROU +${delta}`; corT = COR.verde; }
+            else if (delta < -2) { tendencia = `PIOROU ${delta}`; corT = COR.vermelho; }
+            else { tendencia = `ESTÁVEL (${delta >= 0 ? '+' : ''}${delta})`; corT = COR.cinza; }
+          }
+          doc.fillColor('#111827').fontSize(7.5).font('Helvetica').text(dataTxt, MARGEM, y, { width: 80 });
+          doc.fillColor(COR.cinza).fontSize(7).font('Helvetica').text(h.numero ? `#${h.numero}` : '-', MARGEM + 85, y, { width: 60 });
+          doc.fillColor('#111827').fontSize(7.5).font('Helvetica-Bold').text(scoreTxt, MARGEM + 150, y, { width: 50, align: 'right' });
+          doc.fillColor(COR.cinza).fontSize(7).font('Helvetica').text(classifTxt, MARGEM + 210, y, { width: 120 });
+          doc.fillColor(corT).fontSize(7).font('Helvetica-Bold').text(tendencia, MARGEM + 335, y, { width: 90 });
+          y += 12;
+        });
+        if (historicoLista.length > 5) {
+          y = verificarPagina(doc, y, 12);
+          doc.fillColor(COR.cinza).fontSize(6.5).font('Helvetica-Oblique').text(`(+${historicoLista.length - 5} consulta(s) anterior(es) não exibida(s))`, MARGEM, y, { width: LARGURA });
+          y += 10;
+        }
+        y += 6;
+      }
+
       // ════ DADOS CADASTRAIS — PJ ════
       if (pedido.alvo_tipo === 'PJ') {
         y = secao(doc, 'DADOS CADASTRAIS - RECEITA FEDERAL', y);
@@ -477,41 +588,107 @@ function gerarDossie(pedido, dadosDB) {
       y = secao(doc, 'PROCESSOS JUDICIAIS', y);
       const totalP = processos.total || 0;
       if (totalP === 0 && processos.escavador_falhou) {
-        // Escavador falhou, fallback Datajud tambem vazio -> nao e NADA CONSTA, e indisponibilidade
         doc.rect(MARGEM, y, LARGURA, 30).fill('#fef3c7');
         doc.fillColor('#92400e').fontSize(9).font('Helvetica-Bold').text('Consulta de processos indisponivel.', MARGEM + 8, y + 4);
-        doc.fillColor('#92400e').fontSize(7).font('Helvetica').text(`Escavador retornou ${processos.escavador_status_http || 'erro'}: ${processos.escavador_detalhes || 'falha na autenticacao/token'}. Datajud (TJGO/TRF1/STJ/TST) tambem vazio. Recomenda-se reexecutar a consulta apos corrigir o token do Escavador.`, MARGEM + 8, y + 16, { width: LARGURA - 16 });
+        doc.fillColor('#92400e').fontSize(7).font('Helvetica').text(`Escavador retornou ${processos.escavador_status_http || 'erro'}: ${processos.escavador_detalhes || 'falha na autenticação/token'}. Datajud (TJGO/TRF1/STJ/TST) também vazio. Recomenda-se reexecutar a consulta após corrigir o token do Escavador.`, MARGEM + 8, y + 16, { width: LARGURA - 16 });
         y += 40;
       } else if (totalP === 0) {
         doc.rect(MARGEM, y, LARGURA, 24).fill('#dcfce7');
         doc.fillColor('#14532d').fontSize(9).font('Helvetica').text('Nenhum processo encontrado nas bases consultadas.', MARGEM + 8, y + 6);
         y += 30;
       } else {
+        const lista = processos.processos || [];
+        const ativos = lista.filter(p => p.status === 'Ativo');
+        const inativos = lista.filter(p => p.status !== 'Ativo');
+
+        // ---------- RESUMO JUDICIAL EM LINGUAGEM NATURAL ----------
+        const resumoJudicial = construirResumoJudicial(lista, pedido.alvo_documento, pedido.alvo_nome);
+
+        // Cabeçalho com total e fonte
         doc.rect(MARGEM, y, LARGURA, 24).fill('#fef3c7');
         doc.fillColor('#92400e').fontSize(10).font('Helvetica-Bold').text(`${totalP} processo(s) encontrado(s)`, MARGEM + 8, y + 5);
         doc.fillColor(COR.cinza).fontSize(7).font('Helvetica').text(`Fonte: ${processos.fonte || 'Datajud CNJ'}`, MARGEM + LARGURA - 150, y + 8);
-        y += 30;
+        y += 28;
 
-        const ativos = (processos.processos || []).filter(p => p.status === 'Ativo');
-        const inativos = (processos.processos || []).filter(p => p.status !== 'Ativo');
         const excluidos = processos.excluidos_advogado || 0;
-        let resumo = `${ativos.length} ativo(s) | ${inativos.length} baixado(s)/inativo(s)`;
-        if (excluidos > 0) resumo += ` | ${excluidos} excluido(s) (como advogado)`;
-        doc.fillColor(COR.cinza).fontSize(6.5).font('Helvetica')
-          .text(resumo, MARGEM + 8, y - 16);
-        y += 4;
+        let resumoCount = `${ativos.length} ativo(s) | ${inativos.length} baixado(s)/inativo(s)`;
+        if (excluidos > 0) resumoCount += ` | ${excluidos} excluído(s) (como advogado)`;
+        doc.fillColor(COR.cinza).fontSize(7).font('Helvetica').text(resumoCount, MARGEM + 8, y);
+        y += 11;
 
-        (processos.processos || []).slice(0, 15).forEach((proc, i) => {
-          y = verificarPagina(doc, y, 16);
+        // Parágrafo de síntese
+        if (resumoJudicial) {
+          doc.font('Helvetica').fontSize(8);
+          const hRes = doc.heightOfString(resumoJudicial, { width: LARGURA - 16 });
+          y = verificarPagina(doc, y, hRes + 14);
+          doc.rect(MARGEM, y, LARGURA, hRes + 10).fill('#f9fafb').stroke(COR.borda);
+          doc.fillColor('#111827').fontSize(8).font('Helvetica').text(resumoJudicial, MARGEM + 8, y + 5, { width: LARGURA - 16 });
+          y += hRes + 14;
+        }
+
+        // ---------- TABELA RICA DE PROCESSOS ----------
+        // Cabeçalho da tabela
+        y = verificarPagina(doc, y, 18);
+        doc.rect(MARGEM, y, LARGURA, 14).fill(COR.azul);
+        doc.fillColor('#ffffff').fontSize(7).font('Helvetica-Bold');
+        doc.text('Número / Classe', MARGEM + 6, y + 4, { width: 200, lineBreak: false });
+        doc.text('Polo / Valor', MARGEM + 210, y + 4, { width: 170, lineBreak: false });
+        doc.text('Tribunal', MARGEM + 385, y + 4, { width: 60, lineBreak: false });
+        doc.text('Status', MARGEM + LARGURA - 50, y + 4, { width: 50, lineBreak: false, align: 'right' });
+        y += 16;
+
+        lista.slice(0, 15).forEach((proc, i) => {
+          // Calcular altura da linha (dinâmica conforme conteúdo)
+          const numeroTxt = proc.numero || 'Processo sem n. CNJ';
+          const classeTxt = [proc.classe, proc.assunto].filter(Boolean).join(' · ') || '-';
+          const poloAtivoDoAlvo = isAlvoNoPolo(proc.polo_ativo, pedido.alvo_documento, pedido.alvo_nome);
+          const poloPassivoDoAlvo = isAlvoNoPolo(proc.polo_passivo, pedido.alvo_documento, pedido.alvo_nome);
+          const papel = poloAtivoDoAlvo ? 'Autor' : poloPassivoDoAlvo ? 'Réu' : 'Parte';
+          const parteContra = poloAtivoDoAlvo
+            ? (proc.polo_passivo || 'outra parte')
+            : poloPassivoDoAlvo ? (proc.polo_ativo || 'outra parte')
+            : (proc.polo_ativo || proc.polo_passivo || '-');
+          const poloLabel = `${papel} vs ${truncar(parteContra, 40)}`;
+          const valorTxt = proc.valor_causa || '-';
+          const dataTxt = proc.data_inicio ? `Ajuiz: ${proc.data_inicio}` : '';
+          const ultMovTxt = proc.ultima_movimentacao ? `Últ. mov: ${proc.ultima_movimentacao}` : '';
+
+          // estimar altura: 3 linhas de 9 = ~28
+          const hLinha = 32;
+          y = verificarPagina(doc, y, hLinha);
+
           const corStatus = proc.status === 'Ativo' ? COR.vermelho : COR.verde;
-          doc.rect(MARGEM, y, 3, 14).fill(corStatus);
-          doc.fillColor(COR.azul).fontSize(6.5).font('Helvetica-Bold').text(proc.numero || 'S/N', MARGEM + 8, y + 2);
-          doc.fillColor(COR.cinza).font('Helvetica').fontSize(6)
-            .text(`${proc.tribunal || ''} | ${proc.data_inicio || 'N/D'}`, MARGEM + 170, y + 2);
-          doc.fillColor(corStatus).fontSize(6).font('Helvetica-Bold')
-            .text(proc.status === 'Ativo' ? 'ATIVO' : 'BAIXADO', MARGEM + LARGURA - 45, y + 2);
-          y += 16;
+          const fundo = i % 2 === 0 ? '#ffffff' : '#f9fafb';
+          doc.rect(MARGEM, y, LARGURA, hLinha).fill(fundo);
+          doc.rect(MARGEM, y, 3, hLinha).fill(corStatus);
+
+          // coluna 1: numero + classe/assunto
+          doc.fillColor(COR.azul).fontSize(7).font('Helvetica-Bold').text(numeroTxt, MARGEM + 8, y + 3, { width: 200, lineBreak: false });
+          doc.fillColor('#111827').fontSize(6.5).font('Helvetica').text(truncar(classeTxt, 60), MARGEM + 8, y + 13, { width: 200, lineBreak: false });
+          if (dataTxt || ultMovTxt) {
+            doc.fillColor(COR.cinza).fontSize(6).font('Helvetica').text([dataTxt, ultMovTxt].filter(Boolean).join(' | '), MARGEM + 8, y + 22, { width: 200, lineBreak: false });
+          }
+
+          // coluna 2: polo / valor
+          doc.fillColor('#111827').fontSize(6.5).font('Helvetica-Bold').text(truncar(poloLabel, 48), MARGEM + 210, y + 3, { width: 170, lineBreak: false });
+          if (valorTxt && valorTxt !== '-') {
+            doc.fillColor(COR.cinza).fontSize(6).font('Helvetica').text(`Valor causa: ${valorTxt}`, MARGEM + 210, y + 13, { width: 170, lineBreak: false });
+          }
+
+          // coluna 3: tribunal
+          doc.fillColor(COR.cinza).fontSize(6.5).font('Helvetica').text(proc.tribunal || '-', MARGEM + 385, y + 3, { width: 60, lineBreak: false });
+
+          // coluna 4: status
+          doc.fillColor(corStatus).fontSize(7).font('Helvetica-Bold').text(proc.status === 'Ativo' ? 'ATIVO' : 'BAIXADO', MARGEM + LARGURA - 50, y + 3, { width: 50, align: 'right', lineBreak: false });
+
+          y += hLinha + 1;
         });
+
+        if (lista.length > 15) {
+          y = verificarPagina(doc, y, 14);
+          doc.fillColor(COR.cinza).fontSize(7).font('Helvetica-Oblique').text(`(+${lista.length - 15} processo(s) adicional/is não exibido/s nesta tabela)`, MARGEM + 8, y);
+          y += 12;
+        }
       }
 
       if (processos.aviso) {
@@ -779,7 +956,15 @@ function gerarDossie(pedido, dadosDB) {
         .text('Documento gerado pelo sistema Rastreia. Nao substitui consulta juridica especializada. Recobro Recuperacao de Credito | Anapolis - GO', MARGEM, y, { align: 'center', width: LARGURA });
 
       doc.end();
-      stream.on('finish', () => resolve({ filename, filepath, url: `/relatorios/${filename}` }));
+      stream.on('finish', () => resolve({
+        filename,
+        filepath,
+        url: `/relatorios/${filename}`,
+        score: score && typeof score.valor !== 'undefined' ? {
+          valor: score.valor,
+          classificacao: score.classificacao || null
+        } : null
+      }));
       stream.on('error', reject);
     } catch (e) {
       console.error('[PDF] Erro ao gerar PDF:', e.message, e.stack);

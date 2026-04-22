@@ -329,10 +329,32 @@ router.post('/:id/concluir', autenticar, async (req, res) => {
       pedido.observacoes = observacoes;
     }
 
-    const { url } = await gerarDossie(pedido, dadosResult.rows);
+    // Histórico de scores deste CPF/CNPJ (para renderizar no PDF com tendência)
+    let historicoScores = [];
+    try {
+      const hist = await pool.query(
+        `SELECT numero, score_calculado, score_classificacao, criado_em, concluido_em
+         FROM pedidos
+         WHERE alvo_documento = $1 AND id != $2 AND score_calculado IS NOT NULL
+         ORDER BY criado_em DESC LIMIT 5`,
+        [pedido.alvo_documento, pedido.id]
+      );
+      historicoScores = hist.rows;
+    } catch (errHist) {
+      console.warn('[pedidos] Histórico de scores indisponível:', errHist.message);
+    }
+    const dadosComHistorico = [
+      ...dadosResult.rows,
+      { fonte: 'historico_scores', dados: { pedidos: historicoScores } }
+    ];
+
+    const resultPdf = await gerarDossie(pedido, dadosComHistorico);
+    const { url, score: scoreGerado } = resultPdf;
     await pool.query(
-      `UPDATE pedidos SET status = 'concluido', concluido_em = NOW(), relatorio_url = $1, atualizado_em = NOW() WHERE id = $2`,
-      [url, pedido.id]
+      `UPDATE pedidos SET status = 'concluido', concluido_em = NOW(), relatorio_url = $1,
+         score_calculado = $2, score_classificacao = $3, atualizado_em = NOW()
+       WHERE id = $4`,
+      [url, scoreGerado?.valor ?? null, scoreGerado?.classificacao ?? null, pedido.id]
     );
     await pool.query('INSERT INTO logs (pedido_id, usuario_id, acao) VALUES ($1, $2, $3)',
       [pedido.id, req.usuario.id, 'Relatório gerado e pedido concluído']);
