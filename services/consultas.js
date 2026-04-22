@@ -146,15 +146,31 @@ async function consultarCPF(cpf) {
           } else {
             dataNasc = '';
           }
-          // Formatar renda (aceita string BR '3.000,50' também)
+          // Formatar renda (aceita string BR '3.000,50' também) + sanity check
           const rendaRaw = r.rendaEstimada || r.renda || '';
           let rendaFormatada = '';
+          let rendaNumerica = null;
+          let rendaInconsistente = false;
+          let rendaMotivoInconsistencia = '';
           if (rendaRaw) {
             const rendaNum = typeof rendaRaw === 'number'
               ? rendaRaw
               : Number(String(rendaRaw).replace(/\./g, '').replace(',', '.'));
             if (!isNaN(rendaNum) && rendaNum > 0) {
+              rendaNumerica = rendaNum;
               rendaFormatada = `R$ ${rendaNum.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`;
+              // Sanity check: teto por CBO de baixa qualificação + cap absoluto
+              const cboStr = String(r.cbo || r.codigoCBO || '').toLowerCase();
+              const cboBaixaQualif = /motofret|mototaxi|bikeboy|entregad|auxiliar|ajudant|motorista de entrega|atendent|caixa|vigilant|porteir|doméstic|faxineir|zelador|aux\./i.test(cboStr);
+              // Cap geral: renda > R$ 100k/mês é flag (0,3% da população brasileira)
+              if (rendaNum > 100000) {
+                rendaInconsistente = true;
+                rendaMotivoInconsistencia = `Renda estimada (${rendaFormatada}) é improvável e não será usada no cálculo de score`;
+              } else if (cboBaixaQualif && rendaNum > 15000) {
+                // CBO de baixa qualificação com renda > R$ 15k = inconsistente
+                rendaInconsistente = true;
+                rendaMotivoInconsistencia = `Renda estimada (${rendaFormatada}) incompatível com CBO ${cboStr || 'informado'} - descartada do score`;
+              }
             }
           }
           // Normaliza arrays (DirectData às vezes retorna objeto único)
@@ -171,6 +187,9 @@ async function consultarCPF(cpf) {
             situacao_rf: r.situacaoCadastral || r.situacaoReceitaFederal || r.situacao || '',
             obito: r.possuiObito || r.obito || false,
             classe_social: r.classeSocial || '', renda_estimada: rendaFormatada,
+            renda_numerica: rendaNumerica,
+            renda_inconsistente: rendaInconsistente,
+            renda_motivo_inconsistencia: rendaMotivoInconsistencia,
             faixa_salarial: r.rendaFaixaSalarial || '',
             profissao: r.cbo || r.codigoCBO || '',
             signo: r.signo || '',

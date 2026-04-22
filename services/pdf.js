@@ -22,9 +22,12 @@ function formatarDoc(doc) {
 }
 
 function corScore(classificacao) {
-  if (classificacao === 'BAIXO RISCO') return COR.verde;
-  if (classificacao === 'RISCO MEDIO') return COR.laranja;
-  if (classificacao === 'INDISPONIVEL') return COR.cinza;
+  const c = (classificacao || '').toUpperCase();
+  if (c.includes('BAIXO RISCO')) return COR.verde;
+  if (c.includes('BAIXO-MODERADO')) return COR.verde;
+  if (c.includes('MODERADO')) return COR.laranja;
+  if (c.includes('MÉDIO') || c === 'RISCO MEDIO') return COR.laranja;
+  if (c.includes('INDISPON')) return COR.cinza;
   return COR.vermelho;
 }
 
@@ -231,6 +234,40 @@ function gerarDossie(pedido, dadosDB) {
         y += 4;
       }
 
+      // Como o score foi composto (transparência - art. 20 LGPD)
+      if (score.contribuicoes && score.contribuicoes.length > 0) {
+        y = verificarPagina(doc, y, 40);
+        y = secao(doc, 'COMO O SCORE FOI COMPOSTO', y);
+        doc.fillColor(COR.cinza).fontSize(7).font('Helvetica').text('Ponto de partida: 100 pontos. Cada dimensão ajusta o score conforme os dados encontrados.', MARGEM, y, { width: LARGURA });
+        y += 12;
+        // Cabeçalho da tabela
+        doc.fillColor('#111827').fontSize(7.5).font('Helvetica-Bold');
+        doc.text('Dimensão', MARGEM, y);
+        doc.text('Ajuste', MARGEM + 200, y, { width: 50, align: 'right' });
+        doc.text('Motivo', MARGEM + 260, y, { width: LARGURA - 260 });
+        y += 11;
+        doc.rect(MARGEM, y - 2, LARGURA, 0.5).fill(COR.borda);
+        score.contribuicoes.forEach(c => {
+          y = verificarPagina(doc, y, 14);
+          const cor = c.delta < 0 ? COR.vermelho : COR.verde;
+          const sinal = c.delta > 0 ? '+' : '';
+          doc.fillColor('#111827').fontSize(7.5).font('Helvetica').text(c.dimensao, MARGEM, y, { width: 195 });
+          doc.fillColor(cor).fontSize(7.5).font('Helvetica-Bold').text(`${sinal}${c.delta}`, MARGEM + 200, y, { width: 50, align: 'right' });
+          doc.fillColor(COR.cinza).fontSize(7).font('Helvetica').text(c.motivo, MARGEM + 260, y, { width: LARGURA - 260 });
+          y += 12;
+        });
+        // Linha de total
+        y = verificarPagina(doc, y, 14);
+        doc.rect(MARGEM, y, LARGURA, 0.5).fill(COR.borda); y += 3;
+        doc.fillColor('#111827').fontSize(8).font('Helvetica-Bold').text('Score final', MARGEM, y, { width: 195 });
+        doc.fillColor(corS).fontSize(8).font('Helvetica-Bold').text(`${score.score}/100`, MARGEM + 200, y, { width: 50, align: 'right' });
+        doc.fillColor(COR.cinza).fontSize(7).font('Helvetica').text(score.classificacao, MARGEM + 260, y, { width: LARGURA - 260 });
+        y += 14;
+        // Nota LGPD
+        doc.fillColor(COR.cinza).fontSize(6.5).font('Helvetica-Oblique').text('Decisão automatizada - art. 20 da LGPD garante direito a revisão. Entre em contato para auditoria do cálculo.', MARGEM, y, { width: LARGURA });
+        y += 14;
+      }
+
       // ════ DADOS CADASTRAIS — PJ ════
       if (pedido.alvo_tipo === 'PJ') {
         y = secao(doc, 'DADOS CADASTRAIS - RECEITA FEDERAL', y);
@@ -288,7 +325,11 @@ function gerarDossie(pedido, dadosDB) {
           }
           if (cadastral.profissao) { linha(doc, 'Profissao (CBO)', cadastral.profissao, y); y += 15; }
           if (cadastral.classe_social) { linha(doc, 'Classe Social', cadastral.classe_social, y); y += 15; }
-          if (cadastral.renda_estimada) { linha(doc, 'Renda Estimada', cadastral.renda_estimada, y); y += 15; }
+          if (cadastral.renda_estimada) {
+            const rotulo = cadastral.renda_inconsistente ? 'Renda Estimada (inconsistente)' : 'Renda Estimada';
+            const valor = cadastral.renda_inconsistente ? `${cadastral.renda_estimada} - descartada do score` : cadastral.renda_estimada;
+            linha(doc, rotulo, valor, y); y += 15;
+          }
 
           // Parentescos (inline)
           if (cadastral.parentescos?.length > 0) {
@@ -498,13 +539,19 @@ function gerarDossie(pedido, dadosDB) {
         y = secao(doc, 'PERFIL FINANCEIRO', y);
 
         // Calcular nivel de endividamento
-        const renda = parseFloat(String(cadastral.renda_estimada || '0').replace(/[^\d.,]/g, '').replace(',', '.')) || 0;
+        // Nao usa renda para capacidade se foi marcada como inconsistente
+        const renda = cadastral.renda_inconsistente
+          ? 0
+          : (parseFloat(String(cadastral.renda_estimada || '0').replace(/[^\d.,]/g, '').replace(',', '.')) || 0);
         const pendencias = Number(negativacoes.total_pendencias || 0);
         const scoreQ = Number(scoreCredito.score || 0);
         const totalProcessos = processos.total || 0;
 
         // Tabela de perfil
-        if (cadastral.renda_estimada) { linha(doc, 'Renda Estimada', cadastral.renda_estimada, y); y += 12; }
+        if (cadastral.renda_estimada) {
+          const r = cadastral.renda_inconsistente ? `${cadastral.renda_estimada} (inconsistente)` : cadastral.renda_estimada;
+          linha(doc, 'Renda Estimada', r, y); y += 12;
+        }
         if (cadastral.faixa_salarial) { linha(doc, 'Faixa Salarial', cadastral.faixa_salarial, y); y += 12; }
         if (perfilEco.nivel_socioeconomico) { linha(doc, 'Nivel Socioeconomico', perfilEco.nivel_socioeconomico, y); y += 12; }
         if (perfilEco.poder_aquisitivo) { linha(doc, 'Poder Aquisitivo', perfilEco.poder_aquisitivo, y); y += 12; }
