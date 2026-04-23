@@ -287,7 +287,7 @@ function gerarDossie(pedido, dadosDB) {
             y += 6;
           }
 
-          // ══ HISTÓRICO DE PROPRIETÁRIOS (DirectData ProprietariosPlaca) ══
+          // ══ HISTÓRICO DE PROPRIETÁRIOS (Credify HistoricoProprietario) ══
           // Mostra a cadeia de donos do veículo por exercício, indicando padrões
           // (rotatividade alta, troca recente de UF, etc).
           const pp = dados.proprietarios_placa || {};
@@ -355,7 +355,7 @@ function gerarDossie(pedido, dadosDB) {
             }
             y += 8;
           } else if (pp.fonte && !pp.disponivel && pp.erro
-                     && !/DIRECTD_TOKEN|Placa inválida|sucesso|success|sem dados|registro.*nao.*encontrado|nao.*consta|Sem hist/i.test(pp.erro)) {
+                     && !/DIRECTD_TOKEN|CREDIFY|Credify não configurada|Placa inválida|sucesso|success|sem dados|registro.*nao.*encontrado|nao.*consta|Sem hist/i.test(pp.erro)) {
             // Nota discreta se a API respondeu com erro real (404 persistente,
             // 401, timeout) - sucessos vazios ficam silenciosos.
             y = verificarPagina(doc, y, 14);

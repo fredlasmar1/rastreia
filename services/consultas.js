@@ -987,110 +987,165 @@ async function consultarVeiculoPorPlaca(placa) {
 
 // =============================================
 // Proprietários Placa — Histórico de donos por exercício
-// Endpoint DirectData (não documentado no cardápio V4.3 público,
-// mas disponível no painel). Retorna lista de proprietários com
-// ano de exercício, documento (CPF/CNPJ), UF de circulação e data
-// de pagamento do licenciamento.
+// Fornecedor: Credify (credifyapis.readme.io).
+// Docs:  POST https://api.credify.com.br/auth  (ClientID + ClientSecret)
+//        POST https://api.credify.com.br/historicoproprietario  (histórico completo via placa)
+//        POST https://api.credify.com.br/veiculoproprietarioplaca (proprietário atual + dados cadastrais)
+//
+// Autenticação: token JWT válido 24h, retornado no campo `Dados`,
+// enviado nas próximas chamadas no header `Authorization: Bearer {token}`.
+//
+// DirectData foi descartada como fonte aqui: o endpoint 'Proprietários Placa'
+// aparece no painel web mas NÃO está exposto no cardápio V4.3 e todas as
+// variações testadas retornaram 404. HistoricoVeiculos (por CPF/CNPJ) continua
+// via DirectData na função abaixo.
 // =============================================
+
+const CREDIFY_BASE = process.env.CREDIFY_BASE_URL || 'https://api.credify.com.br';
+let _credifyTokenCache = { token: null, expiraEm: 0 };
+
+async function _obterTokenCredify() {
+  // Reuso de token por 23h30min (margem de segurança sobre os 24h oficiais).
+  const agora = Date.now();
+  if (_credifyTokenCache.token && _credifyTokenCache.expiraEm > agora) {
+    return _credifyTokenCache.token;
+  }
+  if (!process.env.CREDIFY_CLIENT_ID || !process.env.CREDIFY_CLIENT_SECRET) {
+    const e = new Error('CREDIFY_CLIENT_ID / CREDIFY_CLIENT_SECRET não configurados');
+    e.codigo = 'credenciais_ausentes';
+    throw e;
+  }
+
+  // ClientSecret na doc oficial é integer, mas muitas implementações
+  // aceitam string. Enviamos como número quando possível e caímos para string.
+  const secretRaw = process.env.CREDIFY_CLIENT_SECRET;
+  const secretNum = Number(secretRaw);
+  const clientSecret = Number.isFinite(secretNum) && String(secretNum) === String(secretRaw)
+    ? secretNum
+    : secretRaw;
+
+  const resp = await axios.post(`${CREDIFY_BASE}/auth`, {
+    ClientID: process.env.CREDIFY_CLIENT_ID,
+    ClientSecret: clientSecret
+  }, {
+    headers: { accept: 'application/json', 'content-type': 'application/json' },
+    timeout: 30000
+  });
+
+  const sucesso = resp.data?.Success === true || resp.data?.success === true;
+  const token = resp.data?.Dados || resp.data?.dados || resp.data?.token || resp.data?.Token;
+  if (!sucesso || !token) {
+    const msg = resp.data?.Message || resp.data?.message || 'Autenticação Credify falhou';
+    const e = new Error(msg);
+    e.codigo = 'auth_falhou';
+    throw e;
+  }
+
+  // 23h30min de validade para refresh antecipado.
+  _credifyTokenCache = { token, expiraEm: agora + 23.5 * 3600 * 1000 };
+  return token;
+}
 
 async function consultarProprietariosPlaca(placa) {
   const placaLimpa = normalizarPlaca(placa);
   if (!validarPlaca(placaLimpa)) {
-    return { disponivel: false, erro: 'Placa inválida', placa: placaLimpa, fonte: 'DirectData ProprietariosPlaca' };
+    return { disponivel: false, erro: 'Placa inválida', placa: placaLimpa, fonte: 'Credify HistoricoProprietario' };
   }
-  if (!process.env.DIRECTD_TOKEN) {
-    return { disponivel: false, erro: 'DIRECTD_TOKEN não configurado', fonte: 'DirectData ProprietariosPlaca' };
-  }
-
-  // Tenta múltiplos paths conhecidos (DirectData não documenta publicamente
-  // a rota da tela 'Proprietários Placa'). Override único via env.
-  const override = process.env.DIRECTD_PROPRIETARIOS_URL;
-  const candidatos = override ? [override] : [
-    'https://apiv3.directd.com.br/api/ProprietariosPlaca',
-    'https://apiv3.directd.com.br/api/VeiculoProprietariosPlaca',
-    'https://apiv3.directd.com.br/api/HistoricoProprietarios',
-    'https://apiv3.directd.com.br/api/ProprietariosVeiculo'
-  ];
-
-  let resp = null;
-  let endpointUsado = null;
-  let ultimoErro = null;
-
-  for (const url of candidatos) {
-    try {
-      resp = await axios.get(url, {
-        params: { Placa: placaLimpa, Token: process.env.DIRECTD_TOKEN },
-        timeout: 45000
-      });
-      endpointUsado = url;
-      break;
-    } catch (e) {
-      ultimoErro = e;
-      const status = e.response?.status;
-      // 404 = path não existe, tenta próximo. 401/403/400 = path existe mas rejeitou.
-      if (status && status !== 404) {
-        resp = e.response; // mantém retorno para parsing de metaDados.mensagem
-        endpointUsado = url;
-        break;
-      }
-    }
-  }
-
-  if (!resp) {
-    const status = ultimoErro?.response?.status;
+  if (!process.env.CREDIFY_CLIENT_ID || !process.env.CREDIFY_CLIENT_SECRET) {
     return {
       disponivel: false,
-      erro: status ? `DirectData retornou HTTP ${status}` : 'DirectData indisponível',
-      detalhes: ultimoErro?.response?.data?.metaDados?.mensagem || ultimoErro?.message,
+      erro: 'Credify não configurada',
+      detalhes: 'Defina CREDIFY_CLIENT_ID e CREDIFY_CLIENT_SECRET nas variáveis de ambiente',
+      placa: placaLimpa,
+      fonte: 'Credify HistoricoProprietario'
+    };
+  }
+
+  let token;
+  try {
+    token = await _obterTokenCredify();
+  } catch (e) {
+    return {
+      disponivel: false,
+      erro: 'Falha ao autenticar na Credify',
+      detalhes: e.message,
+      placa: placaLimpa,
+      fonte: 'Credify HistoricoProprietario'
+    };
+  }
+
+  const idConsulta = String(Date.now()).slice(-10);
+  let resp;
+  try {
+    resp = await axios.post(`${CREDIFY_BASE}/historicoproprietario`, {
+      IdConsulta: idConsulta,
+      Placa: placaLimpa
+    }, {
+      headers: {
+        accept: 'application/json',
+        'content-type': 'application/json',
+        Authorization: `Bearer ${token}`
+      },
+      timeout: 45000
+    });
+  } catch (e) {
+    const status = e.response?.status;
+    const apiMsg = e.response?.data?.Message
+      || e.response?.data?.message
+      || e.response?.data?.RESPOSTA?.DESCRICAORETORNO
+      || e.message;
+    return {
+      disponivel: false,
+      erro: status ? `Credify retornou HTTP ${status}` : 'Credify indisponível',
+      detalhes: apiMsg,
       status_http: status || null,
       placa: placaLimpa,
-      fonte: 'DirectData ProprietariosPlaca'
+      fonte: 'Credify HistoricoProprietario'
     };
   }
 
   try {
-    const meta = resp.data?.metaDados || {};
-    const retorno = resp.data?.retorno || {};
-    const resultadoId = Number(meta.resultadoId);
+    // A Credify devolve o payload em UPPERCASE. Normalizamos para o shape
+    // estável consumido pelo PDF (idêntico ao que a DirectData devolvia).
+    const data = resp.data || {};
+    const consulta = data.CONSULTA || data.consulta || {};
+    const resposta = data.RESPOSTA || data.resposta || {};
+    const bloco = resposta.VEICULOPROPRIETARIOPLACA
+      || resposta.veiculoproprietarioplaca
+      || resposta.HISTORICOPROPRIETARIO
+      || {};
 
-    // Possíveis formatos de retorno — normaliza para array de proprietários.
-    let lista = [];
-    if (Array.isArray(retorno.proprietarios)) {
-      lista = retorno.proprietarios;
-    } else if (Array.isArray(retorno.listaProprietarios)) {
-      lista = retorno.listaProprietarios;
-    } else if (Array.isArray(retorno.historico)) {
-      lista = retorno.historico;
-    } else if (Array.isArray(retorno.historicoProprietarios)) {
-      lista = retorno.historicoProprietarios;
-    } else if (Array.isArray(retorno)) {
-      lista = retorno;
-    }
+    // Registros vêm como REGISTRO_1, REGISTRO_2, ... dentro do bloco.
+    const registros = Object.keys(bloco)
+      .filter(k => /^REGISTRO_\d+$/i.test(k))
+      .sort((a, b) => parseInt(a.split('_')[1], 10) - parseInt(b.split('_')[1], 10))
+      .map(k => bloco[k])
+      .filter(r => r && typeof r === 'object');
 
-    if ((resultadoId && resultadoId !== 1) || lista.length === 0) {
+    if (registros.length === 0) {
+      const codigo = resposta.CODIGO || resposta.codigo;
+      const descr = resposta.DESCRICAORETORNO || resposta.descricaoretorno;
       return {
         disponivel: false,
-        erro: meta.mensagem || meta.resultado || 'Sem histórico de proprietários disponível',
-        codigo_api: meta.resultadoId || null,
+        erro: descr || 'Sem histórico de proprietários disponível',
+        codigo_api: codigo || null,
         placa: placaLimpa,
-        tempo_ms: meta.tempoExecucaoMs,
-        fonte: 'DirectData ProprietariosPlaca'
+        fonte: 'Credify HistoricoProprietario'
       };
     }
 
-    // Normaliza cada proprietário para shape estável consumido pelo PDF.
-    const proprietarios = lista.map(p => {
-      const doc = String(p.documento || p.cpfCnpj || p.cpf || p.cnpj || '').replace(/\D/g, '');
+    const proprietarios = registros.map(r => {
+      const doc = String(r.DOCUMENTO || r.NUMERO_DOCUMENTO_PROPRIETARIO || r.documento || '').replace(/\D/g, '');
       const tipoDoc = doc.length === 14 ? 'CNPJ' : (doc.length === 11 ? 'CPF' : '');
-      const docFormatado = doc.length === 14 ? formatarCNPJ(doc) : (doc.length === 11 ? formatarCPF(doc) : (p.documento || ''));
+      const docFormatado = doc.length === 14 ? formatarCNPJ(doc) : (doc.length === 11 ? formatarCPF(doc) : (r.DOCUMENTO || ''));
       return {
-        documento: doc || String(p.documento || ''),
+        documento: doc || String(r.DOCUMENTO || ''),
         documento_formatado: docFormatado,
         tipo_documento: tipoDoc,
-        nome: p.nome || p.proprietario || p.nomeProprietario || '',
-        exercicio: String(p.exercicio || p.anoExercicio || p.ano || '').trim(),
-        data_pagamento: p.dataPagamento || p.dataDoPagamento || p.data_pagamento || '',
-        uf_circulacao: p.ufCirculacao || p.uf || p.estado || ''
+        nome: r.NOME_PROPRIETARIO || r.nome_proprietario || r.NOME || '',
+        exercicio: String(r.ANO_EXERCICIO || r.ano_exercicio || '').trim(),
+        data_pagamento: r.DATA_PROCESSAMENTO || r.data_processamento || '',
+        uf_circulacao: r.UF_DUT || r.uf_dut || ''
       };
     }).filter(p => p.documento || p.nome);
 
@@ -1101,8 +1156,9 @@ async function consultarProprietariosPlaca(placa) {
       return eb - ea;
     });
 
-    const chassi = retorno.chassi || retorno.veiculo?.chassi || '';
-    const renavam = retorno.renavam || retorno.veiculo?.renavam || '';
+    const primeiro = registros[0] || {};
+    const chassi = primeiro.CHASSI || bloco.CHASSI || '';
+    const renavam = primeiro.RENAVAM || bloco.RENAVAM || '';
 
     return {
       disponivel: true,
@@ -1111,23 +1167,18 @@ async function consultarProprietariosPlaca(placa) {
       renavam,
       total: proprietarios.length,
       proprietarios,
-      raw: retorno,
-      endpoint: endpointUsado,
-      fonte: 'DirectData ProprietariosPlaca',
+      raw: resposta,
+      id_consulta: consulta.IDCONSULTA || idConsulta,
+      fonte: 'Credify HistoricoProprietario',
       consultado_em: new Date().toISOString()
     };
   } catch (e) {
-    const status = e.response?.status;
-    const apiMsg = e.response?.data?.metaDados?.mensagem
-      || e.response?.data?.message
-      || e.message;
     return {
       disponivel: false,
-      erro: status ? `DirectData retornou HTTP ${status}` : 'DirectData indisponível',
-      detalhes: apiMsg,
-      status_http: status || null,
+      erro: 'Falha ao interpretar resposta Credify',
+      detalhes: e.message,
       placa: placaLimpa,
-      fonte: 'DirectData ProprietariosPlaca'
+      fonte: 'Credify HistoricoProprietario'
     };
   }
 }
