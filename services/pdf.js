@@ -354,8 +354,10 @@ function gerarDossie(pedido, dadosDB) {
               y += 12;
             }
             y += 8;
-          } else if (pp.fonte && !pp.disponivel && pp.erro && !/DIRECTD_TOKEN|Placa inválida/i.test(pp.erro)) {
-            // Nota discreta se a API respondeu mas sem histórico
+          } else if (pp.fonte && !pp.disponivel && pp.erro
+                     && !/DIRECTD_TOKEN|Placa inválida|sucesso|success|sem dados|registro.*nao.*encontrado|nao.*consta|Sem hist/i.test(pp.erro)) {
+            // Nota discreta se a API respondeu com erro real (404 persistente,
+            // 401, timeout) - sucessos vazios ficam silenciosos.
             y = verificarPagina(doc, y, 14);
             doc.fillColor(COR.cinza).fontSize(7).font('Helvetica-Oblique')
               .text(`Histórico de proprietários indisponível: ${pp.erro}`, MARGEM, y);
@@ -418,7 +420,8 @@ function gerarDossie(pedido, dadosDB) {
               y += 12;
             }
             y += 8;
-          } else if (hv.fonte && !hv.disponivel && hv.erro && !/DIRECTD_TOKEN|CPF\/CNPJ invalido|Nenhum veiculo/i.test(hv.erro)) {
+          } else if (hv.fonte && !hv.disponivel && hv.erro
+                     && !/DIRECTD_TOKEN|CPF\/CNPJ invalido|Nenhum veiculo|sucesso|success|sem dados|registro.*nao.*encontrado|nao.*consta/i.test(hv.erro)) {
             y = verificarPagina(doc, y, 14);
             doc.fillColor(COR.cinza).fontSize(7).font('Helvetica-Oblique')
               .text(`Patrimonio veicular do proprietario indisponivel: ${hv.erro}`, MARGEM, y);
@@ -480,20 +483,21 @@ function gerarDossie(pedido, dadosDB) {
             ];
             // Mapeamento texto bruto -> indicador já estruturado
             const mapeamentoIndicadores = [
-              { regex: /COMUNICA[CÇ]/i,                 tipo: 'COMUNICADO DE VENDA' },
-              { regex: /INTEN[CÇ][AAÃ]O.*VENDA/i,         tipo: 'COMUNICADO DE VENDA' },
+              // IMPORTANTE: regex permissivos para casar variacoes sem acento/plural
+              { regex: /COMUNIC/i,                       tipo: 'COMUNICADO DE VENDA' },
+              { regex: /INTEN.{0,3}O.*VENDA/i,           tipo: 'COMUNICADO DE VENDA' },
               { regex: /ROUBO|FURTO/i,                   tipo: 'ROUBO/FURTO' },
-              { regex: /RENAJUD|JUDICIAL/i,              tipo: 'RESTRICÃO JUDICIAL (RENAJUD)' },
-              { regex: /RECEITA\s*FEDERAL|RFB/i,         tipo: 'RECEITA FEDERAL' },
-              { regex: /LEIL[AAÃ]O/i,                    tipo: 'LEILÃO' },
-              { regex: /PEND[EEÊ]NCIA.*EMISS/i,          tipo: 'PENDÊNCIA DE EMISSÃO' },
+              { regex: /RENAJUD|JUDICIAL/i,              tipo: 'RESTRIÇÃO JUDICIAL (RENAJUD)' },
+              { regex: /RECEITA\s*FEDERAL|\bRFB\b/i,     tipo: 'RECEITA FEDERAL' },
+              { regex: /LEIL.{0,2}O/i,                   tipo: 'LEILÃO' },
+              { regex: /PEND.{0,3}NCIA.*EMISS/i,         tipo: 'PENDÊNCIA DE EMISSÃO' },
               { regex: /RECALL/i,                        tipo: 'RECALL' },
               { regex: /ALARME/i,                        tipo: 'ALARME REGISTRADO' },
-              { regex: /MULTA|INFRA[CÇ][AAÃ]O|RENAINF/i,  tipo: 'MULTAS (RENAINF)' }
+              { regex: /MULTA|INFRA.{0,3}O|RENAINF/i,    tipo: 'MULTAS (RENAINF)' }
             ];
             // Renomeia tipos amigáveis para restrições reais não mapeadas acima
             const rotuloLivre = (txt) => {
-              if (/ALIENA[CÇ][AAÃ]O\s+FIDUCI/i.test(txt)) return 'ALIENAÇÃO FIDUCIÁRIA';
+              if (/ALIENA.{0,3}O\s+FIDUCI/i.test(txt)) return 'ALIENAÇÃO FIDUCIÁRIA';
               if (/GRAVAME/i.test(txt)) return 'GRAVAME';
               if (/ARREND/i.test(txt)) return 'ARRENDAMENTO';
               if (/BLOQUEIO/i.test(txt)) return 'BLOQUEIO';
