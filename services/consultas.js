@@ -1,4 +1,5 @@
 const axios = require('axios');
+const monitorApi = require('./monitorApi');
 
 // ─────────────────────────────────────────────
 // UTILITÁRIOS
@@ -39,6 +40,7 @@ function logarFalhaAPI(origem, status, mensagem) {
     ? '[!!! FALHA API]'
     : '[FALHA API]';
   console.error(`${prefixo} ${origem} | ${c.etiqueta} | status=${status || '-'} | msg=${c.mensagem}`);
+  try { monitorApi.registrarFalha(origem, c); } catch (_) {}
   return c;
 }
 
