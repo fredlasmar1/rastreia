@@ -8,6 +8,40 @@ function limparDoc(doc) { return doc.replace(/\D/g, ''); }
 function formatarCPF(cpf) { return cpf.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, '$1.$2.$3-$4'); }
 function formatarCNPJ(cnpj) { return cnpj.replace(/(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})/, '$1.$2.$3/$4-$5'); }
 
+// Classifica erros HTTP/mensagens de API externa em categorias estáveis.
+// Retorna { categoria, etiqueta, mensagem } onde categoria é uma das:
+// 'saldo' | 'token' | 'quota' | 'cpf_invalido' | 'sem_dados' | 'timeout' | 'servidor' | 'rede' | 'outro'
+function classificarErroAPI(status, mensagem) {
+  const m = String(mensagem || '').toLowerCase();
+  if (status === 402 || /saldo.*(insuficient|zero|negativ)|sem\s+saldo|cr[eé]dito.*insuficient|recarg|pagamento\s+pendent/i.test(m))
+    return { categoria: 'saldo', etiqueta: 'SALDO INSUFICIENTE', mensagem: mensagem || 'Saldo insuficiente na API externa' };
+  if (status === 401 || status === 403 || /token.*(invalid|expirad|revogad)|unauthoriz|forbidden|chave.*invalid|api[_ ]?key.*invalid/i.test(m))
+    return { categoria: 'token', etiqueta: 'TOKEN INVÁLIDO/EXPIRADO', mensagem: mensagem || 'Token de autenticação recusado' };
+  if (status === 429 || /rate.?limit|too.?many.?requests|limite.*(atingid|diário|mensal|excedid)/i.test(m))
+    return { categoria: 'quota', etiqueta: 'LIMITE/QUOTA ATINGIDO', mensagem: mensagem || 'Limite de requisições atingido' };
+  if (/cpf.*(invalid|incorret)|documento.*invalid|placa.*invalid|cnpj.*invalid/i.test(m))
+    return { categoria: 'doc_invalido', etiqueta: 'DOCUMENTO INVÁLIDO', mensagem: mensagem || 'Documento rejeitado pela API' };
+  if (status === 404 || /n[aã]o.?encontrad|nao.?localizad|sem.?registr|sem.?dados|sem.?hist[oó]ric/i.test(m))
+    return { categoria: 'sem_dados', etiqueta: 'SEM DADOS', mensagem: mensagem || 'API respondeu sem registros' };
+  if (/timeout|ETIMEDOUT|ECONNABORTED/i.test(m))
+    return { categoria: 'timeout', etiqueta: 'TIMEOUT', mensagem: mensagem || 'API externa não respondeu a tempo' };
+  if (typeof status === 'number' && status >= 500)
+    return { categoria: 'servidor', etiqueta: 'ERRO NO SERVIDOR DA API', mensagem: mensagem || `HTTP ${status}` };
+  if (/ECONNREFUSED|ENOTFOUND|ECONNRESET|EAI_AGAIN|network/i.test(m))
+    return { categoria: 'rede', etiqueta: 'FALHA DE REDE', mensagem: mensagem || 'Erro de rede ao alcançar a API' };
+  return { categoria: 'outro', etiqueta: 'ERRO', mensagem: mensagem || `HTTP ${status || '?'}` };
+}
+
+// Log padrão destacado para falhas de APIs pagas (aparece claro no Railway)
+function logarFalhaAPI(origem, status, mensagem) {
+  const c = classificarErroAPI(status, mensagem);
+  const prefixo = c.categoria === 'saldo' || c.categoria === 'token' || c.categoria === 'quota'
+    ? '[!!! FALHA API]'
+    : '[FALHA API]';
+  console.error(`${prefixo} ${origem} | ${c.etiqueta} | status=${status || '-'} | msg=${c.mensagem}`);
+  return c;
+}
+
 // ─────────────────────────────────────────────
 // 1. CNPJ — CNPJá (grátis) com fallback CNPJ.ws
 // ─────────────────────────────────────────────
@@ -221,7 +255,7 @@ async function consultarCPF(cpf) {
         || e.response?.data?.mensagem
         || e.response?.data?.message
         || e.message;
-      console.error(`[Direct Data PF] Erro ${status || ''}: ${msg}`);
+      var _erroDirectd = logarFalhaAPI('Direct Data PF', status, msg);
     }
   }
 
@@ -253,15 +287,37 @@ async function consultarCPF(cpf) {
         };
       }
     } catch (e) {
-      console.error(`[CPF.CNPJ] Erro: ${e.response?.status || e.message}`);
+      var _erroCpfCnpj = logarFalhaAPI('CPF.CNPJ', e.response?.status, e.response?.data?.message || e.message);
     }
   }
 
-  // Nenhuma API disponível ou todas falharam
+  // Nenhuma API disponível ou todas falharam — monta aviso específico com base nas falhas
+  const falhaPrincipal = (typeof _erroDirectd !== 'undefined' && _erroDirectd)
+    || (typeof _erroCpfCnpj !== 'undefined' && _erroCpfCnpj)
+    || null;
+  let aviso = 'Nenhuma API de CPF retornou dados.';
+  let instrucao = 'Verifique DIRECTD_TOKEN ou CPFCNPJ_API_KEY';
+  if (falhaPrincipal) {
+    if (falhaPrincipal.categoria === 'saldo') {
+      aviso = 'Consulta bloqueada por saldo insuficiente no provedor de dados cadastrais.';
+      instrucao = 'Recarregar saldo da DirectData em app.directd.com.br para restabelecer o dossiê completo.';
+    } else if (falhaPrincipal.categoria === 'token') {
+      aviso = 'Provedor de dados cadastrais recusou o token de autenticação.';
+      instrucao = 'Atualizar DIRECTD_TOKEN no Railway (token pode ter sido revogado ou expirou).';
+    } else if (falhaPrincipal.categoria === 'quota') {
+      aviso = 'Limite de requisições do provedor de dados cadastrais foi atingido.';
+      instrucao = 'Aguardar reset da quota ou fazer upgrade do plano na DirectData.';
+    } else if (falhaPrincipal.categoria === 'timeout' || falhaPrincipal.categoria === 'rede' || falhaPrincipal.categoria === 'servidor') {
+      aviso = 'Provedor de dados cadastrais está temporariamente indisponível.';
+      instrucao = 'Reexecutar a consulta em alguns minutos.';
+    }
+  }
   return {
     cpf: doc, cpf_formatado: formatarCPF(doc),
-    aviso: 'Nenhuma API de CPF retornou dados.',
-    instrucao: 'Verifique DIRECTD_TOKEN ou CPFCNPJ_API_KEY',
+    aviso,
+    instrucao,
+    falha_categoria: falhaPrincipal?.categoria || 'indisponivel',
+    falha_detalhes: falhaPrincipal?.mensagem || null,
     fonte: 'Indisponivel', consultado_em: new Date().toISOString()
   };
 }
@@ -558,8 +614,8 @@ async function consultarScore(documento, tipo) {
       || e.response?.data?.mensagem
       || e.response?.data?.message
       || e.message;
-    console.error(`[Score] Erro ${status || ''}: ${msg}`);
-    return { disponivel: false, erro: status || e.message, detalhes: msg, fonte: 'Direct Data Score' };
+    const c = logarFalhaAPI('Score', status, msg);
+    return { disponivel: false, erro: status || e.message, detalhes: msg, falha_categoria: c.categoria, fonte: 'Direct Data Score' };
   }
 }
 
@@ -617,8 +673,8 @@ async function consultarNegativacoes(documento) {
       || e.response?.data?.mensagem
       || e.response?.data?.message
       || e.message;
-    console.error(`[Negativacoes] Erro ${status || ''}: ${msg}`);
-    return { disponivel: false, erro: status || e.message, detalhes: msg, fonte: 'Direct Data Negativacoes' };
+    const c = logarFalhaAPI('Negativacoes', status, msg);
+    return { disponivel: false, erro: status || e.message, detalhes: msg, falha_categoria: c.categoria, fonte: 'Direct Data Negativacoes' };
   }
 }
 
@@ -654,8 +710,8 @@ async function consultarProtestos(documento) {
       || e.response?.data?.mensagem
       || e.response?.data?.message
       || e.message;
-    console.error(`[Protestos] Erro ${status || ''}: ${msg}`);
-    return { disponivel: false, erro: status || e.message, detalhes: msg, fonte: 'Direct Data Protestos' };
+    const c = logarFalhaAPI('Protestos', status, msg);
+    return { disponivel: false, erro: status || e.message, detalhes: msg, falha_categoria: c.categoria, fonte: 'Direct Data Protestos' };
   }
 }
 
@@ -690,7 +746,7 @@ async function consultarPerfilEconomico(cpf) {
       || e.response?.data?.mensagem
       || e.response?.data?.message
       || e.message;
-    console.error(`[NivelSocio] Erro ${status || ''}: ${msg}`);
+    logarFalhaAPI('NivelSocio', status, msg);
     return null;
   }
 }
@@ -733,8 +789,8 @@ async function consultarVinculos(documento) {
       || e.response?.data?.mensagem
       || e.response?.data?.message
       || e.message;
-    console.error(`[Vinculos] Erro ${status || ''}: ${msg}`);
-    return { disponivel: false, erro: status || e.message, detalhes: msg, fonte: 'Direct Data Vinculos' };
+    const c = logarFalhaAPI('Vinculos', status, msg);
+    return { disponivel: false, erro: status || e.message, detalhes: msg, falha_categoria: c.categoria, fonte: 'Direct Data Vinculos' };
   }
 }
 
