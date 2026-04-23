@@ -198,6 +198,7 @@ INSERT INTO api_custos (chave, rotulo, valor_brl, fonte, confianca) VALUES
   ('directd_vinculos',       'DirectData — Vinculos Societarios',         1.8400, 'Cardapio DirectData V4.3 (Cadastral)',                  'oficial'),
   ('directd_veiculos',       'DirectData — Consulta Veicular (placa)',    5.4000, 'Cardapio DirectData V4.3 (Veicular)',                   'oficial'),
   ('directd_proprietarios_placa','DirectData — Proprietarios Placa (historico)', 0.3600, 'DirectData painel (nao listado no cardapio publico V4.3)', 'estimado'),
+  ('directd_historico_veiculos','DirectData — Historico de Veiculos (PF/PJ)', 0.3600, 'Cardapio DirectData V4.3 (Veicular)',                  'oficial'),
   ('directd_protestos',      'DirectData — Protestos Nacional',           0.7200, 'Cardapio DirectData V4.3 (Credito)',                    'oficial'),
   ('directd_obito',          'DirectData — Obito (PF)',                   0.3600, 'Cardapio DirectData V4.3 (Cadastral)',                  'oficial'),
   ('directd_beneficiario_final','DirectData — Beneficiario Final (UBO)',  1.4400, 'Cardapio DirectData V4.3 (Societario)',                 'oficial'),

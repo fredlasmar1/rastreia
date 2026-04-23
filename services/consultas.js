@@ -1133,6 +1133,90 @@ async function consultarProprietariosPlaca(placa) {
 }
 
 // =============================================
+// HISTORICO DE VEICULOS (DirectData) - PF/PJ
+// Retorna TODOS os veiculos vinculados a um CPF ou CNPJ.
+// Endpoint publico documentado no cardapio V4.3 (R$ 0,36).
+// =============================================
+async function consultarHistoricoVeiculos(cpfCnpj) {
+  const doc = String(cpfCnpj || '').replace(/\D/g, '');
+  if (!doc || (doc.length !== 11 && doc.length !== 14)) {
+    return { disponivel: false, erro: 'CPF/CNPJ invalido', fonte: 'DirectData HistoricoVeiculos' };
+  }
+  if (!process.env.DIRECTD_TOKEN) {
+    return { disponivel: false, erro: 'DIRECTD_TOKEN nao configurado', fonte: 'DirectData HistoricoVeiculos' };
+  }
+
+  const endpoint = process.env.DIRECTD_HISTORICO_VEICULOS_URL
+    || 'https://apiv3.directd.com.br/api/HistoricoVeiculos';
+
+  const params = { Token: process.env.DIRECTD_TOKEN };
+  if (doc.length === 14) params.Cnpj = doc; else params.Cpf = doc;
+
+  try {
+    const resp = await axios.get(endpoint, { params, timeout: 45000 });
+    const meta = resp.data?.metaDados || {};
+    const retorno = resp.data?.retorno || {};
+    const resultadoId = Number(meta.resultadoId);
+
+    const listaBruta = Array.isArray(retorno.veiculos) ? retorno.veiculos
+      : Array.isArray(retorno.listaVeiculos) ? retorno.listaVeiculos
+      : [];
+
+    if ((resultadoId && resultadoId !== 1) || listaBruta.length === 0) {
+      return {
+        disponivel: false,
+        erro: meta.mensagem || meta.resultado || 'Nenhum veiculo vinculado encontrado',
+        codigo_api: meta.resultadoId || null,
+        documento: doc,
+        tempo_ms: meta.tempoExecucaoMs,
+        fonte: 'DirectData HistoricoVeiculos'
+      };
+    }
+
+    const veiculos = listaBruta.map(v => ({
+      placa: (v.placa || '').toUpperCase().trim(),
+      veiculo: v.veiculo || '',
+      marca: v.marca || '',
+      modelo: v.modelo || '',
+      renavam: String(v.renavam || '').trim(),
+      chassi: String(v.chassi || '').trim(),
+      data_aquisicao: v.dataAquisicao || v.data_aquisicao || ''
+    })).filter(v => v.placa || v.chassi || v.renavam);
+
+    // Ordena por data de aquisicao (mais recente primeiro), placas sem data no fim.
+    veiculos.sort((a, b) => {
+      const parse = (s) => {
+        const m = String(s).match(/(\d{2})\/(\d{2})\/(\d{4})/);
+        return m ? new Date(`${m[3]}-${m[2]}-${m[1]}`).getTime() : 0;
+      };
+      return parse(b.data_aquisicao) - parse(a.data_aquisicao);
+    });
+
+    return {
+      disponivel: true,
+      documento: doc,
+      proprietario: retorno.proprietario || '',
+      total: veiculos.length,
+      veiculos,
+      enderecos: Array.isArray(retorno.enderecos) ? retorno.enderecos : [],
+      raw: retorno,
+      fonte: 'DirectData HistoricoVeiculos',
+      consultado_em: new Date().toISOString()
+    };
+  } catch (e) {
+    const status = e.response?.status;
+    return {
+      disponivel: false,
+      erro: status ? `DirectData retornou HTTP ${status}` : 'DirectData indisponivel',
+      detalhes: e.response?.data?.metaDados?.mensagem || e.message,
+      status_http: status || null,
+      documento: doc,
+      fonte: 'DirectData HistoricoVeiculos'
+    };
+  }
+}
+
+// =============================================
 // ORQUESTRADOR — executa tudo em paralelo
 // =============================================
 
@@ -1140,13 +1224,28 @@ async function executarConsultaCompleta(pedido) {
   const { alvo_documento, alvo_tipo, alvo_nome, tipo, alvo_placa } = pedido;
 
   // Produto standalone: Consulta Veicular
-  // Chamadas em paralelo para enriquecer com histórico de proprietários
+  // Chamadas em paralelo para enriquecer com historico de proprietarios.
+  // Se o veiculo atual tiver CPF/CNPJ do proprietario, consulta tambem o
+  // patrimonio veicular desse dono via HistoricoVeiculos.
   if (tipo === 'consulta_veicular') {
     const [veiculo_placa, proprietarios_placa] = await Promise.all([
       consultarVeiculoPorPlaca(alvo_placa),
       consultarProprietariosPlaca(alvo_placa)
     ]);
-    return { veiculo_placa, proprietarios_placa };
+
+    // Extrai documento do proprietario atual para nova chamada.
+    // consultarVeiculoPorPlaca expoe `proprietario_documento` no root.
+    const docDono = String(
+      veiculo_placa?.proprietario_documento
+      || veiculo_placa?.veiculo?.documento
+      || ''
+    ).replace(/\D/g, '');
+    let historico_veiculos_proprietario = null;
+    if (docDono && (docDono.length === 11 || docDono.length === 14)) {
+      historico_veiculos_proprietario = await consultarHistoricoVeiculos(docDono);
+    }
+
+    return { veiculo_placa, proprietarios_placa, historico_veiculos_proprietario };
   }
 
   // Consultas comuns a todos os produtos
@@ -1213,7 +1312,7 @@ module.exports = {
   consultarSerasa, consultarScore, consultarNegativacoes, consultarProtestos,
   consultarPerfilEconomico, consultarVinculos, consultarObito,
   consultarONR, consultarMatricula, consultarVeiculos,
-  consultarVeiculoPorPlaca, consultarProprietariosPlaca,
+  consultarVeiculoPorPlaca, consultarProprietariosPlaca, consultarHistoricoVeiculos,
   validarPlaca, normalizarPlaca,
   executarConsultaCompleta
 };

@@ -362,6 +362,69 @@ function gerarDossie(pedido, dadosDB) {
             y += 14;
           }
 
+          // ══ PATRIMONIO VEICULAR DO PROPRIETARIO ATUAL (DirectData HistoricoVeiculos) ══
+          // Mostra TODOS os veiculos vinculados ao CPF/CNPJ do dono atual.
+          // Util para due diligence / analise patrimonial em compra e venda.
+          const hv = dados.historico_veiculos_proprietario || {};
+          if (hv.disponivel && Array.isArray(hv.veiculos) && hv.veiculos.length > 0) {
+            y = secao(doc, 'PATRIMONIO VEICULAR DO PROPRIETARIO', y);
+
+            const listaHV = hv.veiculos.slice(0, 15);
+            const ocultoHV = hv.veiculos.length > 15 ? hv.veiculos.length - 15 : 0;
+
+            // Caixa de contexto com totalizador
+            y = verificarPagina(doc, y, 20);
+            doc.rect(MARGEM, y, LARGURA, 16).fill('#eff6ff');
+            const nomeDono = hv.proprietario || v.proprietario || 'Proprietario';
+            doc.fillColor('#1e40af').fontSize(8).font('Helvetica-Bold')
+              .text(`${hv.total} veiculo(s) vinculado(s) a ${truncar(nomeDono, 55)}`, MARGEM + 8, y + 4, { width: LARGURA - 16, lineBreak: false });
+            y += 20;
+
+            // Cabecalho
+            const colHV = {
+              placa: MARGEM + 6,
+              veiculo: MARGEM + 68,
+              renavam: MARGEM + 320,
+              chassi: MARGEM + 400,
+              data: MARGEM + 490
+            };
+            y = verificarPagina(doc, y, 16 + listaHV.length * 14);
+            doc.rect(MARGEM, y, LARGURA, 14).fill(COR.azul);
+            doc.fillColor('#ffffff').fontSize(7.5).font('Helvetica-Bold');
+            doc.text('PLACA',    colHV.placa,   y + 4, { width: 58,  lineBreak: false });
+            doc.text('VEICULO',  colHV.veiculo, y + 4, { width: 248, lineBreak: false });
+            doc.text('RENAVAM', colHV.renavam, y + 4, { width: 76,  lineBreak: false });
+            doc.text('CHASSI',   colHV.chassi,  y + 4, { width: 86,  lineBreak: false });
+            doc.text('AQUIS.',   colHV.data,    y + 4, { width: 55,  lineBreak: false });
+            y += 14;
+
+            listaHV.forEach((veic, i) => {
+              y = verificarPagina(doc, y, 14);
+              doc.rect(MARGEM, y, LARGURA, 13).fill(i % 2 === 0 ? '#ffffff' : '#f9fafb');
+              doc.fillColor('#111827').fontSize(7.5).font('Helvetica');
+              const descr = veic.veiculo || [veic.marca, veic.modelo].filter(Boolean).join(' ') || '-';
+              doc.font('Helvetica-Bold').text(veic.placa || '-', colHV.placa, y + 3, { width: 58, lineBreak: false });
+              doc.font('Helvetica').text(truncar(descr, 46), colHV.veiculo, y + 3, { width: 248, lineBreak: false });
+              doc.text(veic.renavam || '-', colHV.renavam, y + 3, { width: 76, lineBreak: false });
+              doc.text(truncar(veic.chassi || '-', 16), colHV.chassi, y + 3, { width: 86, lineBreak: false });
+              doc.text(veic.data_aquisicao || '-', colHV.data, y + 3, { width: 55, lineBreak: false });
+              y += 13;
+            });
+
+            if (ocultoHV > 0) {
+              y = verificarPagina(doc, y, 14);
+              doc.fillColor(COR.cinza).fontSize(7).font('Helvetica-Oblique')
+                .text(`+${ocultoHV} veiculo(s) adicional(is) nao exibidos`, MARGEM + 6, y + 2);
+              y += 12;
+            }
+            y += 8;
+          } else if (hv.fonte && !hv.disponivel && hv.erro && !/DIRECTD_TOKEN|CPF\/CNPJ invalido|Nenhum veiculo/i.test(hv.erro)) {
+            y = verificarPagina(doc, y, 14);
+            doc.fillColor(COR.cinza).fontSize(7).font('Helvetica-Oblique')
+              .text(`Patrimonio veicular do proprietario indisponivel: ${hv.erro}`, MARGEM, y);
+            y += 14;
+          }
+
           y = secao(doc, 'SITUAÇÃO E RESTRIÇÕES', y);
           y = linha(doc, 'Situação', v.situacao || 'Sem informação', y, 13);
 
