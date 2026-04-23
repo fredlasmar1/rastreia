@@ -406,15 +406,67 @@ function gerarDossie(pedido, dadosDB) {
           });
           // Restrições textuais livres (vindas em v.restricoes como strings)
           if (Array.isArray(v.restricoes)) {
+            // Padrões que indicam AUSENCIA de restrição (ignorar)
+            const padroesVazios = [
+              /^\s*SEM\s+RESTRI/i,
+              /^\s*NADA\s+CONSTA/i,
+              /^\s*N[AA\u00c3]O\s+CONSTA/i,
+              /^\s*N[AA\u00c3]O\s+H[AA\u00c1]/i,
+              /^\s*NENHUMA\s+RESTRI/i,
+              /^\s*LIVRE/i
+            ];
+            // Mapeamento texto bruto -> indicador já estruturado
+            const mapeamentoIndicadores = [
+              { regex: /COMUNICA[CÇ]/i,                 tipo: 'COMUNICADO DE VENDA' },
+              { regex: /INTEN[CÇ][AAÃ]O.*VENDA/i,         tipo: 'COMUNICADO DE VENDA' },
+              { regex: /ROUBO|FURTO/i,                   tipo: 'ROUBO/FURTO' },
+              { regex: /RENAJUD|JUDICIAL/i,              tipo: 'RESTRICÃO JUDICIAL (RENAJUD)' },
+              { regex: /RECEITA\s*FEDERAL|RFB/i,         tipo: 'RECEITA FEDERAL' },
+              { regex: /LEIL[AAÃ]O/i,                    tipo: 'LEILÃO' },
+              { regex: /PEND[EEÊ]NCIA.*EMISS/i,          tipo: 'PENDÊNCIA DE EMISSÃO' },
+              { regex: /RECALL/i,                        tipo: 'RECALL' },
+              { regex: /ALARME/i,                        tipo: 'ALARME REGISTRADO' },
+              { regex: /MULTA|INFRA[CÇ][AAÃ]O|RENAINF/i,  tipo: 'MULTAS (RENAINF)' }
+            ];
+            // Renomeia tipos amigáveis para restrições reais não mapeadas acima
+            const rotuloLivre = (txt) => {
+              if (/ALIENA[CÇ][AAÃ]O\s+FIDUCI/i.test(txt)) return 'ALIENAÇÃO FIDUCIÁRIA';
+              if (/GRAVAME/i.test(txt)) return 'GRAVAME';
+              if (/ARREND/i.test(txt)) return 'ARRENDAMENTO';
+              if (/BLOQUEIO/i.test(txt)) return 'BLOQUEIO';
+              if (/APREENS/i.test(txt)) return 'APREENSÃO';
+              if (/INTERVENC/i.test(txt)) return 'INTERVENÇÃO';
+              if (/RESTRIC/i.test(txt) || /RESTRI[CÇ][AAÃ]O/i.test(txt)) return 'RESTRIÇÃO ADMINISTRATIVA';
+              return 'OUTRA RESTRIÇÃO';
+            };
+
             v.restricoes.forEach(r => {
               if (!r) return;
               const txt = String(r).trim();
               if (!txt) return;
-              // Evita duplicar indicadores já mapeados (heurística simples)
-              const jaCapturado = restricoesEstruturadas.some(x => txt.toUpperCase().includes(x.tipo));
-              if (!jaCapturado) {
+              // Filtra textos que significam "sem restrição"
+              if (padroesVazios.some(re => re.test(txt))) return;
+
+              // Dedup por indicador canonico
+              const indicadorEquiv = mapeamentoIndicadores.find(m => m.regex.test(txt));
+              if (indicadorEquiv) {
+                const jaTem = restricoesEstruturadas.some(x => x.tipo === indicadorEquiv.tipo);
+                if (jaTem) return;
                 restricoesEstruturadas.push({
-                  tipo: 'OUTRA RESTRIÇÃO', severidade: 'atencao',
+                  tipo: indicadorEquiv.tipo,
+                  severidade: indicadorEquiv.tipo === 'ROUBO/FURTO' ? 'critico' : 'atencao',
+                  texto: txt
+                });
+                return;
+              }
+
+              const tipoLivre = rotuloLivre(txt);
+              // Dedup exato de descrição+tipo
+              const duplicada = restricoesEstruturadas.some(x => x.tipo === tipoLivre && (x.texto || '').toUpperCase() === txt.toUpperCase());
+              if (!duplicada) {
+                restricoesEstruturadas.push({
+                  tipo: tipoLivre,
+                  severidade: tipoLivre === 'ALIENAÇÃO FIDUCIÁRIA' || tipoLivre === 'GRAVAME' || tipoLivre === 'BLOQUEIO' || tipoLivre === 'APREENSÃO' ? 'atencao' : 'observar',
                   texto: txt
                 });
               }

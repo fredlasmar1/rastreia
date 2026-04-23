@@ -1002,17 +1002,53 @@ async function consultarProprietariosPlaca(placa) {
     return { disponivel: false, erro: 'DIRECTD_TOKEN não configurado', fonte: 'DirectData ProprietariosPlaca' };
   }
 
-  // Permite configurar endpoint via env se DirectData expor outro path.
-  // Default: /api/ProprietariosVeiculo (padrão de nomenclatura observado).
-  const endpoint = process.env.DIRECTD_PROPRIETARIOS_URL
-    || 'https://apiv3.directd.com.br/api/ProprietariosVeiculo';
+  // Tenta múltiplos paths conhecidos (DirectData não documenta publicamente
+  // a rota da tela 'Proprietários Placa'). Override único via env.
+  const override = process.env.DIRECTD_PROPRIETARIOS_URL;
+  const candidatos = override ? [override] : [
+    'https://apiv3.directd.com.br/api/ProprietariosPlaca',
+    'https://apiv3.directd.com.br/api/VeiculoProprietariosPlaca',
+    'https://apiv3.directd.com.br/api/HistoricoProprietarios',
+    'https://apiv3.directd.com.br/api/ProprietariosVeiculo'
+  ];
+
+  let resp = null;
+  let endpointUsado = null;
+  let ultimoErro = null;
+
+  for (const url of candidatos) {
+    try {
+      resp = await axios.get(url, {
+        params: { Placa: placaLimpa, Token: process.env.DIRECTD_TOKEN },
+        timeout: 45000
+      });
+      endpointUsado = url;
+      break;
+    } catch (e) {
+      ultimoErro = e;
+      const status = e.response?.status;
+      // 404 = path não existe, tenta próximo. 401/403/400 = path existe mas rejeitou.
+      if (status && status !== 404) {
+        resp = e.response; // mantém retorno para parsing de metaDados.mensagem
+        endpointUsado = url;
+        break;
+      }
+    }
+  }
+
+  if (!resp) {
+    const status = ultimoErro?.response?.status;
+    return {
+      disponivel: false,
+      erro: status ? `DirectData retornou HTTP ${status}` : 'DirectData indisponível',
+      detalhes: ultimoErro?.response?.data?.metaDados?.mensagem || ultimoErro?.message,
+      status_http: status || null,
+      placa: placaLimpa,
+      fonte: 'DirectData ProprietariosPlaca'
+    };
+  }
 
   try {
-    const resp = await axios.get(endpoint, {
-      params: { Placa: placaLimpa, Token: process.env.DIRECTD_TOKEN },
-      timeout: 45000
-    });
-
     const meta = resp.data?.metaDados || {};
     const retorno = resp.data?.retorno || {};
     const resultadoId = Number(meta.resultadoId);
@@ -1076,6 +1112,7 @@ async function consultarProprietariosPlaca(placa) {
       total: proprietarios.length,
       proprietarios,
       raw: retorno,
+      endpoint: endpointUsado,
       fonte: 'DirectData ProprietariosPlaca',
       consultado_em: new Date().toISOString()
     };
