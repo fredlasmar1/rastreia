@@ -4,6 +4,7 @@ const router = express.Router();
 const { pool } = require('../db');
 const { autenticar, admin } = require('./auth');
 const { listarCustos, atualizarCusto, calcularCustoPedido, estimarCustoProduto, APIS_POR_PRODUTO } = require('../services/custos');
+const credifyCatalogo = require('../services/credify/catalogo');
 
 // GET /api/admin/custos  -> lista todos os custos cadastrados
 router.get('/', autenticar, admin, async (req, res) => {
@@ -69,6 +70,50 @@ router.get('/estimativa/:tipo', autenticar, async (req, res) => {
   } catch (e) {
     console.error('[custos] estimativa produto:', e);
     res.status(500).json({ erro: 'Erro ao calcular estimativa' });
+  }
+});
+
+// ─── CATÁLOGO CREDIFY VEICULAR ──────────────────────────────
+
+// GET /api/admin/custos/credify/catalogo  -> catálogo completo agrupado
+router.get('/credify/catalogo', autenticar, admin, (req, res) => {
+  try {
+    const catalogo = credifyCatalogo.listarPorCategoria();
+    const padrao = credifyCatalogo.pacotePadraoVeicular();
+    const calculoPadrao = credifyCatalogo.calcularCustoBruto(padrao);
+    const margem = credifyCatalogo.calcularMargem(97, calculoPadrao.total);
+    res.json({
+      catalogo,
+      pacote_padrao: {
+        servicos: padrao,
+        ...calculoPadrao,
+        margem
+      },
+      total_servicos: Object.keys(credifyCatalogo.CATALOGO_VEICULAR).length,
+      atualizado_em: '2026-04-23',
+      faixa: '0 a 10k consultas/mês'
+    });
+  } catch (e) {
+    console.error('[credify] catálogo:', e);
+    res.status(500).json({ erro: 'Erro ao listar catálogo Credify' });
+  }
+});
+
+// POST /api/admin/custos/credify/calcular  -> calcula custo de um pacote sob medida
+// body: { servicos: ['HistoricoProprietarios', 'Gravame', ...], preco_venda: 97 }
+router.post('/credify/calcular', autenticar, admin, (req, res) => {
+  try {
+    const { servicos, preco_venda } = req.body || {};
+    if (!Array.isArray(servicos)) return res.status(400).json({ erro: 'servicos deve ser array' });
+    const calculo = credifyCatalogo.calcularCustoBruto(servicos);
+    const resposta = { ...calculo };
+    if (typeof preco_venda === 'number' && preco_venda >= 0) {
+      resposta.margem = credifyCatalogo.calcularMargem(preco_venda, calculo.total);
+    }
+    res.json(resposta);
+  } catch (e) {
+    console.error('[credify] calcular:', e);
+    res.status(500).json({ erro: 'Erro ao calcular custo' });
   }
 });
 

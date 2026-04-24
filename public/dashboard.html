@@ -15,6 +15,7 @@
     <a href="/clientes.html">Clientes</a>
     <a href="/usuarios.html" id="nav-usuarios" style="display:none">Usuários</a>
     <a href="/custos-api.html" id="nav-custos" style="display:none">Custos API</a>
+    <a href="/credify.html" id="nav-credify" style="display:none">Credify</a>
     <a href="#" onclick="logout()">Sair</a>
   </div>
   <div class="nav-user" id="nav-user"></div>
@@ -72,8 +73,10 @@
   if (usuario.perfil === 'admin') {
     const navU = document.getElementById('nav-usuarios');
     const navC = document.getElementById('nav-custos');
+    const navCredify = document.getElementById('nav-credify');
     if (navU) navU.style.display = '';
     if (navC) navC.style.display = '';
+    if (navCredify) navCredify.style.display = '';
   }
 
   function esc(str) { const d = document.createElement('div'); d.textContent = str; return d.innerHTML; }
