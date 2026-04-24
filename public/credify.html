@@ -21,6 +21,40 @@
     .resumo-card.margem .label { color: #14532d; }
     .resumo-card.margem .valor { color: #14532d; }
 
+    /* Tiers comerciais */
+    .tiers-section { margin-bottom: 32px; }
+    .tiers-section h2 { font-size: 18px; color: #111827; margin: 0 0 6px; }
+    .tiers-section .legenda { font-size: 13px; color: #64748b; margin-bottom: 18px; }
+    .tiers-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+    @media (max-width: 900px) { .tiers-grid { grid-template-columns: 1fr; } }
+    .tier-card { background: #fff; border: 1px solid #e5e7eb; border-radius: 14px; padding: 22px; display: flex; flex-direction: column; position: relative; }
+    .tier-card.destaque { border-color: #111827; border-width: 2px; box-shadow: 0 4px 12px rgba(0,0,0,0.08); }
+    .tier-card .badge-top { position: absolute; top: -10px; left: 22px; background: #111827; color: #fff; font-size: 10px; font-weight: 700; letter-spacing: 0.5px; padding: 4px 10px; border-radius: 4px; text-transform: uppercase; }
+    .tier-card h3 { margin: 0 0 4px; font-size: 15px; color: #6b7280; text-transform: uppercase; letter-spacing: 0.6px; font-weight: 700; }
+    .tier-card .preco { font-size: 32px; color: #111827; font-weight: 800; margin: 4px 0 2px; }
+    .tier-card .preco small { font-size: 14px; color: #6b7280; font-weight: 500; }
+    .tier-card .desc { font-size: 12px; color: #64748b; line-height: 1.5; margin: 10px 0 14px; min-height: 52px; }
+    .tier-card .publico { font-size: 11px; color: #111827; background: #f1f5f9; padding: 6px 10px; border-radius: 6px; margin-bottom: 14px; }
+    .tier-card ul { margin: 0; padding: 0; list-style: none; font-size: 12px; color: #334155; }
+    .tier-card ul li { padding: 5px 0; border-top: 1px solid #f1f5f9; font-family: Menlo, monospace; font-size: 11px; }
+    .tier-card ul li:first-child { border-top: none; }
+    .tier-card .rodape { margin-top: auto; padding-top: 14px; border-top: 1px dashed #e5e7eb; font-size: 11px; color: #6b7280; display: flex; justify-content: space-between; }
+    .tier-card .rodape strong { color: #111827; }
+    .tier-card .btn-aplicar { margin-top: 12px; background: #f8fafc; border: 1px solid #cbd5e1; color: #111827; padding: 8px 12px; border-radius: 6px; font-size: 12px; font-weight: 600; cursor: pointer; width: 100%; }
+    .tier-card .btn-aplicar:hover { background: #111827; color: #fff; }
+    .tier-card.destaque .btn-aplicar { background: #111827; color: #fff; border-color: #111827; }
+    .tier-card.destaque .btn-aplicar:hover { background: #374151; }
+
+    /* Add-ons */
+    .addons-box { background: #fffbeb; border: 1px solid #fcd34d; border-radius: 10px; padding: 16px 20px; margin-top: 18px; }
+    .addons-box h4 { margin: 0 0 10px; font-size: 13px; color: #78350f; text-transform: uppercase; letter-spacing: 0.5px; }
+    .addon-linha { display: grid; grid-template-columns: 1fr auto auto; gap: 12px; padding: 8px 0; border-top: 1px solid #fde68a; font-size: 12px; align-items: center; }
+    .addon-linha:first-of-type { border-top: none; }
+    .addon-linha .addon-nome { font-weight: 600; color: #78350f; }
+    .addon-linha .addon-desc { color: #92400e; font-size: 11px; margin-top: 2px; }
+    .addon-linha .addon-preco { font-weight: 700; color: #78350f; font-family: Menlo, monospace; }
+    .addon-linha .addon-margem { font-size: 10px; color: #92400e; }
+
     .calc-box { background: #fff; border: 1px solid #e5e7eb; border-radius: 12px; padding: 22px 24px; margin-bottom: 24px; }
     .calc-box h3 { margin: 0 0 14px; font-size: 15px; color: #111827; display:flex; justify-content:space-between; align-items:center; }
     .calc-box .acoes-calc { display:flex; gap:10px; align-items:center; font-size: 12px; }
@@ -75,6 +109,19 @@
     <strong>Nenhum desses valores aparece no PDF do cliente.</strong>
   </div>
 
+  <!-- Tiers comerciais de venda -->
+  <div class="tiers-section">
+    <h2>Tiers de venda — Consulta Veicular</h2>
+    <div class="legenda">Preços sugeridos. Admin pode ajustar por pedido. O custo bruto nunca aparece no PDF do cliente.</div>
+    <div class="tiers-grid" id="tiers-grid">
+      <div style="grid-column:1/-1;padding:30px;text-align:center;color:#9ca3af">Carregando tiers…</div>
+    </div>
+    <div class="addons-box" id="addons-box" style="display:none">
+      <h4>Add-ons (itens avulsos que podem ser anexados a qualquer tier)</h4>
+      <div id="addons-lista"></div>
+    </div>
+  </div>
+
   <!-- Resumo do pacote padrão -->
   <div class="resumo-grid" id="resumo-grid">
     <div class="resumo-card"><div class="label">Total de serviços</div><div class="valor" id="r-total">30</div><div class="sub">disponíveis no catálogo</div></div>
@@ -124,6 +171,7 @@ function logout() { localStorage.clear(); location.href = '/'; }
 function fmt(v) { return 'R$ ' + v.toFixed(2).replace('.', ','); }
 
 let catalogoData = null;
+let tiersData = null;
 let selecionados = new Set();
 
 async function carregar() {
@@ -236,7 +284,85 @@ function aplicarPadrao() {
 
 document.getElementById('preco-venda').addEventListener('input', recalcular);
 
+async function carregarTiers() {
+  const res = await fetch('/api/admin/custos/credify/tiers', { headers: { Authorization: 'Bearer ' + token } });
+  if (!res.ok) { document.getElementById('tiers-grid').innerHTML = '<div style="grid-column:1/-1;padding:20px;color:#b91c1c">Erro ao carregar tiers.</div>'; return; }
+  tiersData = await res.json();
+  renderTiers();
+  renderAddons();
+}
+
+function renderTiers() {
+  const destaqueSlug = 'completo';
+  const html = tiersData.tiers.map(tier => {
+    const isDestaque = tier.slug === destaqueSlug;
+    const servicosHtml = tier.servicos.map(s => `<li>✓ ${s}</li>`).join('');
+    return `
+      <div class="tier-card ${isDestaque ? 'destaque' : ''}">
+        ${isDestaque ? '<span class="badge-top">Mais vendido</span>' : ''}
+        <h3>${tier.nome}</h3>
+        <div class="preco">R$ ${tier.preco_sugerido.toFixed(0)}<small>,00</small></div>
+        <div class="desc">${tier.descricao}</div>
+        <div class="publico"><strong>Ideal para:</strong> ${tier.publico}</div>
+        <ul>${servicosHtml}</ul>
+        <div class="rodape">
+          <span>Custo bruto: <strong>${tier.total_formatado}</strong></span>
+          <span>Margem: <strong>${tier.margem.margem_pct}%</strong></span>
+        </div>
+        <button class="btn-aplicar" onclick="aplicarTier('${tier.slug}')">Aplicar na calculadora ↓</button>
+      </div>
+    `;
+  }).join('');
+  document.getElementById('tiers-grid').innerHTML = html;
+}
+
+function renderAddons() {
+  if (!tiersData || !tiersData.addons || !tiersData.addons.length) return;
+  const html = tiersData.addons.map(a => `
+    <div class="addon-linha">
+      <div>
+        <div class="addon-nome">${a.nome}</div>
+        <div class="addon-desc">${a.descricao}</div>
+      </div>
+      <div style="text-align:right">
+        <div class="addon-preco">+ R$ ${a.preco_adicional.toFixed(2).replace('.', ',')}</div>
+        <div class="addon-margem">custo ${fmt(a.custo_bruto)} · ${a.margem.margem_pct}%</div>
+      </div>
+      <button class="btn-aplicar" style="margin:0;width:auto;padding:6px 10px" onclick="aplicarAddon('${a.slug}')">+ Add</button>
+    </div>
+  `).join('');
+  document.getElementById('addons-lista').innerHTML = html;
+  document.getElementById('addons-box').style.display = 'block';
+}
+
+function aplicarTier(slug) {
+  if (!tiersData) return;
+  const tier = tiersData.tiers.find(t => t.slug === slug);
+  if (!tier) return;
+  limparSelecao();
+  document.getElementById('preco-venda').value = tier.preco_sugerido;
+  tier.servicos.forEach(chave => {
+    const cb = document.querySelector(`.servico-row[data-chave="${chave}"] input[type=checkbox]`);
+    if (cb) { cb.checked = true; toggle(chave, true); }
+  });
+  const primeiro = document.querySelector('.servico-row.selecionado');
+  if (primeiro) primeiro.scrollIntoView({ behavior: 'smooth', block: 'center' });
+}
+
+function aplicarAddon(slug) {
+  if (!tiersData) return;
+  const addon = tiersData.addons.find(a => a.slug === slug);
+  if (!addon) return;
+  const vendaAtual = parseFloat(document.getElementById('preco-venda').value) || 0;
+  document.getElementById('preco-venda').value = (vendaAtual + addon.preco_adicional).toFixed(2);
+  addon.servicos.forEach(chave => {
+    const cb = document.querySelector(`.servico-row[data-chave="${chave}"] input[type=checkbox]`);
+    if (cb && !cb.checked) { cb.checked = true; toggle(chave, true); }
+  });
+}
+
 carregar();
+carregarTiers();
 </script>
 </body>
 </html>

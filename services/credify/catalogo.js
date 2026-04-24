@@ -104,21 +104,131 @@ function calcularCustoBruto(servicosSelecionados) {
 }
 
 /**
- * Sugere pacote padrão para um dossiê veicular (R$ 97 venda).
- * Inclui as consultas mínimas que o mercado exige para dossiê sério.
+ * Tiers comerciais da Consulta Veicular.
+ * Básico (R$ 47) — checagem rápida pré-compra.
+ * Completo (R$ 97) — dossiê completo com histórico.
+ * Premium (R$ 147) — completo + leilão (único que detecta sinistro grave/salvado).
+ *
+ * O preco_sugerido é o piso de venda. Admin pode ajustar por pedido.
+ * O add_on_leilao permite adicionar LeilaoConjugado ao Básico/Completo por +R$ 29.
+ */
+const TIERS_VEICULAR = {
+  basico: {
+    nome: 'Básico',
+    slug: 'basico',
+    preco_sugerido: 47.00,
+    descricao: 'Checagem essencial pré-compra: proprietário, financiamento, multas, bloqueio judicial e FIPE.',
+    publico: 'Comprador pessoal fazendo primeira olhada no carro usado',
+    servicos: [
+      'VeicularBNacionalOnLine',
+      'Gravame',
+      'Renainf',
+      'RENAJUD',
+      'PrecificadorFIPE'
+    ]
+  },
+  completo: {
+    nome: 'Completo',
+    slug: 'completo',
+    preco_sugerido: 97.00,
+    descricao: 'Dossiê completo: tudo do Básico + histórico de proprietários, roubo/furto, indícios de sinistro e recall.',
+    publico: 'Lojistas, despachantes, consultores de compra e compradores sérios',
+    servicos: [
+      'VeicularBNacionalOnLine',
+      'Gravame',
+      'Renainf',
+      'RENAJUD',
+      'PrecificadorFIPE',
+      'HistoricoProprietarios',
+      'HistoricoRouboFurto',
+      'IndicioSinistroVeicular',
+      'RecallII'
+    ]
+  },
+  premium: {
+    nome: 'Premium',
+    slug: 'premium',
+    preco_sugerido: 147.00,
+    descricao: 'Premium com Leilão: tudo do Completo + consulta em bases de leilão (detecta sinistro grave, salvado e recuperação de seguradora) + decodificação profunda do chassi.',
+    publico: 'Compra de alto valor, due diligence judicial, seguradoras, financeiras e quem não pode errar',
+    servicos: [
+      'VeicularBNacionalOnLine',
+      'Gravame',
+      'Renainf',
+      'RENAJUD',
+      'PrecificadorFIPE',
+      'HistoricoProprietarios',
+      'HistoricoRouboFurto',
+      'IndicioSinistroVeicular',
+      'RecallII',
+      'LeilaoConjugado',
+      'DECODIFICAR_CHASSI'
+    ]
+  }
+};
+
+// Add-ons avulsos (itens extras que o admin pode anexar a qualquer tier)
+const ADDONS_VEICULAR = {
+  leilao: {
+    nome: 'Consulta em bases de leilão',
+    descricao: 'Detecta se o veículo passou por leilão de sinistro, salvado ou recuperação de seguradora. Item mais valioso para evitar surpresas.',
+    preco_adicional: 29.00,
+    servicos: ['LeilaoConjugado']
+  },
+  cnh_proprietario: {
+    nome: 'Validação da CNH do proprietário',
+    descricao: 'Valida a CNH do atual proprietário (pontuação + flags de irregularidade).',
+    preco_adicional: 15.00,
+    servicos: ['CNHPontuacao', 'FlagCNH']
+  },
+  veiculos_por_cpf: {
+    nome: 'Outros veículos do proprietário',
+    descricao: 'Lista todos os veículos vinculados ao CPF do proprietário. Útil em investigação patrimonial.',
+    preco_adicional: 19.00,
+    servicos: ['VeiculoCPF']
+  }
+};
+
+/**
+ * Retorna a configuração de um tier, incluindo cálculo de custo e margem.
+ * @param {string} slug - 'basico' | 'completo' | 'premium'
+ * @returns {object|null}
+ */
+function obterTier(slug) {
+  const tier = TIERS_VEICULAR[slug];
+  if (!tier) return null;
+  const calc = calcularCustoBruto(tier.servicos);
+  const margem = calcularMargem(tier.preco_sugerido, calc.total);
+  return { ...tier, ...calc, margem };
+}
+
+/**
+ * Lista os 3 tiers com custo, margem e descrição pronta para UI.
+ */
+function listarTiers() {
+  return Object.keys(TIERS_VEICULAR).map(slug => obterTier(slug));
+}
+
+/**
+ * Lista add-ons disponíveis com custo calculado.
+ */
+function listarAddons() {
+  return Object.entries(ADDONS_VEICULAR).map(([slug, addon]) => {
+    const calc = calcularCustoBruto(addon.servicos);
+    return {
+      slug,
+      ...addon,
+      custo_bruto: calc.total,
+      margem: calcularMargem(addon.preco_adicional, calc.total)
+    };
+  });
+}
+
+/**
+ * Compat: mantém pacotePadraoVeicular() apontando para o Completo.
  */
 function pacotePadraoVeicular() {
-  return [
-    'VeicularBNacionalOnLine',      // identificação
-    'Gravame',                       // alienação
-    'Renainf',                       // multas
-    'RENAJUD',                       // bloqueio judicial
-    'HistoricoProprietarios',        // histórico proprietários (Credify)
-    'HistoricoRouboFurto',           // roubo/furto
-    'IndicioSinistroVeicular',       // sinistro
-    'RecallII',                      // recall
-    'PrecificadorFIPE'               // FIPE
-  ];
+  return [...TIERS_VEICULAR.completo.servicos];
 }
 
 /**
@@ -133,7 +243,12 @@ function calcularMargem(precoVenda, custoBruto) {
 module.exports = {
   CATALOGO_VEICULAR,
   CATEGORIAS,
+  TIERS_VEICULAR,
+  ADDONS_VEICULAR,
   listarPorCategoria,
+  listarTiers,
+  listarAddons,
+  obterTier,
   calcularCustoBruto,
   pacotePadraoVeicular,
   calcularMargem

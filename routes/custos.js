@@ -99,6 +99,33 @@ router.get('/credify/catalogo', autenticar, admin, (req, res) => {
   }
 });
 
+// GET /api/admin/custos/credify/tiers  -> retorna os 3 tiers comerciais + add-ons
+router.get('/credify/tiers', autenticar, admin, (req, res) => {
+  try {
+    res.json({
+      tiers: credifyCatalogo.listarTiers(),
+      addons: credifyCatalogo.listarAddons(),
+      atualizado_em: '2026-04-23',
+      observacao: 'Preços sugeridos (admin pode ajustar por pedido). Custo bruto é INTERNO — nunca vai para o cliente.'
+    });
+  } catch (e) {
+    console.error('[credify] tiers:', e);
+    res.status(500).json({ erro: 'Erro ao listar tiers' });
+  }
+});
+
+// GET /api/admin/custos/credify/tier/:slug  -> retorna detalhes de um tier específico
+router.get('/credify/tier/:slug', autenticar, admin, (req, res) => {
+  try {
+    const tier = credifyCatalogo.obterTier(req.params.slug);
+    if (!tier) return res.status(404).json({ erro: 'Tier não encontrado (use: basico, completo ou premium)' });
+    res.json(tier);
+  } catch (e) {
+    console.error('[credify] tier:', e);
+    res.status(500).json({ erro: 'Erro ao obter tier' });
+  }
+});
+
 // POST /api/admin/custos/credify/calcular  -> calcula custo de um pacote sob medida
 // body: { servicos: ['HistoricoProprietarios', 'Gravame', ...], preco_venda: 97 }
 router.post('/credify/calcular', autenticar, admin, (req, res) => {

@@ -197,6 +197,18 @@ const PRODUTOS = {
     prazo_horas: 0.5,
     icone: '🚗',
     sem_alvo_documento: true,
+    // Tiers comerciais (catálogo Credify). Admin pode ajustar o preço final por pedido.
+    // O campo `preco` acima continua sendo o piso do Completo (tier padrão).
+    tiers: {
+      basico:   { preco: 47,  servicos: 5,  descricao: 'Checagem rápida pré-compra' },
+      completo: { preco: 97,  servicos: 9,  descricao: 'Dossiê completo com histórico', padrao: true },
+      premium:  { preco: 147, servicos: 11, descricao: 'Completo + leilão + chassi decodificado' }
+    },
+    addons: {
+      leilao:             { preco: 29, descricao: 'Consulta em bases de leilão' },
+      cnh_proprietario:   { preco: 15, descricao: 'Validação da CNH do proprietário' },
+      veiculos_por_cpf:   { preco: 19, descricao: 'Outros veículos do proprietário' }
+    },
     publico_alvo: [
       'Comprador de veículo usado antes de fechar negócio',
       'Quem vai receber veículo como pagamento ou garantia',
