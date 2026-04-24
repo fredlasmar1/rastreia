@@ -253,26 +253,47 @@ router.post('/', autenticar, async (req, res) => {
   }
 });
 
-// GET /api/pedidos/catalogo/veicular  -> tiers e add-ons visíveis para qualquer usuário autenticado
-// (usado em /novo-pedido.html por operadores não-admin). Só retorna dados de venda,
-// sem custo bruto nem detalhes internos da Credify.
+// GET /api/pedidos/catalogo/veicular  -> tiers e add-ons visíveis para usuário autenticado.
+// Se admin/operador, inclui custo bruto + margem + lucro (interno, nunca no PDF).
+// Cliente/vendedor comum recebe só preço de venda.
 router.get('/catalogo/veicular', autenticar, (req, res) => {
   try {
-    const tiers = credifyCatalogo.listarTiers().map(t => ({
-      slug: t.slug,
-      nome: t.nome,
-      preco_sugerido: t.preco_sugerido,
-      descricao: t.descricao,
-      publico: t.publico,
-      qtd_servicos: t.qtd_servicos
-    }));
-    const addons = credifyCatalogo.listarAddons().map(a => ({
-      slug: a.slug,
-      nome: a.nome,
-      descricao: a.descricao,
-      preco_adicional: a.preco_adicional
-    }));
-    res.json({ tiers, addons });
+    const mostrarCusto = req.usuario.perfil === 'admin' || req.usuario.perfil === 'operador';
+
+    const tiers = credifyCatalogo.listarTiers().map(t => {
+      const base = {
+        slug: t.slug,
+        nome: t.nome,
+        preco_sugerido: t.preco_sugerido,
+        descricao: t.descricao,
+        publico: t.publico,
+        qtd_servicos: t.qtd_servicos
+      };
+      if (mostrarCusto) {
+        base.custo_bruto = t.total;
+        base.custo_bruto_formatado = t.total_formatado;
+        base.margem_pct = t.margem.margem_pct;
+        base.lucro = t.margem.margem;
+      }
+      return base;
+    });
+
+    const addons = credifyCatalogo.listarAddons().map(a => {
+      const base = {
+        slug: a.slug,
+        nome: a.nome,
+        descricao: a.descricao,
+        preco_adicional: a.preco_adicional
+      };
+      if (mostrarCusto) {
+        base.custo_bruto = a.custo_bruto;
+        base.margem_pct = a.margem.margem_pct;
+        base.lucro = a.margem.margem;
+      }
+      return base;
+    });
+
+    res.json({ tiers, addons, mostra_custo: mostrarCusto });
   } catch (e) {
     console.error('[pedidos] catálogo veicular:', e);
     res.status(500).json({ erro: 'Erro ao listar catálogo' });

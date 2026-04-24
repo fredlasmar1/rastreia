@@ -83,9 +83,19 @@
       </div>
       <div style="font-size:12px;color:#6b7280;text-transform:uppercase;letter-spacing:0.5px;font-weight:600;margin-bottom:8px">Add-ons (opcionais)</div>
       <div id="addons-veicular-grid" style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px"></div>
-      <div id="resumo-veicular" style="margin-top:14px;padding:12px 16px;background:#f8fafc;border:1px solid #e5e7eb;border-radius:8px;display:flex;justify-content:space-between;align-items:center;font-size:13px">
-        <span><strong id="rv-tier">Completo</strong> · <span id="rv-addons-label" style="color:#6b7280">sem add-ons</span></span>
-        <span style="font-size:16px;font-weight:700;color:#111827">R$ <span id="rv-valor">97,00</span></span>
+      <div id="resumo-veicular" style="margin-top:14px;padding:12px 16px;background:#f8fafc;border:1px solid #e5e7eb;border-radius:8px;font-size:13px">
+        <div style="display:flex;justify-content:space-between;align-items:center">
+          <span><strong id="rv-tier">Completo</strong> · <span id="rv-addons-label" style="color:#6b7280">sem add-ons</span></span>
+          <span style="font-size:16px;font-weight:700;color:#111827">R$ <span id="rv-valor">97,00</span></span>
+        </div>
+        <div id="rv-custo-box" style="display:none;margin-top:10px;padding-top:10px;border-top:1px dashed #d1d5db;font-size:11px;color:#6b7280">
+          <div style="text-transform:uppercase;letter-spacing:0.5px;font-weight:700;margin-bottom:4px">💰 Interno (admin/operador)</div>
+          <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px">
+            <div><span style="font-size:10px;text-transform:uppercase">Custo APIs</span><br><strong id="rv-custo" style="color:#dc2626;font-size:13px">R$ 0,00</strong></div>
+            <div><span style="font-size:10px;text-transform:uppercase">Margem</span><br><strong id="rv-margem-pct" style="font-size:13px">0%</strong></div>
+            <div><span style="font-size:10px;text-transform:uppercase">Lucro</span><br><strong id="rv-lucro" style="color:#16a34a;font-size:13px">R$ 0,00</strong></div>
+          </div>
+        </div>
       </div>
     </div>
   </div>
@@ -98,6 +108,9 @@
     .tier-mini .tier-preco { font-size:22px; color:#111827; font-weight:800; margin:4px 0 2px; }
     .tier-mini .tier-desc { font-size:11px; color:#64748b; line-height:1.4; min-height:32px; }
     .tier-mini .tier-servicos { font-size:10px; color:#64748b; margin-top:8px; padding-top:8px; border-top:1px solid #f1f5f9; font-family:Menlo,monospace; }
+    .tier-mini .tier-custo { margin-top:6px; padding:5px 7px; background:#fafafa; border:1px dashed #d1d5db; border-radius:4px; font-size:10px; display:flex; justify-content:space-between; }
+    .tier-mini .tier-custo .custo-val { color:#dc2626; font-weight:700; font-family:Menlo,monospace; }
+    .tier-mini .tier-custo .margem-val { font-weight:700; font-family:Menlo,monospace; }
     .tier-mini .badge-mini { position:absolute; top:-8px; right:10px; background:#111827; color:#fff; font-size:9px; font-weight:700; letter-spacing:0.5px; padding:3px 8px; border-radius:3px; text-transform:uppercase; }
     .addon-mini { display:flex; align-items:center; gap:8px; padding:10px 12px; background:#fff; border:1px solid #e5e7eb; border-radius:8px; cursor:pointer; transition: all 0.15s; font-size:12px; }
     .addon-mini:hover { border-color:#94a3b8; }
@@ -281,6 +294,7 @@
   let TIERS_VEICULAR_DATA = null;
   let tierSelecionado = 'completo';
   let addonsSelecionados = new Set();
+  let MOSTRA_CUSTO_VEICULAR = false; // true se API retornar mostra_custo=true
   const MOSTRAR_CUSTO = usuario.perfil === 'admin' || usuario.perfil === 'operador';
 
   function fmtBRL(v) { return 'R$ ' + Number(v).toLocaleString('pt-BR', { minimumFractionDigits: 2 }); }
@@ -547,6 +561,7 @@
         throw new Error('http ' + res.status);
       }
       TIERS_VEICULAR_DATA = await res.json();
+      MOSTRA_CUSTO_VEICULAR = !!TIERS_VEICULAR_DATA.mostra_custo;
       renderTiersVeicular();
       renderAddonsVeicular();
       atualizarResumoVeicular();
@@ -577,15 +592,22 @@
 
   function renderTiersVeicular() {
     const grid = document.getElementById('tiers-veicular-grid');
-    grid.innerHTML = TIERS_VEICULAR_DATA.tiers.map(t => `
+    grid.innerHTML = TIERS_VEICULAR_DATA.tiers.map(t => {
+      const custoHtml = (MOSTRA_CUSTO_VEICULAR && t.custo_bruto != null) ? `
+        <div class="tier-custo">
+          <span>custo: <span class="custo-val">${fmtBRL(t.custo_bruto)}</span></span>
+          <span>margem: <span class="margem-val" style="color:${corMargem(t.margem_pct)}">${t.margem_pct.toFixed(0)}%</span></span>
+        </div>` : '';
+      return `
       <div class="tier-mini ${t.slug === tierSelecionado ? 'selecionado' : ''}" onclick="selecionarTier('${t.slug}')">
         ${t.slug === 'completo' ? '<span class="badge-mini">Mais vendido</span>' : ''}
         <div class="tier-nome">${t.nome}</div>
         <div class="tier-preco">R$ ${t.preco_sugerido}</div>
         <div class="tier-desc">${t.descricao}</div>
         <div class="tier-servicos">${t.qtd_servicos} serviços</div>
-      </div>
-    `).join('');
+        ${custoHtml}
+      </div>`;
+    }).join('');
   }
 
   function renderAddonsVeicular() {
@@ -594,6 +616,9 @@
       const ativo = addonsSelecionados.has(a.slug);
       // Se o tier já inclui o serviço (ex: premium + leilao), mostra como "já incluso"
       const jaIncluso = (tierSelecionado === 'premium' && a.slug === 'leilao');
+      const custoAddon = (MOSTRA_CUSTO_VEICULAR && a.custo_bruto != null)
+        ? `<div style="font-size:9px;color:#6b7280;font-family:Menlo,monospace">custo <span style="color:#dc2626">${fmtBRL(a.custo_bruto)}</span> · margem <span style="color:${corMargem(a.margem_pct)}">${a.margem_pct.toFixed(0)}%</span></div>`
+        : '';
       return `
         <label class="addon-mini ${ativo ? 'ativo' : ''}" style="${jaIncluso ? 'opacity:0.5;cursor:not-allowed' : ''}">
           <input type="checkbox" ${ativo || jaIncluso ? 'checked' : ''} ${jaIncluso ? 'disabled' : ''}
@@ -601,6 +626,7 @@
           <div style="flex:1">
             <div class="addon-titulo">${a.nome}${jaIncluso ? ' <span style="font-size:10px;color:#16a34a">(já incluso)</span>' : ''}</div>
             <div style="font-size:10px;color:#6b7280">${a.descricao}</div>
+            ${custoAddon}
           </div>
           <span class="addon-preco-lbl">+R$ ${a.preco_adicional}</span>
         </label>
@@ -628,10 +654,15 @@
     const tier = TIERS_VEICULAR_DATA.tiers.find(t => t.slug === tierSelecionado);
     if (!tier) return;
     let valor = tier.preco_sugerido;
+    let custo = tier.custo_bruto || 0;
     const addonsNomes = [];
     addonsSelecionados.forEach(slug => {
       const a = TIERS_VEICULAR_DATA.addons.find(x => x.slug === slug);
-      if (a) { valor += a.preco_adicional; addonsNomes.push(a.nome); }
+      if (a) {
+        valor += a.preco_adicional;
+        custo += (a.custo_bruto || 0);
+        addonsNomes.push(a.nome);
+      }
     });
     document.getElementById('rv-tier').textContent = tier.nome;
     document.getElementById('rv-addons-label').textContent = addonsNomes.length ? '+ ' + addonsNomes.join(' + ') : 'sem add-ons';
@@ -639,6 +670,20 @@
 
     // Atualiza o resumo global do lado direito
     document.getElementById('r-valor').textContent = 'R$ ' + valor.toLocaleString('pt-BR', { minimumFractionDigits: 2 });
+
+    // Bloco interno de custo/margem/lucro (admin/operador)
+    const box = document.getElementById('rv-custo-box');
+    if (MOSTRA_CUSTO_VEICULAR && tier.custo_bruto != null) {
+      const lucro = valor - custo;
+      const margemPct = valor > 0 ? (lucro / valor * 100) : 0;
+      document.getElementById('rv-custo').textContent = fmtBRL(custo);
+      document.getElementById('rv-margem-pct').textContent = margemPct.toFixed(1) + '%';
+      document.getElementById('rv-margem-pct').style.color = corMargem(margemPct);
+      document.getElementById('rv-lucro').textContent = fmtBRL(lucro);
+      box.style.display = 'block';
+    } else {
+      box.style.display = 'none';
+    }
   }
 
   // Inicializar
