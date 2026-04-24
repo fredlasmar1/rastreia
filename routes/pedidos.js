@@ -8,6 +8,7 @@ const { gerarDossie } = require('../services/pdf');
 const { notificarClienteConcluido, notificarOperadorNovoPedido } = require('../services/whatsapp');
 const { criarPreferencia } = require('../services/mercadopago');
 const { PRODUTOS } = require('../services/produtos');
+const credifyCatalogo = require('../services/credify/catalogo');
 
 const PRECOS = {
   dossie_pf: 197,
@@ -111,7 +112,9 @@ router.post('/', autenticar, async (req, res) => {
       finalidade, aceite_termos,
       // Imobiliária
       alvo2_nome, alvo2_documento, alvo2_tipo,
-      imovel_matricula, imovel_endereco, imovel_estado
+      imovel_matricula, imovel_endereco, imovel_estado,
+      // Veicular: tier e add-ons
+      tier_veicular, addons_veicular, valor_customizado
     } = req.body;
 
     const isVeicular = tipo === 'consulta_veicular';
@@ -152,8 +155,37 @@ router.post('/', autenticar, async (req, res) => {
       return res.status(400).json({ erro: 'Aceite dos Termos de Uso é obrigatório' });
     }
 
-    const valor = PRECOS[tipo];
+    let valor = PRECOS[tipo];
     if (!valor) return res.status(400).json({ erro: 'Tipo inválido' });
+
+    // Se for veicular com tier especificado, recalcular preço a partir do catálogo
+    let tierSlug = null;
+    let addonsList = [];
+    if (isVeicular && tier_veicular) {
+      const tier = credifyCatalogo.obterTier(tier_veicular);
+      if (!tier) return res.status(400).json({ erro: 'Tier inválido (use: basico, completo ou premium)' });
+      tierSlug = tier.slug;
+      valor = tier.preco_sugerido;
+
+      // Add-ons: aceita array ou CSV
+      if (addons_veicular) {
+        const pedidos = Array.isArray(addons_veicular)
+          ? addons_veicular
+          : String(addons_veicular).split(',').map(s => s.trim()).filter(Boolean);
+        for (const slug of pedidos) {
+          const addon = credifyCatalogo.listarAddons().find(a => a.slug === slug);
+          if (addon) {
+            addonsList.push(addon.slug);
+            valor += addon.preco_adicional;
+          }
+        }
+      }
+    }
+
+    // Admin/operador pode sobrescrever o valor final (ex: desconto ou cobrança especial)
+    if (typeof valor_customizado === 'number' && valor_customizado >= 0) {
+      valor = valor_customizado;
+    }
 
     const prazoHoras = PRAZOS[tipo] || 2;
     const prazo = new Date(Date.now() + prazoHoras * 60 * 60 * 1000);
@@ -179,10 +211,11 @@ router.post('/', autenticar, async (req, res) => {
         alvo_nome, alvo_documento, alvo_tipo, valor, prazo_entrega, operador_id,
         finalidade, ip_solicitante, aceite_termos, token_publico,
         alvo2_nome, alvo2_documento, alvo2_tipo,
-        imovel_matricula, imovel_endereco, imovel_estado, alvo_placa
+        imovel_matricula, imovel_endereco, imovel_estado, alvo_placa,
+        tier_veicular, addons_veicular
       )
       VALUES ($1, 'aguardando_pagamento', $2, $3, $4, $5, $6, $7, $8, $9, $10,
-              $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21)
+              $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23)
       RETURNING *`,
       [
         tipo, cliente_nome.trim(), cliente_email, cliente_whatsapp,
@@ -190,7 +223,8 @@ router.post('/', autenticar, async (req, res) => {
         finalidade, ip, true, tokenPublico,
         alvo2_nome?.trim() || null, alvo2DocLimpo, alvo2_tipo || null,
         imovel_matricula || null, imovel_endereco || null, imovel_estado || 'GO',
-        placaLimpa
+        placaLimpa,
+        tierSlug, addonsList.length ? addonsList.join(',') : null
       ]
     );
 
@@ -216,6 +250,32 @@ router.post('/', autenticar, async (req, res) => {
   } catch (e) {
     console.error('Erro ao criar pedido:', e);
     res.status(500).json({ erro: 'Erro ao criar pedido' });
+  }
+});
+
+// GET /api/pedidos/catalogo/veicular  -> tiers e add-ons visíveis para qualquer usuário autenticado
+// (usado em /novo-pedido.html por operadores não-admin). Só retorna dados de venda,
+// sem custo bruto nem detalhes internos da Credify.
+router.get('/catalogo/veicular', autenticar, (req, res) => {
+  try {
+    const tiers = credifyCatalogo.listarTiers().map(t => ({
+      slug: t.slug,
+      nome: t.nome,
+      preco_sugerido: t.preco_sugerido,
+      descricao: t.descricao,
+      publico: t.publico,
+      qtd_servicos: t.qtd_servicos
+    }));
+    const addons = credifyCatalogo.listarAddons().map(a => ({
+      slug: a.slug,
+      nome: a.nome,
+      descricao: a.descricao,
+      preco_adicional: a.preco_adicional
+    }));
+    res.json({ tiers, addons });
+  } catch (e) {
+    console.error('[pedidos] catálogo veicular:', e);
+    res.status(500).json({ erro: 'Erro ao listar catálogo' });
   }
 });
 

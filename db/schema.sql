@@ -222,3 +222,9 @@ WHERE api_custos.confianca != 'manual';  -- preserva edicoes manuais feitas em /
 ALTER TABLE pedidos ADD COLUMN IF NOT EXISTS score_calculado INT;
 ALTER TABLE pedidos ADD COLUMN IF NOT EXISTS score_classificacao VARCHAR(50);
 CREATE INDEX IF NOT EXISTS idx_pedidos_alvo_doc_data ON pedidos(alvo_documento, criado_em DESC);
+
+-- ==========================================================================
+-- Fase 5: tiers comerciais da Consulta Veicular (Básico / Completo / Premium)
+-- ==========================================================================
+ALTER TABLE pedidos ADD COLUMN IF NOT EXISTS tier_veicular VARCHAR(20);      -- basico | completo | premium
+ALTER TABLE pedidos ADD COLUMN IF NOT EXISTS addons_veicular TEXT;            -- CSV: leilao,cnh_proprietario,veiculos_por_cpf

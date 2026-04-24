@@ -1337,6 +1337,11 @@ async function executarConsultaCompleta(pedido) {
   // Se o veiculo atual tiver CPF/CNPJ do proprietario, consulta tambem o
   // patrimonio veicular desse dono via HistoricoVeiculos.
   if (tipo === 'consulta_veicular') {
+    // Tier comercial (basico/completo/premium) — gravado no pedido pela rota /api/pedidos.
+    // Padrão é 'completo' (9 serviços) para manter comportamento atual quando vier sem tier.
+    const tier = pedido.tier_veicular || 'completo';
+    const addons = (pedido.addons_veicular || '').split(',').map(s => s.trim()).filter(Boolean);
+
     const [veiculo_placa, proprietarios_placa] = await Promise.all([
       consultarVeiculoPorPlaca(alvo_placa),
       consultarProprietariosPlaca(alvo_placa)
@@ -1349,12 +1354,25 @@ async function executarConsultaCompleta(pedido) {
       || veiculo_placa?.veiculo?.documento
       || ''
     ).replace(/\D/g, '');
+
+    // Histórico de proprietários (incluso só a partir do Completo e no add-on veiculos_por_cpf)
+    const temHistoricoProp = tier !== 'basico' || addons.includes('veiculos_por_cpf');
     let historico_veiculos_proprietario = null;
-    if (docDono && (docDono.length === 11 || docDono.length === 14)) {
+    if (temHistoricoProp && docDono && (docDono.length === 11 || docDono.length === 14)) {
       historico_veiculos_proprietario = await consultarHistoricoVeiculos(docDono);
     }
 
-    return { veiculo_placa, proprietarios_placa, historico_veiculos_proprietario };
+    // TODO(credify): quando a API Credify estiver ativa, chamar APENAS os serviços
+    // do tier + add-ons (ex: LeilaoConjugado só no Premium ou com addon 'leilao').
+    // Por enquanto usamos o agregado DirectData + HistoricoProprietario/Veiculos.
+
+    return {
+      veiculo_placa,
+      proprietarios_placa: temHistoricoProp ? proprietarios_placa : null,
+      historico_veiculos_proprietario,
+      _tier: tier,
+      _addons: addons
+    };
   }
 
   // Consultas comuns a todos os produtos

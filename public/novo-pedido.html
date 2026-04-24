@@ -75,7 +75,41 @@
         <input type="text" id="alvo_nome_veiculo" placeholder="Ex: Honda Civic do cliente João">
       </div>
     </div>
+
+    <div style="margin-top:20px;padding-top:20px;border-top:1px dashed #e5e7eb">
+      <div style="font-size:12px;color:#6b7280;text-transform:uppercase;letter-spacing:0.5px;font-weight:600;margin-bottom:8px">Escolha o nível do relatório</div>
+      <div id="tiers-veicular-grid" style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:14px">
+        <div style="grid-column:1/-1;padding:20px;text-align:center;color:#9ca3af;font-size:13px">Carregando tiers…</div>
+      </div>
+      <div style="font-size:12px;color:#6b7280;text-transform:uppercase;letter-spacing:0.5px;font-weight:600;margin-bottom:8px">Add-ons (opcionais)</div>
+      <div id="addons-veicular-grid" style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px"></div>
+      <div id="resumo-veicular" style="margin-top:14px;padding:12px 16px;background:#f8fafc;border:1px solid #e5e7eb;border-radius:8px;display:flex;justify-content:space-between;align-items:center;font-size:13px">
+        <span><strong id="rv-tier">Completo</strong> · <span id="rv-addons-label" style="color:#6b7280">sem add-ons</span></span>
+        <span style="font-size:16px;font-weight:700;color:#111827">R$ <span id="rv-valor">97,00</span></span>
+      </div>
+    </div>
   </div>
+
+  <style>
+    .tier-mini { background:#fff; border:1px solid #e5e7eb; border-radius:10px; padding:14px; cursor:pointer; transition: all 0.15s; position:relative; }
+    .tier-mini:hover { border-color:#94a3b8; }
+    .tier-mini.selecionado { border-color:#111827; border-width:2px; padding:13px; background:#f8fafc; }
+    .tier-mini .tier-nome { font-size:11px; text-transform:uppercase; letter-spacing:0.5px; color:#6b7280; font-weight:700; }
+    .tier-mini .tier-preco { font-size:22px; color:#111827; font-weight:800; margin:4px 0 2px; }
+    .tier-mini .tier-desc { font-size:11px; color:#64748b; line-height:1.4; min-height:32px; }
+    .tier-mini .tier-servicos { font-size:10px; color:#64748b; margin-top:8px; padding-top:8px; border-top:1px solid #f1f5f9; font-family:Menlo,monospace; }
+    .tier-mini .badge-mini { position:absolute; top:-8px; right:10px; background:#111827; color:#fff; font-size:9px; font-weight:700; letter-spacing:0.5px; padding:3px 8px; border-radius:3px; text-transform:uppercase; }
+    .addon-mini { display:flex; align-items:center; gap:8px; padding:10px 12px; background:#fff; border:1px solid #e5e7eb; border-radius:8px; cursor:pointer; transition: all 0.15s; font-size:12px; }
+    .addon-mini:hover { border-color:#94a3b8; }
+    .addon-mini.ativo { border-color:#111827; background:#fffbeb; border-width:2px; padding:9px 11px; }
+    .addon-mini input { width:14px; height:14px; cursor:pointer; accent-color:#111827; }
+    .addon-mini .addon-titulo { font-weight:600; color:#111827; }
+    .addon-mini .addon-preco-lbl { color:#78350f; font-weight:700; font-family:Menlo,monospace; font-size:11px; }
+    @media (max-width: 720px) {
+      #tiers-veicular-grid { grid-template-columns:1fr !important; }
+      #addons-veicular-grid { grid-template-columns:1fr !important; }
+    }
+  </style>
 
   <!-- PASSO 2B: Segundo Alvo + Imóvel (apenas para Due Diligence Imobiliária) -->
   <div class="pedido-section" id="secao-imobiliaria" style="display:none">
@@ -243,6 +277,10 @@
 
   let tipoSelecionado = '';
   let CUSTOS_ESTIMADOS = {}; // preenchido se admin/operador
+  let tiersVeicularCarregados = false;
+  let TIERS_VEICULAR_DATA = null;
+  let tierSelecionado = 'completo';
+  let addonsSelecionados = new Set();
   const MOSTRAR_CUSTO = usuario.perfil === 'admin' || usuario.perfil === 'operador';
 
   function fmtBRL(v) { return 'R$ ' + Number(v).toLocaleString('pt-BR', { minimumFractionDigits: 2 }); }
@@ -333,6 +371,7 @@
     const isVeicular = tipo === 'consulta_veicular';
     document.getElementById('secao-placa').style.display = isVeicular ? 'block' : 'none';
     document.getElementById('secao-alvo-pfpj').style.display = isVeicular ? 'none' : 'block';
+    if (isVeicular && !tiersVeicularCarregados) carregarTiersVeicular();
 
     document.getElementById('r-produto').textContent = p.nome;
     document.getElementById('r-valor').textContent = 'R$ ' + p.preco.toLocaleString('pt-BR');
@@ -379,6 +418,8 @@
       }
       payload.alvo_placa = alvo_placa;
       payload.alvo_nome = document.getElementById('alvo_nome_veiculo').value.trim();
+      payload.tier_veicular = tierSelecionado;
+      payload.addons_veicular = Array.from(addonsSelecionados);
     } else {
       const alvo_nome = document.getElementById('alvo_nome').value.trim();
       const alvo_documento = document.getElementById('alvo_documento').value.replace(/\D/g, '');
@@ -491,6 +532,114 @@
       document.getElementById('cliente-dropdown').style.display = 'none';
     }
   });
+
+  // --- Tiers da Consulta Veicular ---
+  async function carregarTiersVeicular() {
+    tiersVeicularCarregados = true;
+    try {
+      const res = await fetch('/api/pedidos/catalogo/veicular', { headers: { Authorization: `Bearer ${token}` } });
+      if (!res.ok) {
+        // Se não for admin (403), usa fallback local
+        if (res.status === 401 || res.status === 403) {
+          usarTiersFallback();
+          return;
+        }
+        throw new Error('http ' + res.status);
+      }
+      TIERS_VEICULAR_DATA = await res.json();
+      renderTiersVeicular();
+      renderAddonsVeicular();
+      atualizarResumoVeicular();
+    } catch (e) {
+      console.warn('Falha ao carregar tiers, usando fallback:', e);
+      usarTiersFallback();
+    }
+  }
+
+  function usarTiersFallback() {
+    // Fallback (operador sem acesso ao endpoint admin): usa os metadados de produtos.js via /api/produtos
+    TIERS_VEICULAR_DATA = {
+      tiers: [
+        { slug:'basico',   nome:'Básico',   preco_sugerido:47,  descricao:'Checagem essencial pré-compra',       qtd_servicos:5  },
+        { slug:'completo', nome:'Completo', preco_sugerido:97,  descricao:'Dossiê completo com histórico',         qtd_servicos:9  },
+        { slug:'premium',  nome:'Premium',  preco_sugerido:147, descricao:'Completo + leilão + chassi profundo',  qtd_servicos:11 }
+      ],
+      addons: [
+        { slug:'leilao',           nome:'Consulta de leilão',          preco_adicional:29, descricao:'Detecta sinistro grave / salvado' },
+        { slug:'cnh_proprietario', nome:'CNH do proprietário',         preco_adicional:15, descricao:'Pontuação e flags' },
+        { slug:'veiculos_por_cpf', nome:'Outros veículos do dono',      preco_adicional:19, descricao:'Lista veículos por CPF' }
+      ]
+    };
+    renderTiersVeicular();
+    renderAddonsVeicular();
+    atualizarResumoVeicular();
+  }
+
+  function renderTiersVeicular() {
+    const grid = document.getElementById('tiers-veicular-grid');
+    grid.innerHTML = TIERS_VEICULAR_DATA.tiers.map(t => `
+      <div class="tier-mini ${t.slug === tierSelecionado ? 'selecionado' : ''}" onclick="selecionarTier('${t.slug}')">
+        ${t.slug === 'completo' ? '<span class="badge-mini">Mais vendido</span>' : ''}
+        <div class="tier-nome">${t.nome}</div>
+        <div class="tier-preco">R$ ${t.preco_sugerido}</div>
+        <div class="tier-desc">${t.descricao}</div>
+        <div class="tier-servicos">${t.qtd_servicos} serviços</div>
+      </div>
+    `).join('');
+  }
+
+  function renderAddonsVeicular() {
+    const grid = document.getElementById('addons-veicular-grid');
+    grid.innerHTML = TIERS_VEICULAR_DATA.addons.map(a => {
+      const ativo = addonsSelecionados.has(a.slug);
+      // Se o tier já inclui o serviço (ex: premium + leilao), mostra como "já incluso"
+      const jaIncluso = (tierSelecionado === 'premium' && a.slug === 'leilao');
+      return `
+        <label class="addon-mini ${ativo ? 'ativo' : ''}" style="${jaIncluso ? 'opacity:0.5;cursor:not-allowed' : ''}">
+          <input type="checkbox" ${ativo || jaIncluso ? 'checked' : ''} ${jaIncluso ? 'disabled' : ''}
+                 onchange="toggleAddon('${a.slug}', this.checked)">
+          <div style="flex:1">
+            <div class="addon-titulo">${a.nome}${jaIncluso ? ' <span style="font-size:10px;color:#16a34a">(já incluso)</span>' : ''}</div>
+            <div style="font-size:10px;color:#6b7280">${a.descricao}</div>
+          </div>
+          <span class="addon-preco-lbl">+R$ ${a.preco_adicional}</span>
+        </label>
+      `;
+    }).join('');
+  }
+
+  window.selecionarTier = function(slug) {
+    tierSelecionado = slug;
+    // Se mudou pra Premium, remove addon leilao (fica incluso)
+    if (slug === 'premium') addonsSelecionados.delete('leilao');
+    renderTiersVeicular();
+    renderAddonsVeicular();
+    atualizarResumoVeicular();
+  };
+
+  window.toggleAddon = function(slug, checked) {
+    if (checked) addonsSelecionados.add(slug);
+    else addonsSelecionados.delete(slug);
+    renderAddonsVeicular();
+    atualizarResumoVeicular();
+  };
+
+  function atualizarResumoVeicular() {
+    const tier = TIERS_VEICULAR_DATA.tiers.find(t => t.slug === tierSelecionado);
+    if (!tier) return;
+    let valor = tier.preco_sugerido;
+    const addonsNomes = [];
+    addonsSelecionados.forEach(slug => {
+      const a = TIERS_VEICULAR_DATA.addons.find(x => x.slug === slug);
+      if (a) { valor += a.preco_adicional; addonsNomes.push(a.nome); }
+    });
+    document.getElementById('rv-tier').textContent = tier.nome;
+    document.getElementById('rv-addons-label').textContent = addonsNomes.length ? '+ ' + addonsNomes.join(' + ') : 'sem add-ons';
+    document.getElementById('rv-valor').textContent = valor.toFixed(2).replace('.', ',');
+
+    // Atualiza o resumo global do lado direito
+    document.getElementById('r-valor').textContent = 'R$ ' + valor.toLocaleString('pt-BR', { minimumFractionDigits: 2 });
+  }
 
   // Inicializar
   renderProdutos();
