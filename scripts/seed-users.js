@@ -6,8 +6,8 @@ const { Pool } = require('pg');
 const bcrypt = require('bcryptjs');
 
 const USERS = [
-  { email: 'matheus@recobro.com', senha: 'SEJ43KAx15coYQ', nome: 'Matheus', perfil: 'admin' },
-  { email: 'pedro@recobro.com',   senha: '8JEGoIeCDx0oWg', nome: 'Pedro',   perfil: 'admin' },
+  { email: 'matheus@recobro.com', senha: 'admin123', nome: 'Matheus', perfil: 'admin' },
+  { email: 'pedro@recobro.com',   senha: 'admin123', nome: 'Pedro',   perfil: 'admin' },
 ];
 
 (async () => {
