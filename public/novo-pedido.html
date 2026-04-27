@@ -168,31 +168,21 @@
       </div>
     </div>
 
-    <!-- Upload de documentos do imóvel para análise IA -->
+    <!-- Upload de documentos do imóvel para análise IA (v2) -->
     <div style="margin-top:18px;border-top:1px solid #e5e7eb;padding-top:16px">
-      <div style="font-size:12px;color:#6b7280;margin-bottom:8px">DOCUMENTOS DO IMÓVEL (opcional — análise por IA)</div>
+      <div style="font-size:12px;color:#6b7280;margin-bottom:8px">DOCUMENTOS DO IMÓVEL (opcional)</div>
       <div style="font-size:12px;color:#374151;margin-bottom:10px;line-height:1.5">
-        Anexe a <strong>matrícula</strong> e/ou <strong>escritura</strong> (PDF, JPG ou PNG até 20MB).
-        A IA vai extrair dados estruturados e adicionar dois blocos ao PDF final: <em>Resumo Executivo + Alertas</em>
-        e <em>Identificação + Histórico de Proprietários</em>. Sem documentos, o pedido segue normal.
+        Arraste aqui ou clique para selecionar — PDF, JPG ou PNG, até 20MB cada, máximo 5 arquivos.
+        A IA identifica automaticamente o tipo de cada documento (matrícula, escritura, IPTU, contrato, certidão de ônus, ITBI…) e cruza os dados com as APIs externas.
       </div>
       <div id="docs-imovel-lista" style="margin-bottom:10px"></div>
-      <div style="display:flex;gap:8px;flex-wrap:wrap">
-        <label class="btn btn-outline btn-sm" style="cursor:pointer">
-          + Matrícula
-          <input type="file" accept=".pdf,.jpg,.jpeg,.png" style="display:none"
-                 onchange="anexarDocImovel(this, 'matricula')">
-        </label>
-        <label class="btn btn-outline btn-sm" style="cursor:pointer">
-          + Escritura
-          <input type="file" accept=".pdf,.jpg,.jpeg,.png" style="display:none"
-                 onchange="anexarDocImovel(this, 'escritura')">
-        </label>
-        <label class="btn btn-outline btn-sm" style="cursor:pointer">
-          + Outro
-          <input type="file" accept=".pdf,.jpg,.jpeg,.png" style="display:none"
-                 onchange="anexarDocImovel(this, 'outro')">
-        </label>
+      <label id="docs-imovel-drop" class="btn btn-outline" style="cursor:pointer;display:flex;align-items:center;justify-content:center;width:100%;padding:18px;border:2px dashed #cbd5e1;background:#f8fafc;color:#475569;text-transform:none;font-weight:500">
+        + Adicionar documentos
+        <input type="file" accept=".pdf,.jpg,.jpeg,.png" multiple style="display:none"
+               onchange="anexarDocsImovel(this)">
+      </label>
+      <div style="margin-top:8px;font-size:11px;color:#6b7280">
+        💡 A IA classifica cada documento automaticamente. Documentos não imobiliários (RG, foto, etc.) viram apenas alerta — não bloqueiam o pedido.
       </div>
       <div id="docs-imovel-aviso" style="margin-top:8px;font-size:11px;color:#dc2626"></div>
     </div>
@@ -318,8 +308,8 @@
     investigacao_patrimonial: { nome: 'Investigação Patrimonial', preco: 497, prazo: '4 horas' }
   };
 
-  // Documentos do imóvel selecionados antes do pedido ser criado.
-  // Estrutura: [{ tipo: 'matricula', file: File, nome: 'matricula.pdf', tamanho: 12345 }]
+  // V2: docs do imóvel sem tipo — a IA classifica automaticamente.
+  // Estrutura: [{ file: File, nome: 'matricula.pdf', tamanho: 12345 }]
   let docsImovel = [];
   const MAX_DOCS_IMOVEL = 5;
   const TAM_MAX_DOC = 20 * 1024 * 1024; // 20MB
@@ -330,26 +320,27 @@
     return (b / (1024 * 1024)).toFixed(1) + ' MB';
   }
 
-  function anexarDocImovel(input, tipo) {
+  function anexarDocsImovel(input) {
     const aviso = document.getElementById('docs-imovel-aviso');
     aviso.textContent = '';
-    const f = input.files && input.files[0];
+    const arquivos = Array.from(input.files || []);
     input.value = '';
-    if (!f) return;
-    if (docsImovel.length >= MAX_DOCS_IMOVEL) {
-      aviso.textContent = `Limite de ${MAX_DOCS_IMOVEL} documentos por pedido.`;
-      return;
+    for (const f of arquivos) {
+      if (docsImovel.length >= MAX_DOCS_IMOVEL) {
+        aviso.textContent = `Limite de ${MAX_DOCS_IMOVEL} documentos por pedido.`;
+        break;
+      }
+      if (f.size > TAM_MAX_DOC) {
+        aviso.textContent = `Arquivo "${f.name}" tem ${fmtTamanho(f.size)} — limite é 20MB.`;
+        continue;
+      }
+      const mime = (f.type || '').toLowerCase();
+      if (!['application/pdf', 'image/jpeg', 'image/jpg', 'image/png'].includes(mime)) {
+        aviso.textContent = `Tipo "${mime || 'desconhecido'}" não suportado. Use PDF, JPG ou PNG.`;
+        continue;
+      }
+      docsImovel.push({ file: f, nome: f.name, tamanho: f.size });
     }
-    if (f.size > TAM_MAX_DOC) {
-      aviso.textContent = `Arquivo "${f.name}" tem ${fmtTamanho(f.size)} — limite é 20MB.`;
-      return;
-    }
-    const mime = (f.type || '').toLowerCase();
-    if (!['application/pdf', 'image/jpeg', 'image/jpg', 'image/png'].includes(mime)) {
-      aviso.textContent = `Tipo "${mime || 'desconhecido'}" não suportado. Use PDF, JPG ou PNG.`;
-      return;
-    }
-    docsImovel.push({ tipo, file: f, nome: f.name, tamanho: f.size });
     renderDocsImovel();
   }
 
@@ -365,7 +356,7 @@
     lista.innerHTML = docsImovel.map((d, i) => `
       <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 10px;background:#f9fafb;border:1px solid #e5e7eb;border-radius:6px;margin-bottom:6px;font-size:12px">
         <div>
-          <span style="display:inline-block;padding:2px 8px;background:#dbeafe;color:#1e3a8a;border-radius:4px;font-weight:700;font-size:10px;text-transform:uppercase">${esc(d.tipo)}</span>
+          <span style="display:inline-block;padding:2px 8px;background:#fef3c7;color:#92400e;border-radius:4px;font-weight:700;font-size:10px;text-transform:uppercase">A classificar</span>
           <strong style="margin-left:8px">${esc(d.nome)}</strong>
           <span style="color:#6b7280">· ${fmtTamanho(d.tamanho)}</span>
         </div>
@@ -582,15 +573,13 @@
       if (!res.ok) return alerta(data.erro || 'Erro ao criar pedido', 'error');
 
       // Upload de documentos do imóvel (apenas Due Diligence Imobiliária)
+      // V2: nao manda mais tipo — a IA classifica no servidor.
       if (tipo === 'due_diligence_imobiliaria' && docsImovel.length) {
         try {
           const fd = new FormData();
-          const tipos = [];
           for (const d of docsImovel) {
             fd.append('documentos', d.file, d.nome);
-            tipos.push(d.tipo);
           }
-          fd.append('tipos', JSON.stringify(tipos));
           const upRes = await fetch(`/api/pedidos/${data.id}/documentos`, {
             method: 'POST',
             headers: { Authorization: `Bearer ${token}` },

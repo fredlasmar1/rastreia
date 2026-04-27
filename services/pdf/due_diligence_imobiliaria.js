@@ -27,6 +27,40 @@ function corSeveridade(sev) {
   return { bg: '#dcfce7', fg: '#065f46', label: 'BAIXA' };
 }
 
+function rotuloCategoria(c) {
+  const m = {
+    proprietarios: 'Proprietários',
+    transmissoes: 'Transmissões',
+    onus: 'Ônus & Gravames',
+    endereco: 'Endereço',
+    documento: 'Documentos',
+    outro: 'Outros'
+  };
+  return m[(c || '').toLowerCase()] || 'Outros';
+}
+
+function blocoDocumentosAnalisados(doc, y, analise) {
+  const docs = Array.isArray(analise?.documentos_processados) ? analise.documentos_processados : [];
+  if (!docs.length) return y;
+  y = secao(doc, 'DOCUMENTOS ANALISADOS PELA IA', y);
+  for (const d of docs) {
+    y = verificarPagina(doc, y, 18);
+    const irrel = !!d.irrelevante;
+    const bg = irrel ? '#fef3c7' : '#f3f4f6';
+    const fg = irrel ? '#92400e' : '#111827';
+    doc.rect(MARGEM, y, LARGURA, 16).fill(bg).stroke('#e5e7eb');
+    const tipoLbl = irrel ? `${(d.tipo || 'outro').toUpperCase()} (não reconhecido)` : (d.tipo || '-').toUpperCase();
+    doc.fillColor(fg).fontSize(7.5).font('Helvetica-Bold').text(tipoLbl, MARGEM + 6, y + 4, { width: 160, lineBreak: false });
+    const linhaResumo = [
+      d.filename || '-',
+      d.resumo_curto ? `· ${d.resumo_curto}` : null
+    ].filter(Boolean).join(' ');
+    doc.fillColor('#374151').fontSize(7).font('Helvetica').text(linhaResumo, MARGEM + 170, y + 5, { width: LARGURA - 180, lineBreak: false });
+    y += 18;
+  }
+  return y + 4;
+}
+
 function blocoResumoExecutivoIA(doc, y, analise) {
   if (!analise) return y;
   y = secao(doc, 'RESUMO EXECUTIVO — ANÁLISE DOS DOCUMENTOS (IA)', y);
@@ -41,10 +75,26 @@ function blocoResumoExecutivoIA(doc, y, analise) {
   }
 
   const alertas = Array.isArray(analise.alertas) ? analise.alertas : [];
-  if (alertas.length) {
-    doc.fillColor(COR.azul).fontSize(9).font('Helvetica-Bold').text(`ALERTAS IDENTIFICADOS (${alertas.length})`, MARGEM, y);
-    y += 14;
-    for (const a of alertas) {
+  if (!alertas.length) return y + 4;
+
+  // Agrupa por categoria
+  const grupos = {};
+  for (const a of alertas) {
+    const cat = (a.categoria || 'outro').toLowerCase();
+    if (!grupos[cat]) grupos[cat] = [];
+    grupos[cat].push(a);
+  }
+  const ordem = ['proprietarios', 'transmissoes', 'onus', 'endereco', 'documento', 'outro'];
+  const cats = Object.keys(grupos).sort((a, b) => ordem.indexOf(a) - ordem.indexOf(b));
+
+  doc.fillColor(COR.azul).fontSize(9).font('Helvetica-Bold').text(`ALERTAS IDENTIFICADOS (${alertas.length})`, MARGEM, y);
+  y += 14;
+
+  for (const cat of cats) {
+    y = verificarPagina(doc, y, 16);
+    doc.fillColor('#374151').fontSize(8).font('Helvetica-Bold').text(rotuloCategoria(cat).toUpperCase() + ` (${grupos[cat].length})`, MARGEM, y);
+    y += 12;
+    for (const a of grupos[cat]) {
       const sev = corSeveridade(a.severidade);
       const tit = (a.titulo || '-').toString();
       const desc = (a.descricao || '').toString();
@@ -52,7 +102,6 @@ function blocoResumoExecutivoIA(doc, y, analise) {
       const altura = Math.max(22, hDesc + 14);
       y = verificarPagina(doc, y, altura + 4);
       doc.rect(MARGEM, y, LARGURA, altura).fill(sev.bg).stroke('#e5e7eb');
-      // tag de severidade
       doc.rect(MARGEM + 6, y + 5, 60, 12).fill(sev.fg);
       doc.fillColor('#fff').fontSize(7).font('Helvetica-Bold').text(sev.label, MARGEM + 6, y + 8, { width: 60, align: 'center' });
       doc.fillColor(sev.fg).fontSize(8.5).font('Helvetica-Bold').text(tit, MARGEM + 72, y + 5, { width: LARGURA - 80 });
@@ -61,6 +110,52 @@ function blocoResumoExecutivoIA(doc, y, analise) {
       }
       y += altura + 4;
     }
+    y += 2;
+  }
+  return y + 4;
+}
+
+function blocoOnusIA(doc, y, analise) {
+  const onus = Array.isArray(analise?.onus_e_gravames) ? analise.onus_e_gravames : [];
+  if (!onus.length) return y;
+  y = secao(doc, 'ÔNUS E GRAVAMES (IA — extraídos dos documentos)', y);
+  for (const o of onus) {
+    y = verificarPagina(doc, y, 22);
+    const ativo = o.ativo === true;
+    const bg = ativo ? '#fef2f2' : '#f9fafb';
+    const borda = ativo ? '#fecaca' : '#e5e7eb';
+    doc.rect(MARGEM, y, LARGURA, 20).fill(bg).stroke(borda);
+    const tipo = (o.tipo || 'gravame').toString().toUpperCase();
+    const tag = ativo ? '[ATIVO]' : '[BAIXADO]';
+    doc.fillColor(ativo ? COR.vermelho : '#6b7280').fontSize(8).font('Helvetica-Bold').text(`${tipo}  ${tag}`, MARGEM + 6, y + 4, { width: 200, lineBreak: false });
+    const linha2 = [
+      o.credor ? `Credor: ${o.credor}` : null,
+      o.valor != null ? `Valor: ${formatarBRL(o.valor)}` : null,
+      o.data ? `Data: ${o.data}` : null
+    ].filter(Boolean).join('  |  ');
+    doc.fillColor('#374151').fontSize(7).font('Helvetica').text(linha2 || '-', MARGEM + 6, y + 12, { width: LARGURA - 12 });
+    y += 22;
+  }
+  return y + 4;
+}
+
+function blocoTransmissoesIA(doc, y, analise) {
+  const trans = Array.isArray(analise?.transmissoes) ? analise.transmissoes : [];
+  if (!trans.length) return y;
+  y = secao(doc, 'HISTÓRICO DE TRANSMISSÕES (IA)', y);
+  for (const t of trans) {
+    y = verificarPagina(doc, y, 18);
+    doc.rect(MARGEM, y, LARGURA, 16).fill('#f9fafb').stroke('#e5e7eb');
+    const cab = `${t.data || '-'}  |  ${t.tipo || '-'}`;
+    doc.fillColor('#111827').fontSize(7.5).font('Helvetica-Bold').text(cab, MARGEM + 6, y + 3, { width: LARGURA - 12, lineBreak: false });
+    const linha2 = [
+      `${t.de_nome || '-'}${t.de_cpf_cnpj ? ' (' + formatarDoc(t.de_cpf_cnpj) + ')' : ''}`,
+      '→',
+      `${t.para_nome || '-'}${t.para_cpf_cnpj ? ' (' + formatarDoc(t.para_cpf_cnpj) + ')' : ''}`,
+      t.valor != null ? `· ${formatarBRL(t.valor)}` : ''
+    ].join(' ');
+    doc.fillColor('#374151').fontSize(7).font('Helvetica').text(linha2, MARGEM + 6, y + 11, { width: LARGURA - 12, lineBreak: false });
+    y += 18;
   }
   return y + 4;
 }
@@ -353,17 +448,22 @@ function render(doc, pedido, dados, score, checklist, produto) {
   // e os dados extraídos viram esses dois blocos abaixo.
   const analiseIA = (pedido.analise_ia_status === 'concluida') ? pedido.analise_ia : null;
   const analise = (typeof analiseIA === 'string') ? safeParseJSON(analiseIA) : analiseIA;
-  if (analise) y = blocoResumoExecutivoIA(doc, y, analise);
+  if (analise) {
+    y = blocoDocumentosAnalisados(doc, y, analise);
+    y = blocoResumoExecutivoIA(doc, y, analise);
+  }
 
   // COMPRADOR / VENDEDOR / IMÓVEL
   y = secaoComprador(doc, y, dados, pedido);
   y = secaoVendedor(doc, y, dados, pedido);
   y = secaoImovel(doc, y, dados, pedido);
 
-  // Identificação + Proprietários extraídos da matrícula pela IA
+  // Identificação + Proprietários + Ônus + Transmissões extraídos pela IA
   if (analise) {
     y = blocoIdentificacaoIA(doc, y, analise);
     y = blocoProprietariosIA(doc, y, analise);
+    y = blocoOnusIA(doc, y, analise);
+    y = blocoTransmissoesIA(doc, y, analise);
   }
 
   // Quando o alvo é uma pessoa, traz o bloco completo de processos/protestos do alvo
