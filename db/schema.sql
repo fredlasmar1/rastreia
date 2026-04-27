@@ -272,3 +272,33 @@ ON CONFLICT (chave) DO UPDATE SET
   confianca = EXCLUDED.confianca,
   atualizado_em = NOW()
 WHERE api_custos.confianca != 'manual';
+
+-- ==========================================================================
+-- Fase 7 (v3): CPF/CNPJ opcional + múltiplos alvos para Due Diligence Imobiliária
+-- ==========================================================================
+-- A IA pode extrair os proprietários dos documentos (matrícula/escritura) e
+-- disparar consultas externas para CADA um. Quando isso ocorre, criamos uma
+-- linha em pedido_alvos por proprietário (origem='extraido_ia'). Se o
+-- operador informar manualmente, origem='manual'. A tabela pedidos continua
+-- com alvo_documento populado com o primeiro alvo (compat retroativa).
+
+CREATE TABLE IF NOT EXISTS pedido_alvos (
+  id SERIAL PRIMARY KEY,
+  pedido_id UUID NOT NULL REFERENCES pedidos(id) ON DELETE CASCADE,
+  nome VARCHAR(255),
+  documento VARCHAR(20) NOT NULL,
+  tipo_documento VARCHAR(10),                 -- 'cpf' | 'cnpj'
+  origem VARCHAR(20) NOT NULL DEFAULT 'manual', -- 'manual' | 'extraido_ia'
+  principal BOOLEAN DEFAULT false,
+  criado_em TIMESTAMP DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_pedido_alvos_pedido ON pedido_alvos(pedido_id);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_pedido_alvos_pedido_doc ON pedido_alvos(pedido_id, documento);
+
+-- Mensagem de erro / bloqueio do processamento (ex: cpf_ilegivel)
+ALTER TABLE pedidos ADD COLUMN IF NOT EXISTS erro_processamento TEXT;
+
+-- Novos valores aceitos em analise_ia_status:
+--   'cpf_ilegivel'        — IA não conseguiu extrair CPF/CNPJ legível
+--   'aguardando_extracao' — pedido criado sem CPF, esperando extração da IA
+-- A coluna já é VARCHAR(20), nenhuma migration estrutural necessária.

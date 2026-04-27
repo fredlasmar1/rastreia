@@ -43,13 +43,16 @@
   <div class="pedido-section" id="secao-alvo-pfpj">
     <div class="section-title">2. Dados do Alvo da Consulta</div>
     <div id="label-alvo1" style="font-size:12px;color:#6b7280;margin-bottom:8px;display:none">COMPRADOR</div>
+    <div id="aviso-cpf-opcional" style="display:none;background:#eff6ff;border:1px solid #bfdbfe;border-radius:6px;padding:10px 12px;margin-bottom:12px;font-size:12px;color:#1e3a8a;line-height:1.5">
+      💡 <strong>Due Diligence Imobiliária:</strong> se você anexar matrícula ou escritura abaixo, o CPF/CNPJ é <strong>opcional</strong> — a IA extrai os proprietários do documento automaticamente.
+    </div>
     <div class="form-grid">
       <div class="form-group full">
         <label>Nome Completo / Razão Social *</label>
         <input type="text" id="alvo_nome" placeholder="Nome ou Razão Social">
       </div>
       <div class="form-group">
-        <label>CPF ou CNPJ *</label>
+        <label id="label-alvo-doc">CPF ou CNPJ *</label>
         <input type="text" id="alvo_documento" placeholder="000.000.000-00 ou 00.000.000/0000-00" oninput="detectarTipo(this.value)">
       </div>
       <div class="form-group">
@@ -486,6 +489,8 @@
     const isImob = tipo === 'due_diligence_imobiliaria';
     document.getElementById('secao-imobiliaria').style.display = isImob ? 'block' : 'none';
     document.getElementById('label-alvo1').style.display = isImob ? 'block' : 'none';
+    document.getElementById('aviso-cpf-opcional').style.display = isImob ? 'block' : 'none';
+    document.getElementById('label-alvo-doc').textContent = isImob ? 'CPF ou CNPJ (opcional se anexar documentos)' : 'CPF ou CNPJ *';
 
     // Mostrar/ocultar seção veicular
     const isVeicular = tipo === 'consulta_veicular';
@@ -544,10 +549,17 @@
       const alvo_nome = document.getElementById('alvo_nome').value.trim();
       const alvo_documento = document.getElementById('alvo_documento').value.replace(/\D/g, '');
       const alvo_tipo = document.getElementById('alvo_tipo').value;
-      if (!alvo_documento) return alerta('Informe o CPF ou CNPJ', 'error');
+      // V3: Due Diligence Imobiliária com documentos anexados → CPF é opcional.
+      // A IA extrai os proprietários da matrícula/escritura e cria os alvos.
+      const isImobiliaria = tipo === 'due_diligence_imobiliaria';
+      const temDocs = docsImovel.length > 0;
+      if (!alvo_documento && !(isImobiliaria && temDocs)) {
+        return alerta('Informe o CPF ou CNPJ', 'error');
+      }
       payload.alvo_nome = alvo_nome;
-      payload.alvo_documento = alvo_documento;
+      payload.alvo_documento = alvo_documento || null;
       payload.alvo_tipo = alvo_tipo;
+      if (isImobiliaria && temDocs) payload.tem_documentos = true;
     }
 
     // Campos de Due Diligence Imobiliária
@@ -558,8 +570,11 @@
       payload.imovel_matricula = document.getElementById('imovel_matricula').value.trim();
       payload.imovel_endereco = document.getElementById('imovel_endereco').value.trim();
       payload.imovel_estado = document.getElementById('imovel_estado').value;
-      if (!payload.alvo2_nome || !payload.alvo2_documento || !payload.imovel_matricula) {
-        return alerta('Para Due Diligence Imobiliária: vendedor e matrícula são obrigatórios', 'error');
+      // V3: com documentos anexados, vendedor e matrícula passam a ser opcionais
+      // (a IA preenche o que conseguir extrair).
+      const temDocs = docsImovel.length > 0;
+      if (!temDocs && (!payload.alvo2_nome || !payload.alvo2_documento || !payload.imovel_matricula)) {
+        return alerta('Sem documentos anexados: vendedor e matrícula são obrigatórios. Anexe escritura/matrícula ou preencha os campos.', 'error');
       }
     }
 

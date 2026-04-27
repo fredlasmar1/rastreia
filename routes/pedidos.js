@@ -13,6 +13,7 @@ const { criarPreferencia } = require('../services/mercadopago');
 const { PRODUTOS } = require('../services/produtos');
 const credifyCatalogo = require('../services/credify/catalogo');
 const analiseIA = require('../services/analise_documentos_ia');
+const pedidoAlvos = require('../services/pedido_alvos');
 
 // ─── Upload de documentos do imóvel (Due Diligence Imobiliária) ───
 const UPLOADS_ROOT = path.join(__dirname, '..', 'uploads', 'imoveis');
@@ -163,12 +164,21 @@ router.post('/', autenticar, async (req, res) => {
 
     let docLimpo = null;
     let placaLimpa = null;
+    // V3: para due_diligence_imobiliaria, alvo_documento é opcional se houver
+    // intenção de subir documentos (frontend envia tem_documentos=true). Nesse
+    // caso, a IA extrai os proprietários da matrícula/escritura e cria os alvos.
+    const isImobiliaria = tipo === 'due_diligence_imobiliaria';
+    const temDocumentos = !!req.body.tem_documentos;
+    const cpfPodeSerOpcional = isImobiliaria && temDocumentos;
 
     if (isVeicular) {
       placaLimpa = (alvo_placa || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
       if (!PLACA_REGEX.test(placaLimpa)) {
         return res.status(400).json({ erro: 'Placa inválida. Use formato AAA9999 (antigo) ou AAA9A99 (Mercosul)' });
       }
+    } else if (cpfPodeSerOpcional && !alvo_documento) {
+      // CPF opcional: a IA extrai dos documentos. Não validamos alvo_tipo aqui.
+      docLimpo = null;
     } else {
       if (!alvo_documento) {
         return res.status(400).json({ erro: 'alvo_documento é obrigatório' });
@@ -228,12 +238,19 @@ router.post('/', autenticar, async (req, res) => {
     const tokenPublico = crypto.randomBytes(32).toString('hex');
 
     // Validar segundo alvo se for due_diligence_imobiliaria
+    // V3: matricula, alvo2_nome e alvo2_documento passam a ser opcionais quando
+    // o operador sobe documentos do imóvel — a IA preenche o que conseguir.
     let alvo2DocLimpo = null;
     if (tipo === 'due_diligence_imobiliaria') {
-      if (!alvo2_nome || !alvo2_documento || !imovel_matricula) {
-        return res.status(400).json({ erro: 'Para Due Diligence Imobiliária: alvo2_nome, alvo2_documento e imovel_matricula são obrigatórios' });
+      if (!temDocumentos && (!alvo2_nome || !alvo2_documento || !imovel_matricula)) {
+        return res.status(400).json({ erro: 'Para Due Diligence Imobiliária sem documentos anexados: alvo2_nome, alvo2_documento e imovel_matricula são obrigatórios' });
       }
-      alvo2DocLimpo = alvo2_documento.replace(/\D/g, '');
+      if (alvo2_documento) {
+        alvo2DocLimpo = alvo2_documento.replace(/\D/g, '');
+        if (alvo2DocLimpo.length !== 11 && alvo2DocLimpo.length !== 14) {
+          return res.status(400).json({ erro: 'CPF/CNPJ do vendedor deve ter 11 ou 14 dígitos' });
+        }
+      }
     }
 
     const nomeAlvoFinal = isVeicular
@@ -266,6 +283,31 @@ router.post('/', autenticar, async (req, res) => {
     const pedido = result.rows[0];
     await pool.query('INSERT INTO logs (pedido_id, usuario_id, acao, detalhes) VALUES ($1, $2, $3, $4)',
       [pedido.id, req.usuario.id, 'Pedido criado', `Finalidade: ${finalidade} | IP: ${ip}`]);
+
+    // V3: para due_diligence_imobiliaria, sincroniza pedido_alvos.
+    // Se o operador informou CPF: cria alvo principal manual.
+    // Se não informou (cpfPodeSerOpcional): marca status aguardando_extracao —
+    // a IA vai extrair os proprietários quando rodar /consultar.
+    if (isImobiliaria) {
+      if (docLimpo) {
+        await pedidoAlvos.adicionarAlvo(pedido.id, {
+          nome: nomeAlvoFinal, documento: docLimpo, origem: 'manual', principal: true
+        });
+        // Vendedor (alvo2) também vira alvo consultado (compat com v2)
+        if (alvo2DocLimpo) {
+          await pedidoAlvos.adicionarAlvo(pedido.id, {
+            nome: alvo2_nome?.trim() || null, documento: alvo2DocLimpo, origem: 'manual', principal: false
+          });
+        }
+      } else {
+        // CPF opcional + docs vão ser anexados → marcar aguardando extração
+        await pool.query(
+          `UPDATE pedidos SET analise_ia_status = 'aguardando_extracao', atualizado_em = NOW() WHERE id = $1`,
+          [pedido.id]
+        );
+        pedido.analise_ia_status = 'aguardando_extracao';
+      }
+    }
 
     // Gerar link Mercado Pago
     if (process.env.MP_ACCESS_TOKEN) {
@@ -435,6 +477,60 @@ router.get('/:id/documentos', autenticar, async (req, res) => {
   }
 });
 
+// V3: listar alvos consultados de um pedido (Due Diligence Imobiliária)
+router.get('/:id/alvos', autenticar, async (req, res) => {
+  try {
+    const alvos = await pedidoAlvos.listarAlvos(req.params.id);
+    res.json({ alvos });
+  } catch (e) {
+    console.error('[pedidos] listar alvos:', e);
+    res.status(500).json({ erro: 'Erro ao listar alvos' });
+  }
+});
+
+// V3: adicionar alvo manualmente (operador completa quando IA falhou em ler CPF)
+router.post('/:id/alvos', autenticar, async (req, res) => {
+  try {
+    const { nome, documento } = req.body || {};
+    if (!documento) return res.status(400).json({ erro: 'documento é obrigatório' });
+    if (!pedidoAlvos.docLegivel(documento)) {
+      return res.status(400).json({ erro: 'CPF/CNPJ inválido (use 11 ou 14 dígitos)' });
+    }
+    const pRes = await pool.query('SELECT id, tipo FROM pedidos WHERE id = $1', [req.params.id]);
+    if (!pRes.rows.length) return res.status(404).json({ erro: 'Pedido não encontrado' });
+    if (pRes.rows[0].tipo !== 'due_diligence_imobiliaria') {
+      return res.status(400).json({ erro: 'Múltiplos alvos só em Due Diligence Imobiliária' });
+    }
+    const total = await pedidoAlvos.contarAlvos(req.params.id);
+    if (total >= pedidoAlvos.MAX_ALVOS) {
+      return res.status(400).json({ erro: `Máximo de ${pedidoAlvos.MAX_ALVOS} alvos por pedido` });
+    }
+    const principal = total === 0;
+    const out = await pedidoAlvos.adicionarAlvo(req.params.id, {
+      nome, documento, origem: 'manual', principal
+    });
+    if (!out) return res.status(400).json({ erro: 'Não foi possível adicionar o alvo' });
+    if (principal) await pedidoAlvos.atualizarAlvoPrincipalEmPedido(req.params.id);
+    // Limpa flag cpf_ilegivel se estava marcada — agora há alvo manual.
+    await pool.query(
+      `UPDATE pedidos
+          SET analise_ia_status = CASE WHEN analise_ia_status IN ('cpf_ilegivel','aguardando_extracao')
+                                       THEN 'pendente' ELSE analise_ia_status END,
+              erro_processamento = CASE WHEN analise_ia_status IN ('cpf_ilegivel','aguardando_extracao')
+                                        THEN NULL ELSE erro_processamento END,
+              atualizado_em = NOW()
+        WHERE id = $1`,
+      [req.params.id]
+    );
+    await pool.query('INSERT INTO logs (pedido_id, usuario_id, acao, detalhes) VALUES ($1, $2, $3, $4)',
+      [req.params.id, req.usuario.id, 'Alvo adicionado manualmente', `documento=${pedidoAlvos.digSafe(documento)}`]);
+    res.json({ ok: true, alvo: out });
+  } catch (e) {
+    console.error('[pedidos] adicionar alvo:', e);
+    res.status(500).json({ erro: 'Erro ao adicionar alvo' });
+  }
+});
+
 // Disparar análise IA manualmente (idempotente)
 router.post('/:id/analise-ia', autenticar, async (req, res) => {
   try {
@@ -489,7 +585,35 @@ router.post('/:id/consultar', autenticar, async (req, res) => {
   try {
     const pResult = await pool.query('SELECT * FROM pedidos WHERE id = $1', [req.params.id]);
     if (pResult.rows.length === 0) return res.status(404).json({ erro: 'Pedido não encontrado' });
-    const pedido = pResult.rows[0];
+    let pedido = pResult.rows[0];
+
+    // V3: Due Diligence Imobiliária com CPF opcional + documentos.
+    // Se está aguardando extração, roda a IA primeiro para popular pedido_alvos
+    // a partir dos documentos. Só depois roda as consultas externas.
+    if (pedido.tipo === 'due_diligence_imobiliaria') {
+      const totalAlvos = await pedidoAlvos.contarAlvos(pedido.id);
+      const precisaExtrair = pedido.analise_ia_status === 'aguardando_extracao' || totalAlvos === 0;
+      if (precisaExtrair) {
+        console.log(`[v3] pedido ${pedido.id}: rodando análise IA antes das consultas (extração de alvos)`);
+        const out = await analiseIA.analisarDocumentosImovel(pedido.id);
+        if (out.status === 'cpf_ilegivel') {
+          return res.status(400).json({
+            erro: 'cpf_ilegivel',
+            mensagem: out.erro || 'IA não conseguiu extrair CPF/CNPJ dos documentos. Informe manualmente em /alvos.'
+          });
+        }
+        // Recarrega pedido para pegar alvo_documento atualizado pela IA
+        const refresh = await pool.query('SELECT * FROM pedidos WHERE id = $1', [pedido.id]);
+        pedido = refresh.rows[0];
+      }
+      // Se ainda está em cpf_ilegivel após tentativa, bloqueia
+      if (pedido.analise_ia_status === 'cpf_ilegivel') {
+        return res.status(400).json({
+          erro: 'cpf_ilegivel',
+          mensagem: pedido.erro_processamento || 'Pedido bloqueado: CPF ilegível. Informe manualmente em /alvos.'
+        });
+      }
+    }
 
     // Se alvo_nome for placeholder, tenta auto-preencher depois com nome real
     const nomePlaceholder = !pedido.alvo_nome || pedido.alvo_nome === 'A identificar';
@@ -548,6 +672,11 @@ router.post('/:id/concluir', autenticar, async (req, res) => {
     if (pResult.rows.length === 0) return res.status(404).json({ erro: 'Pedido não encontrado' });
     const pedido = pResult.rows[0];
     const dadosResult = await pool.query('SELECT * FROM dados_consulta WHERE pedido_id = $1', [pedido.id]);
+
+    // V3: anexa lista de alvos consultados ao pedido para o PDF renderizar
+    try {
+      pedido.alvos_consultados = await pedidoAlvos.listarAlvos(pedido.id);
+    } catch (_) { pedido.alvos_consultados = []; }
 
     if (observacoes) {
       await pool.query('UPDATE pedidos SET observacoes = $1 WHERE id = $2', [observacoes, pedido.id]);

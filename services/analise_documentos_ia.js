@@ -15,6 +15,7 @@
 
 const fs = require('fs');
 const { pool } = require('../db');
+const pedidoAlvos = require('./pedido_alvos');
 
 const MODELO_DEFAULT = 'claude-sonnet-4-5';
 const MIME_PDF = 'application/pdf';
@@ -176,6 +177,11 @@ function montarBloco(doc) {
 }
 
 function digSafe(s) { return (s || '').toString().replace(/\D/g, ''); }
+
+async function temAlvoConsultado(pedidoId) {
+  const r = await pool.query('SELECT 1 FROM pedido_alvos WHERE pedido_id = $1 LIMIT 1', [pedidoId]);
+  return r.rows.length > 0;
+}
 
 function only(obj, keys) {
   if (!obj) return null;
@@ -473,6 +479,60 @@ async function analisarDocumentosImovel(pedidoId) {
         transmissoes_historicas: [],
         onus_e_gravames: []
       };
+    }
+
+    // ─ Etapa B.5: criar pedido_alvos a partir dos proprietários extraídos ─
+    // V3: cada proprietário com CPF/CNPJ legível vira 1 linha em pedido_alvos
+    // (origem='extraido_ia'). Limita a MAX_ALVOS. Idempotente — não duplica.
+    const pedidoBaseRes = await pool.query(
+      `SELECT id, analise_ia_status, alvo_documento FROM pedidos WHERE id = $1`,
+      [pedidoId]
+    );
+    const pedidoBase = pedidoBaseRes.rows[0] || {};
+
+    const proprietarios = Array.isArray(dadosExtraidos.proprietarios_atuais)
+      ? dadosExtraidos.proprietarios_atuais : [];
+    const propsLegiveis = proprietarios.filter(p => pedidoAlvos.docLegivel(p?.cpf_cnpj));
+    const totalAtual = await pedidoAlvos.contarAlvos(pedidoId);
+
+    let inseridosIA = 0;
+    for (const prop of propsLegiveis) {
+      if (totalAtual + inseridosIA >= pedidoAlvos.MAX_ALVOS) break;
+      const isPrincipal = (totalAtual + inseridosIA) === 0;
+      const out = await pedidoAlvos.adicionarAlvo(pedidoId, {
+        nome: prop.nome,
+        documento: prop.cpf_cnpj,
+        origem: 'extraido_ia',
+        principal: isPrincipal
+      });
+      if (out?.criado) {
+        inseridosIA++;
+        console.log(`[v3] alvo extraído da IA: CPF=${pedidoAlvos.digSafe(prop.cpf_cnpj)} origem=documento`);
+      }
+    }
+
+    // Se o pedido foi criado sem CPF (aguardando_extracao) e a IA não conseguiu
+    // identificar nenhum CPF/CNPJ legível em nenhum documento, marcamos como
+    // cpf_ilegivel — o operador precisa completar manualmente.
+    const aguardandoExtracao = pedidoBase.analise_ia_status === 'aguardando_extracao'
+      || (!pedidoBase.alvo_documento && !await temAlvoConsultado(pedidoId));
+    if (aguardandoExtracao && !propsLegiveis.length) {
+      const msg = 'Não consegui identificar CPF/CNPJ legível dos proprietários nos documentos enviados. Por favor, informe manualmente o CPF/CNPJ do(s) proprietário(s) para liberar as consultas externas.';
+      await pool.query(
+        `UPDATE pedidos
+            SET analise_ia_status = 'cpf_ilegivel',
+                erro_processamento = $1,
+                atualizado_em = NOW()
+          WHERE id = $2`,
+        [msg, pedidoId]
+      );
+      console.warn(`[v3] pedido ${pedidoId}: cpf_ilegivel — aguardando preenchimento manual`);
+      return { status: 'cpf_ilegivel', erro: msg };
+    }
+
+    // Sincroniza pedidos.alvo_documento com o primeiro alvo (compat com PDF/listagens)
+    if (inseridosIA > 0) {
+      await pedidoAlvos.atualizarAlvoPrincipalEmPedido(pedidoId);
     }
 
     // ─ Etapa C: cruzamento ──────────────────────────────────────

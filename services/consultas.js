@@ -1375,46 +1375,89 @@ async function executarConsultaCompleta(pedido) {
     };
   }
 
-  // Consultas comuns a todos os produtos
-  const promises = [
-    alvo_tipo === 'PJ' ? consultarCNPJ(alvo_documento) : consultarCPF(alvo_documento),
-    consultarProcessos(alvo_documento, alvo_tipo, alvo_nome),
-    alvo_tipo === 'PJ' ? consultarTransparencia(alvo_documento, alvo_nome) : Promise.resolve(null),
-    consultarScore(alvo_documento),
-    consultarNegativacoes(alvo_documento),
-    alvo_tipo === 'PF' ? consultarPerfilEconomico(alvo_documento) : Promise.resolve(null)
-  ];
-
   // Vínculos societários para produtos premium
   const precisaVinculos = ['due_diligence', 'investigacao_patrimonial', 'due_diligence_imobiliaria'].includes(tipo);
-  if (precisaVinculos) promises.push(consultarVinculos(alvo_documento));
-
   // Veículos e imóveis para investigação patrimonial e imobiliária
   const precisaVeiculos = ['investigacao_patrimonial', 'due_diligence_imobiliaria'].includes(tipo);
-  if (precisaVeiculos) promises.push(consultarVeiculos(alvo_documento));
+
+  // V3: para due_diligence_imobiliaria, podem haver múltiplos alvos vindos de
+  // pedido_alvos (extraídos da IA). Roda o mesmo conjunto de consultas para
+  // cada um. Para os demais produtos, usa apenas o alvo principal do pedido.
+  if (tipo === 'due_diligence_imobiliaria') {
+    const { pool } = require('../db');
+    const r = await pool.query(
+      `SELECT nome, documento, tipo_documento, principal
+         FROM pedido_alvos
+        WHERE pedido_id = $1
+        ORDER BY principal DESC, id ASC`,
+      [pedido.id]
+    );
+    const alvos = r.rows.map(a => ({
+      nome: a.nome,
+      documento: a.documento,
+      tipo: a.tipo_documento === 'cnpj' ? 'PJ' : 'PF'
+    }));
+
+    // Compat: se nada em pedido_alvos mas há alvo_documento legado, usa esse
+    if (!alvos.length && alvo_documento) {
+      alvos.push({ nome: alvo_nome, documento: alvo_documento, tipo: alvo_tipo || 'PF' });
+    }
+    // Compat: alvo2 legado adicional (caso pedido_alvos esteja vazio)
+    if (!r.rows.length && pedido.alvo2_documento) {
+      alvos.push({ nome: pedido.alvo2_nome, documento: pedido.alvo2_documento, tipo: pedido.alvo2_tipo || 'PF' });
+    }
+
+    if (!alvos.length) {
+      // Sem alvos — retorna resultado vazio (a UI mostra cpf_ilegivel)
+      return {};
+    }
+
+    const out = {};
+    for (let idx = 0; idx < alvos.length; idx++) {
+      const a = alvos[idx];
+      console.log(`[v3] consultas alvo ${idx + 1}/${alvos.length}: doc=${a.documento} tipo=${a.tipo}`);
+      const r1 = await executarConsultasParaAlvo(a, { precisaVinculos, precisaVeiculos, tipo });
+      // O primeiro alvo (principal) usa nomes padrão; demais ganham sufixo _N (2, 3, …).
+      const sufixo = idx === 0 ? '' : `_${idx + 1}`;
+      for (const [k, v] of Object.entries(r1)) {
+        if (v == null) continue;
+        out[`${k}${sufixo}`] = v;
+      }
+    }
+    return out;
+  }
+
+  // Demais produtos: alvo único do pedido
+  return executarConsultasParaAlvo(
+    { nome: alvo_nome, documento: alvo_documento, tipo: alvo_tipo },
+    { precisaVinculos, precisaVeiculos, tipo }
+  );
+}
+
+// V3: roda o conjunto de consultas externas para UM alvo (CPF/CNPJ).
+// Devolve um dicionário com chaves canônicas (sem sufixo) — o orquestrador
+// adiciona _N quando há múltiplos alvos.
+async function executarConsultasParaAlvo(alvo, { precisaVinculos, precisaVeiculos, tipo }) {
+  const { documento, tipo: tipoAlvo, nome } = alvo;
+  if (!documento) return {};
+
+  const promises = [
+    tipoAlvo === 'PJ' ? consultarCNPJ(documento) : consultarCPF(documento),
+    consultarProcessos(documento, tipoAlvo, nome),
+    tipoAlvo === 'PJ' ? consultarTransparencia(documento, nome) : Promise.resolve(null),
+    consultarScore(documento),
+    consultarNegativacoes(documento),
+    tipoAlvo === 'PF' ? consultarPerfilEconomico(documento) : Promise.resolve(null)
+  ];
+
+  if (precisaVinculos) promises.push(consultarVinculos(documento));
+  if (precisaVeiculos) promises.push(consultarVeiculos(documento));
 
   const resultados = await Promise.all(promises);
   const [cadastral, processos, transparencia, score_credito, negativacoes, perfil_economico] = resultados;
-  let idx = 6;
-  const vinculos = precisaVinculos ? resultados[idx++] : null;
-  const veiculos = precisaVeiculos ? resultados[idx++] : null;
-
-  // Para Due Diligence Imobiliária: consultar também o segundo alvo (vendedor)
-  let cadastral2 = null, processos2 = null, score2 = null, negativacoes2 = null, vinculos2 = null;
-  if (tipo === 'due_diligence_imobiliaria' && pedido.alvo2_documento) {
-    const [c2, p2, s2, n2, v2] = await Promise.all([
-      pedido.alvo2_tipo === 'PJ' ? consultarCNPJ(pedido.alvo2_documento) : consultarCPF(pedido.alvo2_documento),
-      consultarProcessos(pedido.alvo2_documento, pedido.alvo2_tipo, pedido.alvo2_nome),
-      consultarScore(pedido.alvo2_documento),
-      consultarNegativacoes(pedido.alvo2_documento),
-      consultarVinculos(pedido.alvo2_documento)
-    ]);
-    cadastral2 = c2;
-    processos2 = p2;
-    score2 = s2;
-    negativacoes2 = n2;
-    vinculos2 = v2;
-  }
+  let i = 6;
+  const vinculos = precisaVinculos ? resultados[i++] : null;
+  const veiculos = precisaVeiculos ? resultados[i++] : null;
 
   return {
     receita_federal: cadastral,
@@ -1424,12 +1467,7 @@ async function executarConsultaCompleta(pedido) {
     ...(negativacoes?.status ? { negativacoes } : {}),
     ...(perfil_economico ? { perfil_economico } : {}),
     ...(vinculos?.total ? { vinculos } : {}),
-    ...(veiculos ? { veiculos } : {}),
-    ...(cadastral2 ? { receita_federal_2: cadastral2 } : {}),
-    ...(processos2 ? { processos_2: processos2 } : {}),
-    ...(score2?.score ? { score_credito_2: score2 } : {}),
-    ...(negativacoes2?.status ? { negativacoes_2: negativacoes2 } : {}),
-    ...(vinculos2?.total ? { vinculos_2: vinculos2 } : {})
+    ...(veiculos ? { veiculos } : {})
   };
 }
 
@@ -1441,5 +1479,6 @@ module.exports = {
   consultarONR, consultarMatricula, consultarVeiculos,
   consultarVeiculoPorPlaca, consultarProprietariosPlaca, consultarHistoricoVeiculos,
   validarPlaca, normalizarPlaca,
-  executarConsultaCompleta
+  executarConsultaCompleta,
+  executarConsultasParaAlvo
 };

@@ -414,6 +414,55 @@ function safeParseJSON(s) {
   try { return JSON.parse(s); } catch { return null; }
 }
 
+// V3: enumera todos os alvos consultados (1 a N), com origem (manual ou IA)
+// e resumo do que foi encontrado em cada um.
+function secaoAlvosConsultados(doc, y, dados, pedido) {
+  const alvos = Array.isArray(pedido.alvos_consultados) ? pedido.alvos_consultados : [];
+  if (!alvos.length) return y;
+
+  y = secao(doc, `ALVOS CONSULTADOS (${alvos.length})`, y);
+  alvos.forEach((alvo, idx) => {
+    const sufixo = idx === 0 ? '' : `_${idx + 1}`;
+    const cad = dados[`receita_federal${sufixo}`] || {};
+    const sc = dados[`score_credito${sufixo}`] || {};
+    const neg = dados[`negativacoes${sufixo}`] || {};
+    const proc = dados[`processos${sufixo}`] || {};
+    const vinc = dados[`vinculos${sufixo}`] || {};
+
+    y = verificarPagina(doc, y, 70);
+    const origemLbl = alvo.origem === 'extraido_ia' ? 'EXTRAÍDO PELA IA' : 'INFORMADO MANUALMENTE';
+    const corOrigem = alvo.origem === 'extraido_ia' ? '#1e3a8a' : '#374151';
+    const bgOrigem = alvo.origem === 'extraido_ia' ? '#dbeafe' : '#f3f4f6';
+
+    doc.rect(MARGEM, y, LARGURA, 22).fill('#f9fafb').stroke('#e5e7eb');
+    doc.fillColor('#111827').fontSize(9.5).font('Helvetica-Bold')
+      .text(`Alvo ${idx + 1}${alvo.principal ? ' (principal)' : ''}: ${alvo.nome || cad.nome || cad.razao_social || '-'}`, MARGEM + 8, y + 4, { width: LARGURA - 200 });
+    doc.fillColor(COR.cinza).fontSize(7.5).font('Helvetica')
+      .text(`CPF/CNPJ: ${formatarDoc(alvo.documento) || alvo.documento}`, MARGEM + 8, y + 13, { width: 220 });
+    doc.rect(LARGURA - 110 + MARGEM, y + 4, 110, 14).fill(bgOrigem);
+    doc.fillColor(corOrigem).fontSize(7).font('Helvetica-Bold')
+      .text(origemLbl, LARGURA - 105 + MARGEM, y + 8, { width: 105, align: 'center' });
+    y += 26;
+
+    const bullets = [];
+    if (cad.situacao) bullets.push(`Situação RF: ${cad.situacao}`);
+    if (cad.situacao_rf) bullets.push(`Situação RF: ${cad.situacao_rf}`);
+    if (sc.score) bullets.push(`Score Crédito: ${sc.score}/1000`);
+    if (typeof proc.total === 'number') bullets.push(`Processos: ${proc.total}`);
+    if (neg.status) bullets.push(`Negativações: ${neg.status}`);
+    if (typeof vinc.total === 'number' && vinc.total > 0) bullets.push(`Vínculos societários: ${vinc.total}`);
+    if (!bullets.length) bullets.push('Sem dados retornados pelas APIs externas para este alvo.');
+
+    bullets.forEach(b => {
+      y = verificarPagina(doc, y, 11);
+      doc.fillColor('#374151').fontSize(7.5).font('Helvetica').text(`• ${b}`, MARGEM + 12, y, { width: LARGURA - 24 });
+      y += 10;
+    });
+    y += 6;
+  });
+  return y + 4;
+}
+
 // Monta um objeto "lado" a partir do alvo do pedido (modo legado, alvo único)
 function _montarLadoFromAlvo(dados, pedido) {
   const cad = dados.receita_federal || {};
@@ -453,7 +502,14 @@ function render(doc, pedido, dados, score, checklist, produto) {
     y = blocoResumoExecutivoIA(doc, y, analise);
   }
 
-  // COMPRADOR / VENDEDOR / IMÓVEL
+  // V3: Lista de todos os alvos consultados (até 5), com resumo por alvo.
+  // Substitui a antiga divisão fixa comprador/vendedor quando há múltiplos alvos
+  // extraídos da IA.
+  y = secaoAlvosConsultados(doc, y, dados, pedido);
+
+  // COMPRADOR / VENDEDOR / IMÓVEL — mantidos por compatibilidade com o
+  // formato antigo (alvo único + alvo2). Quando há alvos_consultados, esses
+  // blocos costumam ficar vazios (em integração).
   y = secaoComprador(doc, y, dados, pedido);
   y = secaoVendedor(doc, y, dados, pedido);
   y = secaoImovel(doc, y, dados, pedido);
