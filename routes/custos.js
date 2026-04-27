@@ -4,7 +4,31 @@ const router = express.Router();
 const { pool } = require('../db');
 const { autenticar, admin } = require('./auth');
 const { listarCustos, atualizarCusto, calcularCustoPedido, estimarCustoProduto, APIS_POR_PRODUTO } = require('../services/custos');
+const { calcularCustoBruto, calcularTodos } = require('../services/custos_apis');
 const credifyCatalogo = require('../services/credify/catalogo');
+
+// GET /api/admin/custos/produtos  -> custo bruto / margem de TODOS os produtos
+// Referência interna de precificação (catálogo fixo em services/custos_apis.js)
+router.get('/produtos', autenticar, admin, (req, res) => {
+  try {
+    res.json({ produtos: calcularTodos() });
+  } catch (e) {
+    console.error('[custos] produtos:', e);
+    res.status(500).json({ erro: 'Erro ao calcular custos por produto' });
+  }
+});
+
+// GET /api/admin/custos/produtos/:produtoKey  -> custo bruto / margem de um produto
+router.get('/produtos/:produtoKey', autenticar, admin, (req, res) => {
+  try {
+    const resultado = calcularCustoBruto(req.params.produtoKey);
+    if (!resultado) return res.status(404).json({ erro: 'Produto desconhecido' });
+    res.json(resultado);
+  } catch (e) {
+    console.error('[custos] produto:', e);
+    res.status(500).json({ erro: 'Erro ao calcular custo do produto' });
+  }
+});
 
 // GET /api/admin/custos  -> lista todos os custos cadastrados
 router.get('/', autenticar, admin, async (req, res) => {
