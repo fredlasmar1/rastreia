@@ -93,6 +93,11 @@ function chavesPorFonte(fonte, dados) {
     case 'vinculos_2':
       if (dados?.total > 0) c.push('directd_vinculos');
       break;
+    case 'analise_ia_imovel':
+      // Marcador artificial: emitido em calcularCustoPedido() abaixo
+      // sempre que o pedido tiver análise IA concluída.
+      if (dados?.concluida) c.push('claude_analise_imovel');
+      break;
   }
   return c;
 }
@@ -130,7 +135,8 @@ const APIS_POR_PRODUTO = {
   due_diligence_imobiliaria: [
     'directd_pf_plus', 'escavador_processos', 'directd_score_quod', 'directd_negativacoes', // comprador
     'directd_pf_plus', 'escavador_processos', 'directd_negativacoes', 'directd_veiculos', 'directd_vinculos', // vendedor
-    'onr_matricula' // imóvel
+    'onr_matricula', // imóvel
+    'claude_analise_imovel' // análise IA matrícula+escritura via Claude Sonnet 4.5
   ],
   consulta_veicular: ['directd_veiculos']
 };

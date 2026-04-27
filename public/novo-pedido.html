@@ -166,6 +166,35 @@
         <input type="text" id="imovel_endereco" placeholder="Rua, número, bairro, cidade">
       </div>
     </div>
+
+    <!-- Upload de documentos do imóvel para análise IA -->
+    <div style="margin-top:18px;border-top:1px solid #e5e7eb;padding-top:16px">
+      <div style="font-size:12px;color:#6b7280;margin-bottom:8px">DOCUMENTOS DO IMÓVEL (opcional — análise por IA)</div>
+      <div style="font-size:12px;color:#374151;margin-bottom:10px;line-height:1.5">
+        Anexe a <strong>matrícula</strong> e/ou <strong>escritura</strong> (PDF, JPG ou PNG até 20MB).
+        A IA vai extrair dados estruturados e adicionar dois blocos ao PDF final: <em>Resumo Executivo + Alertas</em>
+        e <em>Identificação + Histórico de Proprietários</em>. Sem documentos, o pedido segue normal.
+      </div>
+      <div id="docs-imovel-lista" style="margin-bottom:10px"></div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <label class="btn btn-outline btn-sm" style="cursor:pointer">
+          + Matrícula
+          <input type="file" accept=".pdf,.jpg,.jpeg,.png" style="display:none"
+                 onchange="anexarDocImovel(this, 'matricula')">
+        </label>
+        <label class="btn btn-outline btn-sm" style="cursor:pointer">
+          + Escritura
+          <input type="file" accept=".pdf,.jpg,.jpeg,.png" style="display:none"
+                 onchange="anexarDocImovel(this, 'escritura')">
+        </label>
+        <label class="btn btn-outline btn-sm" style="cursor:pointer">
+          + Outro
+          <input type="file" accept=".pdf,.jpg,.jpeg,.png" style="display:none"
+                 onchange="anexarDocImovel(this, 'outro')">
+        </label>
+      </div>
+      <div id="docs-imovel-aviso" style="margin-top:8px;font-size:11px;color:#dc2626"></div>
+    </div>
   </div>
 
   <!-- PASSO 3: Dados do Cliente -->
@@ -287,6 +316,62 @@
     analise_devedor: { nome: 'Análise de Devedor', preco: 250, prazo: '2 horas' },
     investigacao_patrimonial: { nome: 'Investigação Patrimonial', preco: 497, prazo: '4 horas' }
   };
+
+  // Documentos do imóvel selecionados antes do pedido ser criado.
+  // Estrutura: [{ tipo: 'matricula', file: File, nome: 'matricula.pdf', tamanho: 12345 }]
+  let docsImovel = [];
+  const MAX_DOCS_IMOVEL = 5;
+  const TAM_MAX_DOC = 20 * 1024 * 1024; // 20MB
+
+  function fmtTamanho(b) {
+    if (b < 1024) return b + ' B';
+    if (b < 1024 * 1024) return (b / 1024).toFixed(0) + ' KB';
+    return (b / (1024 * 1024)).toFixed(1) + ' MB';
+  }
+
+  function anexarDocImovel(input, tipo) {
+    const aviso = document.getElementById('docs-imovel-aviso');
+    aviso.textContent = '';
+    const f = input.files && input.files[0];
+    input.value = '';
+    if (!f) return;
+    if (docsImovel.length >= MAX_DOCS_IMOVEL) {
+      aviso.textContent = `Limite de ${MAX_DOCS_IMOVEL} documentos por pedido.`;
+      return;
+    }
+    if (f.size > TAM_MAX_DOC) {
+      aviso.textContent = `Arquivo "${f.name}" tem ${fmtTamanho(f.size)} — limite é 20MB.`;
+      return;
+    }
+    const mime = (f.type || '').toLowerCase();
+    if (!['application/pdf', 'image/jpeg', 'image/jpg', 'image/png'].includes(mime)) {
+      aviso.textContent = `Tipo "${mime || 'desconhecido'}" não suportado. Use PDF, JPG ou PNG.`;
+      return;
+    }
+    docsImovel.push({ tipo, file: f, nome: f.name, tamanho: f.size });
+    renderDocsImovel();
+  }
+
+  function removerDocImovel(idx) {
+    docsImovel.splice(idx, 1);
+    renderDocsImovel();
+  }
+
+  function renderDocsImovel() {
+    const lista = document.getElementById('docs-imovel-lista');
+    if (!lista) return;
+    if (!docsImovel.length) { lista.innerHTML = ''; return; }
+    lista.innerHTML = docsImovel.map((d, i) => `
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 10px;background:#f9fafb;border:1px solid #e5e7eb;border-radius:6px;margin-bottom:6px;font-size:12px">
+        <div>
+          <span style="display:inline-block;padding:2px 8px;background:#dbeafe;color:#1e3a8a;border-radius:4px;font-weight:700;font-size:10px;text-transform:uppercase">${esc(d.tipo)}</span>
+          <strong style="margin-left:8px">${esc(d.nome)}</strong>
+          <span style="color:#6b7280">· ${fmtTamanho(d.tamanho)}</span>
+        </div>
+        <button onclick="removerDocImovel(${i})" style="background:none;border:none;cursor:pointer;color:#dc2626;font-size:14px">&times;</button>
+      </div>
+    `).join('');
+  }
 
   let tipoSelecionado = '';
   let CUSTOS_ESTIMADOS = {}; // preenchido se admin/operador
@@ -465,6 +550,31 @@
       });
       const data = await res.json();
       if (!res.ok) return alerta(data.erro || 'Erro ao criar pedido', 'error');
+
+      // Upload de documentos do imóvel (apenas Due Diligence Imobiliária)
+      if (tipo === 'due_diligence_imobiliaria' && docsImovel.length) {
+        try {
+          const fd = new FormData();
+          const tipos = [];
+          for (const d of docsImovel) {
+            fd.append('documentos', d.file, d.nome);
+            tipos.push(d.tipo);
+          }
+          fd.append('tipos', JSON.stringify(tipos));
+          const upRes = await fetch(`/api/pedidos/${data.id}/documentos`, {
+            method: 'POST',
+            headers: { Authorization: `Bearer ${token}` },
+            body: fd
+          });
+          if (!upRes.ok) {
+            const eu = await upRes.json().catch(() => ({}));
+            console.warn('upload docs falhou:', eu);
+            alerta('Pedido criado, mas falhou o upload de documentos: ' + (eu.erro || upRes.status), 'error');
+          }
+        } catch (eUp) {
+          console.warn('upload docs erro:', eUp);
+        }
+      }
 
       if (marcadoPago) {
         await fetch(`/api/pedidos/${data.id}/pago`, {

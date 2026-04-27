@@ -1,5 +1,8 @@
 const express = require('express');
 const crypto = require('crypto');
+const fs = require('fs');
+const path = require('path');
+const multer = require('multer');
 const router = express.Router();
 const { autenticar } = require('./auth');
 const { pool } = require('../db');
@@ -9,6 +12,34 @@ const { notificarClienteConcluido, notificarOperadorNovoPedido } = require('../s
 const { criarPreferencia } = require('../services/mercadopago');
 const { PRODUTOS } = require('../services/produtos');
 const credifyCatalogo = require('../services/credify/catalogo');
+const analiseIA = require('../services/analise_documentos_ia');
+
+// ─── Upload de documentos do imóvel (Due Diligence Imobiliária) ───
+const UPLOADS_ROOT = path.join(__dirname, '..', 'uploads', 'imoveis');
+const MIMES_DOCUMENTOS = new Set([
+  'application/pdf', 'image/jpeg', 'image/jpg', 'image/png', 'image/webp'
+]);
+const MAX_DOCS_POR_PEDIDO = 5;
+const TIPOS_DOCUMENTOS_VALIDOS = new Set(['matricula', 'escritura', 'outro']);
+
+const uploadDocumentos = multer({
+  storage: multer.diskStorage({
+    destination: (req, file, cb) => {
+      const dir = path.join(UPLOADS_ROOT, req.params.id);
+      try { fs.mkdirSync(dir, { recursive: true }); } catch (_) {}
+      cb(null, dir);
+    },
+    filename: (req, file, cb) => {
+      const safeOrig = (file.originalname || 'arquivo').replace(/[^A-Za-z0-9._-]/g, '_').slice(-120);
+      cb(null, `${Date.now()}_${safeOrig}`);
+    }
+  }),
+  limits: { fileSize: 20 * 1024 * 1024, files: MAX_DOCS_POR_PEDIDO },
+  fileFilter: (req, file, cb) => {
+    if (MIMES_DOCUMENTOS.has((file.mimetype || '').toLowerCase())) return cb(null, true);
+    cb(new Error('Tipo de arquivo não suportado. Use PDF, JPG ou PNG.'));
+  }
+});
 
 const PRECOS = {
   dossie_pf: 197,
@@ -315,6 +346,100 @@ router.get('/:id', autenticar, async (req, res) => {
   }
 });
 
+// ── Upload de documentos do imóvel (Due Diligence Imobiliária) ─────
+// POST /api/pedidos/:id/documentos
+// multipart/form-data, campo "documentos" (array, até 5 arquivos),
+// + body field "tipos" como JSON-array OU múltiplos campos "tipo[]" alinhados
+// com a ordem dos arquivos. Se "tipo" não vier, default 'outro'.
+router.post('/:id/documentos', autenticar, (req, res) => {
+  uploadDocumentos.array('documentos', MAX_DOCS_POR_PEDIDO)(req, res, async (err) => {
+    if (err) {
+      return res.status(400).json({ erro: err.message || 'Erro no upload' });
+    }
+    const arquivos = req.files || [];
+    if (!arquivos.length) return res.status(400).json({ erro: 'Nenhum arquivo enviado' });
+    try {
+      const pedidoId = req.params.id;
+      const pResult = await pool.query('SELECT id, tipo FROM pedidos WHERE id = $1', [pedidoId]);
+      if (pResult.rows.length === 0) {
+        // limpa arquivos já gravados pra não deixar lixo no disco
+        arquivos.forEach(a => { try { fs.unlinkSync(a.path); } catch (_) {} });
+        return res.status(404).json({ erro: 'Pedido não encontrado' });
+      }
+      if (pResult.rows[0].tipo !== 'due_diligence_imobiliaria') {
+        arquivos.forEach(a => { try { fs.unlinkSync(a.path); } catch (_) {} });
+        return res.status(400).json({ erro: 'Upload de documentos só é permitido para Due Diligence Imobiliária' });
+      }
+
+      // Limite total: existentes + novos <= MAX_DOCS_POR_PEDIDO
+      const jaExistem = await pool.query('SELECT COUNT(*) FROM pedido_documentos WHERE pedido_id = $1', [pedidoId]);
+      if (parseInt(jaExistem.rows[0].count, 10) + arquivos.length > MAX_DOCS_POR_PEDIDO) {
+        arquivos.forEach(a => { try { fs.unlinkSync(a.path); } catch (_) {} });
+        return res.status(400).json({ erro: `Máximo de ${MAX_DOCS_POR_PEDIDO} documentos por pedido` });
+      }
+
+      // Tipos: aceita JSON ('["matricula","escritura"]') OU array de strings
+      let tiposIn = req.body.tipos || req.body.tipo;
+      let tipos = [];
+      if (Array.isArray(tiposIn)) tipos = tiposIn;
+      else if (typeof tiposIn === 'string' && tiposIn.trim().startsWith('[')) {
+        try { tipos = JSON.parse(tiposIn); } catch (_) { tipos = []; }
+      } else if (typeof tiposIn === 'string') {
+        tipos = [tiposIn];
+      }
+
+      const inseridos = [];
+      for (let i = 0; i < arquivos.length; i++) {
+        const arq = arquivos[i];
+        const rawTipo = (tipos[i] || 'outro').toLowerCase();
+        const tipo = TIPOS_DOCUMENTOS_VALIDOS.has(rawTipo) ? rawTipo : 'outro';
+        const r = await pool.query(
+          `INSERT INTO pedido_documentos (pedido_id, tipo, filename, filepath, size_bytes, mime_type)
+           VALUES ($1, $2, $3, $4, $5, $6)
+           RETURNING id, tipo, filename, size_bytes, mime_type`,
+          [pedidoId, tipo, arq.originalname, arq.path, arq.size, arq.mimetype]
+        );
+        inseridos.push(r.rows[0]);
+      }
+      // marca status pendente; processo real roda quando rodar /consultar
+      await pool.query(
+        `UPDATE pedidos SET analise_ia_status = 'pendente', atualizado_em = NOW() WHERE id = $1`,
+        [pedidoId]
+      );
+      res.status(201).json({ documentos: inseridos });
+    } catch (e) {
+      console.error('[pedidos] upload documentos:', e);
+      arquivos.forEach(a => { try { fs.unlinkSync(a.path); } catch (_) {} });
+      res.status(500).json({ erro: 'Erro ao salvar documentos' });
+    }
+  });
+});
+
+// Listar documentos do pedido
+router.get('/:id/documentos', autenticar, async (req, res) => {
+  try {
+    const r = await pool.query(
+      `SELECT id, tipo, filename, size_bytes, mime_type, criado_em
+         FROM pedido_documentos WHERE pedido_id = $1 ORDER BY criado_em ASC`,
+      [req.params.id]
+    );
+    res.json({ documentos: r.rows });
+  } catch (e) {
+    res.status(500).json({ erro: 'Erro ao listar documentos' });
+  }
+});
+
+// Disparar análise IA manualmente (idempotente)
+router.post('/:id/analise-ia', autenticar, async (req, res) => {
+  try {
+    const out = await analiseIA.analisarDocumentosImovel(req.params.id);
+    res.json(out);
+  } catch (e) {
+    console.error('[pedidos] analise-ia:', e);
+    res.status(500).json({ erro: 'Erro ao executar análise IA' });
+  }
+});
+
 // Marcar como pago (manual)
 router.patch('/:id/pago', autenticar, async (req, res) => {
   try {
@@ -389,7 +514,20 @@ router.post('/:id/consultar', autenticar, async (req, res) => {
     await pool.query('INSERT INTO logs (pedido_id, usuario_id, acao) VALUES ($1, $2, $3)',
       [pedido.id, req.usuario.id, 'Consultas automáticas executadas']);
 
-    res.json({ ok: true, resultados });
+    // Análise IA dos documentos do imóvel (Due Diligence Imobiliária).
+    // Falha graciosamente se ANTHROPIC_API_KEY não estiver setado ou se não houver documentos.
+    let analiseOut = null;
+    if (pedido.tipo === 'due_diligence_imobiliaria') {
+      try {
+        analiseOut = await analiseIA.analisarDocumentosImovel(pedido.id);
+        await pool.query('INSERT INTO logs (pedido_id, usuario_id, acao, detalhes) VALUES ($1, $2, $3, $4)',
+          [pedido.id, req.usuario.id, 'Análise IA documentos', `status: ${analiseOut.status}`]);
+      } catch (eIa) {
+        console.warn('[pedidos] análise IA falhou (não bloqueia):', eIa.message);
+      }
+    }
+
+    res.json({ ok: true, resultados, analise_ia: analiseOut });
   } catch (e) {
     console.error('Erro ao executar consultas:', e);
     res.status(500).json({ erro: 'Erro ao executar consultas' });

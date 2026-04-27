@@ -35,8 +35,16 @@
 
   const TIPOS = {
     dossie_pf: 'Dossiê Pessoa Física', dossie_pj: 'Dossiê Pessoa Jurídica',
-    due_diligence: 'Due Diligence Empresarial', analise_devedor: 'Análise de Devedor',
-    investigacao_patrimonial: 'Investigação Patrimonial'
+    due_diligence: 'Due Diligence Empresarial', due_diligence_imobiliaria: 'Due Diligence Imobiliária',
+    analise_devedor: 'Análise de Devedor', investigacao_patrimonial: 'Investigação Patrimonial',
+    consulta_veicular: 'Consulta Veicular'
+  };
+
+  const STATUS_IA_LABEL = {
+    pendente: { txt: 'Pendente', cor: '#ea580c', bg: '#fef3c7' },
+    concluida: { txt: 'Concluída', cor: '#065f46', bg: '#dcfce7' },
+    falhou: { txt: 'Falhou', cor: '#dc2626', bg: '#fee2e2' },
+    desabilitada: { txt: 'Desabilitada', cor: '#6b7280', bg: '#f3f4f6' }
   };
 
   const STATUS_LABEL = {
@@ -176,6 +184,8 @@
           <div class="alert alert-info">${serasa.nota || 'Verificação manual necessária'}</div>
         </div>` : ''}
 
+      ${renderAnaliseIA(p)}
+
       <!-- FINALIZAÇÃO -->
       <div id="finalizacao" style="display:none">
         <div class="pedido-section">
@@ -193,6 +203,81 @@
             </button>
           </div>
         </div>
+      </div>
+    `;
+  }
+
+  function renderAnaliseIA(p) {
+    if (p.tipo !== 'due_diligence_imobiliaria') return '';
+    const status = p.analise_ia_status || 'desabilitada';
+    const lbl = STATUS_IA_LABEL[status] || STATUS_IA_LABEL.desabilitada;
+    let analise = p.analise_ia;
+    if (typeof analise === 'string') { try { analise = JSON.parse(analise); } catch { analise = null; } }
+    const corSev = (s) => {
+      const k = (s || '').toLowerCase();
+      if (k === 'alta') return { bg: '#fee2e2', fg: '#dc2626' };
+      if (k === 'media') return { bg: '#fef3c7', fg: '#ea580c' };
+      return { bg: '#dcfce7', fg: '#065f46' };
+    };
+    const alertasHtml = (status === 'concluida' && analise && Array.isArray(analise.alertas)) ?
+      analise.alertas.map(a => {
+        const c = corSev(a.severidade);
+        return `<div style="display:flex;gap:10px;padding:10px;background:${c.bg};border-radius:6px;margin-bottom:6px">
+          <span style="font-size:10px;font-weight:700;color:${c.fg};text-transform:uppercase;min-width:50px">${esc((a.severidade || '').toUpperCase())}</span>
+          <div style="flex:1">
+            <div style="font-weight:700;color:${c.fg};font-size:13px">${esc(a.titulo || '-')}</div>
+            <div style="color:#374151;font-size:12px;margin-top:2px">${esc(a.descricao || '')}</div>
+          </div>
+        </div>`;
+      }).join('') : '';
+
+    return `
+      <div class="pedido-section" id="secao-analise-ia">
+        <div class="section-title" style="display:flex;align-items:center;justify-content:space-between">
+          <span>🤖 Análise de Documentos por IA</span>
+          <span style="font-size:11px;padding:3px 10px;border-radius:12px;background:${lbl.bg};color:${lbl.cor};font-weight:700">${lbl.txt}</span>
+        </div>
+        ${status === 'desabilitada' ? `
+          <div style="font-size:13px;color:#6b7280">Sem documentos do imóvel anexados a este pedido — a análise por IA não foi executada.</div>
+        ` : ''}
+        ${status === 'pendente' ? `
+          <div style="font-size:13px;color:#6b7280">Análise pendente. Será executada quando as consultas automáticas rodarem.</div>
+        ` : ''}
+        ${status === 'falhou' ? `
+          <div class="alert alert-error" style="margin:0">A análise IA falhou. Verifique se os documentos estão legíveis e tente novamente em "Executar Consultas Automáticas".</div>
+        ` : ''}
+        ${status === 'concluida' && analise ? `
+          <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px;padding:12px;margin-bottom:12px">
+            <div style="font-size:11px;color:#1e3a8a;font-weight:700;text-transform:uppercase;margin-bottom:4px">Resumo executivo</div>
+            <div style="font-size:13px;color:#1e3a8a;line-height:1.5">${esc(analise.resumo_executivo || '-')}</div>
+          </div>
+          ${alertasHtml ? `<div style="font-size:11px;color:#6b7280;text-transform:uppercase;font-weight:700;margin-bottom:8px">Alertas (${analise.alertas.length})</div>${alertasHtml}` : ''}
+          ${(analise.identificacao && (analise.identificacao.matricula_numero || analise.identificacao.endereco_completo)) ? `
+            <details style="margin-top:10px">
+              <summary style="cursor:pointer;font-size:12px;color:#6b7280">Identificação do imóvel extraída</summary>
+              <div style="margin-top:8px;font-size:13px">
+                ${analise.identificacao.matricula_numero ? `<div><strong>Matrícula:</strong> ${esc(analise.identificacao.matricula_numero)}</div>` : ''}
+                ${analise.identificacao.cartorio ? `<div><strong>Cartório:</strong> ${esc(analise.identificacao.cartorio)}</div>` : ''}
+                ${analise.identificacao.endereco_completo ? `<div><strong>Endereço:</strong> ${esc(analise.identificacao.endereco_completo)}</div>` : ''}
+                ${analise.identificacao.area_total_m2 ? `<div><strong>Área Total:</strong> ${esc(analise.identificacao.area_total_m2)} m²</div>` : ''}
+              </div>
+            </details>
+          ` : ''}
+          ${(Array.isArray(analise.proprietarios) && analise.proprietarios.length) ? `
+            <details style="margin-top:6px">
+              <summary style="cursor:pointer;font-size:12px;color:#6b7280">Histórico de proprietários (${analise.proprietarios.length})</summary>
+              <div style="margin-top:8px">
+                ${analise.proprietarios.map(pr => `
+                  <div style="padding:6px 0;border-bottom:1px solid #f3f4f6;font-size:13px">
+                    <strong>${esc(pr.nome || '-')}</strong>${pr.atual ? ' <span style="color:#16a34a;font-size:11px">[ATUAL]</span>' : ''}
+                    ${pr.tipo_aquisicao ? `<span style="color:#6b7280"> · ${esc(pr.tipo_aquisicao)}</span>` : ''}
+                    ${pr.data_aquisicao ? `<span style="color:#6b7280"> · ${esc(pr.data_aquisicao)}</span>` : ''}
+                  </div>
+                `).join('')}
+              </div>
+            </details>
+          ` : ''}
+        ` : ''}
       </div>
     `;
   }
