@@ -41,9 +41,15 @@ async function mapaCustos() {
 
 // Mapa: fonte dos dados_consulta  →  chave(s) api_custos que foram efetivamente chamadas
 // Algumas fontes disparam várias APIs (ex: DirectData PF Plus também chama cadastro base)
+//
+// V3: para Due Diligence Imobiliária podem haver até 5 alvos. Cada alvo extra
+// usa sufixo _N (receita_federal_2, processos_3, …). Removemos o sufixo aqui
+// para reaproveitar as mesmas regras de mapeamento.
 function chavesPorFonte(fonte, dados) {
   const c = [];
-  switch (fonte) {
+  // Remove sufixo _N (ex: receita_federal_3 → receita_federal). Funciona para qualquer N.
+  const fonteCanon = String(fonte || '').replace(/_(\d+)$/, '');
+  switch (fonteCanon) {
     case 'receita_federal':
       // PJ usa CNPJa (grátis), PF usa DirectData Plus
       if (dados?.tipo === 'PJ' || dados?.razao_social) c.push('cnpja');
@@ -74,24 +80,6 @@ function chavesPorFonte(fonte, dados) {
       break;
     case 'transparencia':
       if (dados && dados.disponivel !== false) c.push('transparencia');
-      break;
-    // Alvos secundários (due diligence imobiliaria)
-    case 'receita_federal_2':
-      if (dados?.tipo === 'PJ' || dados?.razao_social) c.push('cnpja');
-      else if (dados?.nome) c.push('directd_pf_plus');
-      break;
-    case 'processos_2':
-      if (dados?.fonte?.toLowerCase().includes('escavador')) c.push('escavador_processos');
-      else if (dados?.fonte?.toLowerCase().includes('datajud')) c.push('datajud');
-      break;
-    case 'score_credito_2':
-      if (dados?.score !== undefined && dados?.score !== null) c.push('directd_score_quod');
-      break;
-    case 'negativacoes_2':
-      if (dados?.status !== undefined) c.push('directd_negativacoes');
-      break;
-    case 'vinculos_2':
-      if (dados?.total > 0) c.push('directd_vinculos');
       break;
     case 'analise_ia_imovel':
       // Marcador artificial: emitido em calcularCustoPedido() abaixo
