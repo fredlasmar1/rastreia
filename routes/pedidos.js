@@ -1,5 +1,8 @@
 const express = require('express');
 const crypto = require('crypto');
+const fs = require('fs');
+const path = require('path');
+const multer = require('multer');
 const router = express.Router();
 const { autenticar } = require('./auth');
 const { pool } = require('../db');
@@ -8,6 +11,35 @@ const { gerarDossie } = require('../services/pdf');
 const { notificarClienteConcluido, notificarOperadorNovoPedido } = require('../services/whatsapp');
 const { criarPreferencia } = require('../services/mercadopago');
 const { PRODUTOS } = require('../services/produtos');
+const credifyCatalogo = require('../services/credify/catalogo');
+const analiseIA = require('../services/analise_documentos_ia');
+
+// ─── Upload de documentos do imóvel (Due Diligence Imobiliária) ───
+const UPLOADS_ROOT = path.join(__dirname, '..', 'uploads', 'imoveis');
+const MIMES_DOCUMENTOS = new Set([
+  'application/pdf', 'image/jpeg', 'image/jpg', 'image/png', 'image/webp'
+]);
+const MAX_DOCS_POR_PEDIDO = 5;
+const TIPOS_DOCUMENTOS_VALIDOS = new Set(['matricula', 'escritura', 'outro']);
+
+const uploadDocumentos = multer({
+  storage: multer.diskStorage({
+    destination: (req, file, cb) => {
+      const dir = path.join(UPLOADS_ROOT, req.params.id);
+      try { fs.mkdirSync(dir, { recursive: true }); } catch (_) {}
+      cb(null, dir);
+    },
+    filename: (req, file, cb) => {
+      const safeOrig = (file.originalname || 'arquivo').replace(/[^A-Za-z0-9._-]/g, '_').slice(-120);
+      cb(null, `${Date.now()}_${safeOrig}`);
+    }
+  }),
+  limits: { fileSize: 20 * 1024 * 1024, files: MAX_DOCS_POR_PEDIDO },
+  fileFilter: (req, file, cb) => {
+    if (MIMES_DOCUMENTOS.has((file.mimetype || '').toLowerCase())) return cb(null, true);
+    cb(new Error('Tipo de arquivo não suportado. Use PDF, JPG ou PNG.'));
+  }
+});
 
 const PRECOS = {
   dossie_pf: 197,
@@ -111,7 +143,9 @@ router.post('/', autenticar, async (req, res) => {
       finalidade, aceite_termos,
       // Imobiliária
       alvo2_nome, alvo2_documento, alvo2_tipo,
-      imovel_matricula, imovel_endereco, imovel_estado
+      imovel_matricula, imovel_endereco, imovel_estado,
+      // Veicular: tier e add-ons
+      tier_veicular, addons_veicular, valor_customizado
     } = req.body;
 
     const isVeicular = tipo === 'consulta_veicular';
@@ -152,8 +186,37 @@ router.post('/', autenticar, async (req, res) => {
       return res.status(400).json({ erro: 'Aceite dos Termos de Uso é obrigatório' });
     }
 
-    const valor = PRECOS[tipo];
+    let valor = PRECOS[tipo];
     if (!valor) return res.status(400).json({ erro: 'Tipo inválido' });
+
+    // Se for veicular com tier especificado, recalcular preço a partir do catálogo
+    let tierSlug = null;
+    let addonsList = [];
+    if (isVeicular && tier_veicular) {
+      const tier = credifyCatalogo.obterTier(tier_veicular);
+      if (!tier) return res.status(400).json({ erro: 'Tier inválido (use: basico, completo ou premium)' });
+      tierSlug = tier.slug;
+      valor = tier.preco_sugerido;
+
+      // Add-ons: aceita array ou CSV
+      if (addons_veicular) {
+        const pedidos = Array.isArray(addons_veicular)
+          ? addons_veicular
+          : String(addons_veicular).split(',').map(s => s.trim()).filter(Boolean);
+        for (const slug of pedidos) {
+          const addon = credifyCatalogo.listarAddons().find(a => a.slug === slug);
+          if (addon) {
+            addonsList.push(addon.slug);
+            valor += addon.preco_adicional;
+          }
+        }
+      }
+    }
+
+    // Admin/operador pode sobrescrever o valor final (ex: desconto ou cobrança especial)
+    if (typeof valor_customizado === 'number' && valor_customizado >= 0) {
+      valor = valor_customizado;
+    }
 
     const prazoHoras = PRAZOS[tipo] || 2;
     const prazo = new Date(Date.now() + prazoHoras * 60 * 60 * 1000);
@@ -179,10 +242,11 @@ router.post('/', autenticar, async (req, res) => {
         alvo_nome, alvo_documento, alvo_tipo, valor, prazo_entrega, operador_id,
         finalidade, ip_solicitante, aceite_termos, token_publico,
         alvo2_nome, alvo2_documento, alvo2_tipo,
-        imovel_matricula, imovel_endereco, imovel_estado, alvo_placa
+        imovel_matricula, imovel_endereco, imovel_estado, alvo_placa,
+        tier_veicular, addons_veicular
       )
       VALUES ($1, 'aguardando_pagamento', $2, $3, $4, $5, $6, $7, $8, $9, $10,
-              $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21)
+              $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23)
       RETURNING *`,
       [
         tipo, cliente_nome.trim(), cliente_email, cliente_whatsapp,
@@ -190,7 +254,8 @@ router.post('/', autenticar, async (req, res) => {
         finalidade, ip, true, tokenPublico,
         alvo2_nome?.trim() || null, alvo2DocLimpo, alvo2_tipo || null,
         imovel_matricula || null, imovel_endereco || null, imovel_estado || 'GO',
-        placaLimpa
+        placaLimpa,
+        tierSlug, addonsList.length ? addonsList.join(',') : null
       ]
     );
 
@@ -219,6 +284,53 @@ router.post('/', autenticar, async (req, res) => {
   }
 });
 
+// GET /api/pedidos/catalogo/veicular  -> tiers e add-ons visíveis para usuário autenticado.
+// Se admin/operador, inclui custo bruto + margem + lucro (interno, nunca no PDF).
+// Cliente/vendedor comum recebe só preço de venda.
+router.get('/catalogo/veicular', autenticar, (req, res) => {
+  try {
+    const mostrarCusto = req.usuario.perfil === 'admin' || req.usuario.perfil === 'operador';
+
+    const tiers = credifyCatalogo.listarTiers().map(t => {
+      const base = {
+        slug: t.slug,
+        nome: t.nome,
+        preco_sugerido: t.preco_sugerido,
+        descricao: t.descricao,
+        publico: t.publico,
+        qtd_servicos: t.qtd_servicos
+      };
+      if (mostrarCusto) {
+        base.custo_bruto = t.total;
+        base.custo_bruto_formatado = t.total_formatado;
+        base.margem_pct = t.margem.margem_pct;
+        base.lucro = t.margem.margem;
+      }
+      return base;
+    });
+
+    const addons = credifyCatalogo.listarAddons().map(a => {
+      const base = {
+        slug: a.slug,
+        nome: a.nome,
+        descricao: a.descricao,
+        preco_adicional: a.preco_adicional
+      };
+      if (mostrarCusto) {
+        base.custo_bruto = a.custo_bruto;
+        base.margem_pct = a.margem.margem_pct;
+        base.lucro = a.margem.margem;
+      }
+      return base;
+    });
+
+    res.json({ tiers, addons, mostra_custo: mostrarCusto });
+  } catch (e) {
+    console.error('[pedidos] catálogo veicular:', e);
+    res.status(500).json({ erro: 'Erro ao listar catálogo' });
+  }
+});
+
 // Buscar pedido por ID
 router.get('/:id', autenticar, async (req, res) => {
   try {
@@ -231,6 +343,100 @@ router.get('/:id', autenticar, async (req, res) => {
     res.json({ ...result.rows[0], dados: dados.rows });
   } catch (e) {
     res.status(500).json({ erro: 'Erro ao buscar pedido' });
+  }
+});
+
+// ── Upload de documentos do imóvel (Due Diligence Imobiliária) ─────
+// POST /api/pedidos/:id/documentos
+// multipart/form-data, campo "documentos" (array, até 5 arquivos),
+// + body field "tipos" como JSON-array OU múltiplos campos "tipo[]" alinhados
+// com a ordem dos arquivos. Se "tipo" não vier, default 'outro'.
+router.post('/:id/documentos', autenticar, (req, res) => {
+  uploadDocumentos.array('documentos', MAX_DOCS_POR_PEDIDO)(req, res, async (err) => {
+    if (err) {
+      return res.status(400).json({ erro: err.message || 'Erro no upload' });
+    }
+    const arquivos = req.files || [];
+    if (!arquivos.length) return res.status(400).json({ erro: 'Nenhum arquivo enviado' });
+    try {
+      const pedidoId = req.params.id;
+      const pResult = await pool.query('SELECT id, tipo FROM pedidos WHERE id = $1', [pedidoId]);
+      if (pResult.rows.length === 0) {
+        // limpa arquivos já gravados pra não deixar lixo no disco
+        arquivos.forEach(a => { try { fs.unlinkSync(a.path); } catch (_) {} });
+        return res.status(404).json({ erro: 'Pedido não encontrado' });
+      }
+      if (pResult.rows[0].tipo !== 'due_diligence_imobiliaria') {
+        arquivos.forEach(a => { try { fs.unlinkSync(a.path); } catch (_) {} });
+        return res.status(400).json({ erro: 'Upload de documentos só é permitido para Due Diligence Imobiliária' });
+      }
+
+      // Limite total: existentes + novos <= MAX_DOCS_POR_PEDIDO
+      const jaExistem = await pool.query('SELECT COUNT(*) FROM pedido_documentos WHERE pedido_id = $1', [pedidoId]);
+      if (parseInt(jaExistem.rows[0].count, 10) + arquivos.length > MAX_DOCS_POR_PEDIDO) {
+        arquivos.forEach(a => { try { fs.unlinkSync(a.path); } catch (_) {} });
+        return res.status(400).json({ erro: `Máximo de ${MAX_DOCS_POR_PEDIDO} documentos por pedido` });
+      }
+
+      // Tipos: aceita JSON ('["matricula","escritura"]') OU array de strings
+      let tiposIn = req.body.tipos || req.body.tipo;
+      let tipos = [];
+      if (Array.isArray(tiposIn)) tipos = tiposIn;
+      else if (typeof tiposIn === 'string' && tiposIn.trim().startsWith('[')) {
+        try { tipos = JSON.parse(tiposIn); } catch (_) { tipos = []; }
+      } else if (typeof tiposIn === 'string') {
+        tipos = [tiposIn];
+      }
+
+      const inseridos = [];
+      for (let i = 0; i < arquivos.length; i++) {
+        const arq = arquivos[i];
+        const rawTipo = (tipos[i] || 'outro').toLowerCase();
+        const tipo = TIPOS_DOCUMENTOS_VALIDOS.has(rawTipo) ? rawTipo : 'outro';
+        const r = await pool.query(
+          `INSERT INTO pedido_documentos (pedido_id, tipo, filename, filepath, size_bytes, mime_type)
+           VALUES ($1, $2, $3, $4, $5, $6)
+           RETURNING id, tipo, filename, size_bytes, mime_type`,
+          [pedidoId, tipo, arq.originalname, arq.path, arq.size, arq.mimetype]
+        );
+        inseridos.push(r.rows[0]);
+      }
+      // marca status pendente; processo real roda quando rodar /consultar
+      await pool.query(
+        `UPDATE pedidos SET analise_ia_status = 'pendente', atualizado_em = NOW() WHERE id = $1`,
+        [pedidoId]
+      );
+      res.status(201).json({ documentos: inseridos });
+    } catch (e) {
+      console.error('[pedidos] upload documentos:', e);
+      arquivos.forEach(a => { try { fs.unlinkSync(a.path); } catch (_) {} });
+      res.status(500).json({ erro: 'Erro ao salvar documentos' });
+    }
+  });
+});
+
+// Listar documentos do pedido
+router.get('/:id/documentos', autenticar, async (req, res) => {
+  try {
+    const r = await pool.query(
+      `SELECT id, tipo, filename, size_bytes, mime_type, criado_em
+         FROM pedido_documentos WHERE pedido_id = $1 ORDER BY criado_em ASC`,
+      [req.params.id]
+    );
+    res.json({ documentos: r.rows });
+  } catch (e) {
+    res.status(500).json({ erro: 'Erro ao listar documentos' });
+  }
+});
+
+// Disparar análise IA manualmente (idempotente)
+router.post('/:id/analise-ia', autenticar, async (req, res) => {
+  try {
+    const out = await analiseIA.analisarDocumentosImovel(req.params.id);
+    res.json(out);
+  } catch (e) {
+    console.error('[pedidos] analise-ia:', e);
+    res.status(500).json({ erro: 'Erro ao executar análise IA' });
   }
 });
 
@@ -308,7 +514,20 @@ router.post('/:id/consultar', autenticar, async (req, res) => {
     await pool.query('INSERT INTO logs (pedido_id, usuario_id, acao) VALUES ($1, $2, $3)',
       [pedido.id, req.usuario.id, 'Consultas automáticas executadas']);
 
-    res.json({ ok: true, resultados });
+    // Análise IA dos documentos do imóvel (Due Diligence Imobiliária).
+    // Falha graciosamente se ANTHROPIC_API_KEY não estiver setado ou se não houver documentos.
+    let analiseOut = null;
+    if (pedido.tipo === 'due_diligence_imobiliaria') {
+      try {
+        analiseOut = await analiseIA.analisarDocumentosImovel(pedido.id);
+        await pool.query('INSERT INTO logs (pedido_id, usuario_id, acao, detalhes) VALUES ($1, $2, $3, $4)',
+          [pedido.id, req.usuario.id, 'Análise IA documentos', `status: ${analiseOut.status}`]);
+      } catch (eIa) {
+        console.warn('[pedidos] análise IA falhou (não bloqueia):', eIa.message);
+      }
+    }
+
+    res.json({ ok: true, resultados, analise_ia: analiseOut });
   } catch (e) {
     console.error('Erro ao executar consultas:', e);
     res.status(500).json({ erro: 'Erro ao executar consultas' });
@@ -329,10 +548,32 @@ router.post('/:id/concluir', autenticar, async (req, res) => {
       pedido.observacoes = observacoes;
     }
 
-    const { url } = await gerarDossie(pedido, dadosResult.rows);
+    // Histórico de scores deste CPF/CNPJ (para renderizar no PDF com tendência)
+    let historicoScores = [];
+    try {
+      const hist = await pool.query(
+        `SELECT numero, score_calculado, score_classificacao, criado_em, concluido_em
+         FROM pedidos
+         WHERE alvo_documento = $1 AND id != $2 AND score_calculado IS NOT NULL
+         ORDER BY criado_em DESC LIMIT 5`,
+        [pedido.alvo_documento, pedido.id]
+      );
+      historicoScores = hist.rows;
+    } catch (errHist) {
+      console.warn('[pedidos] Histórico de scores indisponível:', errHist.message);
+    }
+    const dadosComHistorico = [
+      ...dadosResult.rows,
+      { fonte: 'historico_scores', dados: { pedidos: historicoScores } }
+    ];
+
+    const resultPdf = await gerarDossie(pedido, dadosComHistorico);
+    const { url, score: scoreGerado } = resultPdf;
     await pool.query(
-      `UPDATE pedidos SET status = 'concluido', concluido_em = NOW(), relatorio_url = $1, atualizado_em = NOW() WHERE id = $2`,
-      [url, pedido.id]
+      `UPDATE pedidos SET status = 'concluido', concluido_em = NOW(), relatorio_url = $1,
+         score_calculado = $2, score_classificacao = $3, atualizado_em = NOW()
+       WHERE id = $4`,
+      [url, scoreGerado?.valor ?? null, scoreGerado?.classificacao ?? null, pedido.id]
     );
     await pool.query('INSERT INTO logs (pedido_id, usuario_id, acao) VALUES ($1, $2, $3)',
       [pedido.id, req.usuario.id, 'Relatório gerado e pedido concluído']);

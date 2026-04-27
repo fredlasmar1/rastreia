@@ -197,6 +197,18 @@ const PRODUTOS = {
     prazo_horas: 0.5,
     icone: '🚗',
     sem_alvo_documento: true,
+    // Tiers comerciais (catálogo Credify). Admin pode ajustar o preço final por pedido.
+    // O campo `preco` acima continua sendo o piso do Completo (tier padrão).
+    tiers: {
+      basico:   { preco: 47,  servicos: 5,  descricao: 'Checagem rápida pré-compra' },
+      completo: { preco: 97,  servicos: 9,  descricao: 'Dossiê completo com histórico', padrao: true },
+      premium:  { preco: 147, servicos: 11, descricao: 'Completo + leilão + chassi decodificado' }
+    },
+    addons: {
+      leilao:             { preco: 29, descricao: 'Consulta em bases de leilão' },
+      cnh_proprietario:   { preco: 15, descricao: 'Validação da CNH do proprietário' },
+      veiculos_por_cpf:   { preco: 19, descricao: 'Outros veículos do proprietário' }
+    },
     publico_alvo: [
       'Comprador de veículo usado antes de fechar negócio',
       'Quem vai receber veículo como pagamento ou garantia',
@@ -218,9 +230,20 @@ const PRODUTOS = {
 // CALCULADORA DE SCORE DE RISCO
 // ─────────────────────────────────────────────────────────
 
+// Helper: dias entre data ISO/string e hoje
+function diasDesde(dataStr) {
+  if (!dataStr) return null;
+  try {
+    const d = new Date(dataStr);
+    if (isNaN(d.getTime())) return null;
+    return Math.floor((Date.now() - d.getTime()) / 86400000);
+  } catch { return null; }
+}
+
 function calcularScore(tipo, dados) {
   if (!dados) dados = {};
   const alertas = [];
+  const contribuicoes = []; // dimensão, delta, motivo - para transparência
 
   const processos = dados.processos || {};
   const cadastral = dados.receita_federal || {};
@@ -234,110 +257,219 @@ function calcularScore(tipo, dados) {
   const fontesConsultadas = (temDadosCadastrais ? 1 : 0) + (temDadosProcessos ? 1 : 0) + (transparencia.em_lista_negra !== undefined ? 1 : 0);
 
   if (fontesConsultadas === 0) {
-    alertas.push('Nenhuma fonte de dados retornou informações — score não calculado');
-    alertas.push('Verifique se as APIs estão configuradas (DIRECTD_TOKEN, ESCAVADOR_API_KEY)');
+    alertas.push({ texto: 'Nenhuma fonte de dados retornou informações — score não calculado', severidade: 'critico' });
+    alertas.push({ texto: 'Verifique se as APIs estão configuradas (DIRECTD_TOKEN, ESCAVADOR_API_KEY)', severidade: 'observar' });
     return {
       score: '-',
       classificacao: 'INDISPONÍVEL',
       cor: 'cinza',
       recomendacao: 'Não foi possível calcular o score de risco porque nenhuma fonte de dados retornou informações. Configure as APIs necessárias e refaça a consulta.',
-      alertas
+      alertas,
+      contribuicoes,
+      versao: 'v2'
     };
   }
 
   let score = 100;
+  // alertas agora podem ser strings (compat) ou objetos { texto, severidade }
+  // severidade: 'critico' | 'atencao' | 'observar' | 'positivo'
+  const alertar = (texto, severidade) => {
+    alertas.push({ texto, severidade: severidade || 'observar' });
+  };
+  const aplicar = (dim, delta, motivo) => {
+    if (delta === 0) return;
+    score += delta;
+    contribuicoes.push({ dimensao: dim, delta, motivo });
+  };
 
-  // Penalidade por dados incompletos
+  // ============================================================
+  // 1. DADOS CADASTRAIS INCOMPLETOS
+  // ============================================================
   if (!temDadosCadastrais) {
-    score -= 15;
-    alertas.push('Dados cadastrais indisponíveis — score parcial');
+    aplicar('Dados cadastrais', -15, 'Dados cadastrais indisponíveis');
+    alertar('Dados cadastrais indisponíveis — score parcial', 'atencao');
   }
   if (cadastral.aviso || cadastral.erro) {
-    score -= 10;
-    alertas.push('API de dados cadastrais não retornou informações completas');
+    aplicar('Dados cadastrais', -10, 'Retorno incompleto da API de dados cadastrais');
+    alertar('API de dados cadastrais não retornou informações completas', 'observar');
   }
 
-  // Penalidade por Score QUOD (Direct Data)
+  // ============================================================
+  // 2. SCORE QUOD (birô) — com peso reduzido quando há processos
+  // ============================================================
+  const processosAtivosArr = (processos.processos || []).filter(p => p.status === 'Ativo');
+  const temSinalJudicial = processosAtivosArr.length > 0;
+
   if (scoreQuod.score) {
     const sq = Number(scoreQuod.score);
-    if (sq < 300) { score -= 30; alertas.push(`Score QUOD muito baixo: ${sq}/1000 — ${scoreQuod.faixa || ''}`); }
-    else if (sq < 500) { score -= 20; alertas.push(`Score QUOD baixo: ${sq}/1000 — ${scoreQuod.faixa || ''}`); }
-    else if (sq < 700) { score -= 10; alertas.push(`Score QUOD medio: ${sq}/1000 — ${scoreQuod.faixa || ''}`); }
+    // Pesos reduzidos quando há processos ativos (QUOD não capta sinal judicial)
+    const reducao = temSinalJudicial ? 0.7 : 1.0;
+    let penalQuod = 0;
+    if (sq < 300) penalQuod = 30;
+    else if (sq < 500) penalQuod = 20;
+    else if (sq < 700) penalQuod = 10;
+    else if (sq < 800) penalQuod = 3; // faixa 700-799 não é isenta
+    penalQuod = Math.round(penalQuod * reducao);
+    if (penalQuod > 0) {
+      aplicar('QUOD', -penalQuod, `Score QUOD ${sq}/1000 (${scoreQuod.faixa || 'sem faixa'})${reducao < 1 ? ' - peso reduzido por sinal judicial' : ''}`);
+      const sevQ = sq < 300 ? 'critico' : sq < 500 ? 'atencao' : 'observar';
+      alertar(`Score QUOD: ${sq}/1000 — ${scoreQuod.faixa || ''}`, sevQ);
+    } else if (sq >= 800) {
+      alertar(`Score QUOD: ${sq}/1000 — ${scoreQuod.faixa || 'Excelente'}`, 'positivo');
+    }
     if (scoreQuod.motivos?.length > 0) {
-      scoreQuod.motivos.slice(0, 2).forEach(m => alertas.push(`QUOD: ${m}`));
+      scoreQuod.motivos.slice(0, 2).forEach(m => alertar(`QUOD: ${m}`, 'observar'));
     }
   }
 
-  // Penalidade por negativacoes (Direct Data)
+  // ============================================================
+  // 3. NEGATIVAÇÕES / PROTESTOS (Direct Data)
+  // ============================================================
   if (negativacoes.total_pendencias > 0) {
     const valorPend = Number(negativacoes.total_pendencias);
-    if (valorPend > 100000) { score -= 30; }
-    else if (valorPend > 10000) { score -= 20; }
-    else { score -= 10; }
-    alertas.push(`Pendencias financeiras: R$ ${valorPend.toLocaleString('pt-BR', {minimumFractionDigits:2})} — ${negativacoes.status || ''}`);
+    let penal = 10, sev = 'atencao';
+    if (valorPend > 100000) { penal = 30; sev = 'critico'; }
+    else if (valorPend > 10000) { penal = 20; sev = 'atencao'; }
+    aplicar('Pendências', -penal, `Pendências R$ ${valorPend.toLocaleString('pt-BR', {minimumFractionDigits:2})}`);
+    alertar(`Pendências financeiras: R$ ${valorPend.toLocaleString('pt-BR', {minimumFractionDigits:2})} — ${negativacoes.status || ''}`, sev);
   }
 
-  // Penalidades por processos judiciais (apenas ativos contam)
+  // ============================================================
+  // 4. PROCESSOS JUDICIAIS — com peso por recência
+  // ============================================================
   const totalProcessos = processos.total || 0;
-  const processosAtivos = (processos.processos || []).filter(p => p.status === 'Ativo').length;
+  const processosAtivos = processosAtivosArr.length;
   const processosInativos = totalProcessos - processosAtivos;
+
   if (processosAtivos > 0) {
-    const penalidade = Math.min(processosAtivos * 5, 40);
-    score -= penalidade;
-    alertas.push(`${processosAtivos} processo(s) ativo(s) encontrado(s)`);
+    const penalBase = Math.min(processosAtivos * 6, 30);
+    aplicar('Processos ativos', -penalBase, `${processosAtivos} processo(s) ativo(s)`);
+    alertar(`${processosAtivos} processo(s) ativo(s) encontrado(s)`, processosAtivos >= 3 ? 'critico' : 'atencao');
+
+    let recentes180 = 0;
+    let recentes90 = 0;
+    let maisRecenteDias = null;
+    processosAtivosArr.forEach(p => {
+      const dias = diasDesde(p.data_inicio);
+      if (dias !== null && dias >= 0) {
+        if (dias < 90) recentes90++;
+        if (dias < 180) recentes180++;
+        if (maisRecenteDias === null || dias < maisRecenteDias) maisRecenteDias = dias;
+      }
+    });
+    if (recentes90 > 0) {
+      aplicar('Recência judicial', -20, `${recentes90} processo(s) ativo(s) ajuizado(s) nos últimos 90 dias`);
+      alertar(`${recentes90} processo(s) ajuizado(s) há menos de 90 dias`, 'critico');
+    } else if (recentes180 > 0) {
+      aplicar('Recência judicial', -12, `${recentes180} processo(s) ativo(s) ajuizado(s) nos últimos 180 dias`);
+      alertar(`${recentes180} processo(s) ajuizado(s) há menos de 180 dias`, 'atencao');
+    }
+    if (maisRecenteDias !== null && maisRecenteDias < 60) {
+      alertar(`Processo mais recente ajuizado há ${maisRecenteDias} dias`, 'critico');
+    }
   }
   if (processosInativos > 0) {
-    alertas.push(`${processosInativos} processo(s) baixado(s)/arquivado(s) (nao impactam score)`);
+    if (processosInativos >= 3) {
+      aplicar('Histórico judicial', -5, `${processosInativos} processo(s) histórico(s) (recorrência)`);
+      alertar(`Recorrência: ${processosInativos} processo(s) baixado(s)/arquivado(s) no histórico`, 'atencao');
+    } else {
+      alertar(`${processosInativos} processo(s) baixado(s)/arquivado(s) no histórico`, 'observar');
+    }
   }
 
-  // Penalidade por lista negra federal
+  // ============================================================
+  // 5. LISTA NEGRA FEDERAL
+  // ============================================================
   if (transparencia.em_lista_negra) {
-    score -= 40;
-    alertas.push('CRITICO: Empresa/Pessoa consta em lista negra federal (CEIS/CNEP)');
+    aplicar('Lista negra', -40, 'Consta em CEIS/CNEP');
+    alertar('Empresa/Pessoa consta em lista negra federal (CEIS/CNEP)', 'critico');
   }
 
-  // Penalidade por situação irregular na RF
+  // ============================================================
+  // 6. SITUAÇÃO RECEITA FEDERAL
+  // ============================================================
   const situacao = (cadastral.situacao || cadastral.situacao_rf || '').toLowerCase();
   if (situacao && !situacao.includes('ativ') && !situacao.includes('regular')) {
-    score -= 25;
-    alertas.push(`Situação irregular na Receita Federal: ${situacao}`);
+    aplicar('Situação RF', -25, `Irregular: ${situacao}`);
+    alertar(`Situação irregular na Receita Federal: ${situacao}`, 'critico');
   }
 
-  // Penalidade por óbito (PF)
+  // ============================================================
+  // 7. ÓBITO
+  // ============================================================
   if (cadastral.obito === true) {
-    score -= 50;
-    alertas.push('CRITICO: Registro de óbito encontrado para este CPF');
+    aplicar('Óbito', -50, 'Registro de óbito no CPF');
+    alertar('Registro de óbito encontrado para este CPF', 'critico');
   }
 
-  // Bônus por empresa antiga (PJ)
+  // ============================================================
+  // 8. EMPRESA NOVA/ANTIGA (PJ)
+  // ============================================================
   if (cadastral.data_abertura) {
     const anos = new Date().getFullYear() - new Date(cadastral.data_abertura).getFullYear();
-    if (anos >= 5) score = Math.min(score + 5, 100);
-    if (anos < 1) { score -= 10; alertas.push('Empresa com menos de 1 ano de existência'); }
+    if (anos >= 5) aplicar('Tempo de empresa', +5, `Empresa com ${anos} anos de existência`);
+    if (anos < 1) {
+      aplicar('Tempo de empresa', -10, 'Empresa com menos de 1 ano');
+      alertar('Empresa com menos de 1 ano de existência', 'atencao');
+    } else if (anos >= 5) {
+      alertar(`Empresa consolidada (${anos} anos de existência)`, 'positivo');
+    }
   }
 
-  score = Math.max(0, Math.min(100, score));
+  // ============================================================
+  // 9. MULTIPLICIDADE CADASTRAL (antifraude)
+  // ============================================================
+  const telefones = Array.isArray(cadastral.telefones) ? cadastral.telefones : [];
+  const enderecos = Array.isArray(cadastral.enderecos) ? cadastral.enderecos : [];
+  if (telefones.length >= 5) {
+    aplicar('Multiplicidade', -8, `${telefones.length} telefones cadastrados`);
+    alertar(`Sinal antifraude: ${telefones.length} telefones cadastrados`, 'atencao');
+  } else if (telefones.length >= 4) {
+    aplicar('Multiplicidade', -4, `${telefones.length} telefones cadastrados`);
+    alertar(`${telefones.length} telefones cadastrados`, 'observar');
+  }
+  if (enderecos.length >= 3) {
+    aplicar('Multiplicidade', -6, `${enderecos.length} endereços cadastrados`);
+    alertar(`Sinal antifraude: ${enderecos.length} endereços cadastrados`, 'atencao');
+  }
 
+  // ============================================================
+  // 10. RENDA INCONSISTENTE
+  // ============================================================
+  if (cadastral.renda_inconsistente) {
+    alertar(cadastral.renda_motivo_inconsistencia || 'Renda estimada inconsistente - desconsiderada', 'observar');
+  }
+
+  score = Math.max(0, Math.min(100, Math.round(score)));
+
+  // ============================================================
+  // BANDAS DE DECISÃO EXPLÍCITAS (v2)
+  // 86-100 EXCELENTE / 71-85 BOM / 51-70 MODERADO / 31-50 ALTO / 0-30 CRÍTICO
+  // ============================================================
   let classificacao, cor, recomendacao;
-  if (score >= 75) {
+  if (score >= 86) {
     classificacao = 'BAIXO RISCO';
     cor = 'verde';
-    recomendacao = 'Perfil favorável para negociação. Recomendamos prosseguir com as devidas cautelas contratuais.';
-  } else if (score >= 50) {
-    classificacao = 'RISCO MÉDIO';
+    recomendacao = 'Perfil favorável. Prosseguir com cautelas contratuais padrão.';
+  } else if (score >= 71) {
+    classificacao = 'RISCO BAIXO-MODERADO';
+    cor = 'verde';
+    recomendacao = 'Perfil aceitável com pontos pontuais de atenção. Documentar riscos no contrato.';
+  } else if (score >= 51) {
+    classificacao = 'RISCO MODERADO';
     cor = 'laranja';
-    recomendacao = 'Existem pontos de atenção. Recomendamos exigir garantias antes de prosseguir.';
-  } else if (score >= 25) {
+    recomendacao = 'Existem pontos de atenção relevantes. Recomendamos exigir garantias antes de prosseguir.';
+  } else if (score >= 31) {
     classificacao = 'ALTO RISCO';
     cor = 'vermelho';
-    recomendacao = 'Perfil de risco elevado. Recomendamos fortemente exigir garantias reais ou recusar a negociação.';
+    recomendacao = 'Perfil de risco elevado. Exigir garantias reais, avalista ou recusar a negociação.';
   } else {
     classificacao = 'RISCO CRÍTICO';
     cor = 'vermelho';
-    recomendacao = 'Não recomendamos prosseguir com esta negociação sem análise jurídica especializada.';
+    recomendacao = 'Não recomendamos prosseguir sem análise jurídica especializada e garantias robustas.';
   }
 
-  return { score, classificacao, cor, recomendacao, alertas };
+  return { score, classificacao, cor, recomendacao, alertas, contribuicoes, versao: 'v2' };
 }
 
 // ─────────────────────────────────────────────────────────

@@ -1,0 +1,368 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Rastreia — Catálogo Credify</title>
+  <link rel="stylesheet" href="/css/style.css">
+  <style>
+    .header-aviso { background: #fef3c7; border: 1px solid #fcd34d; color: #78350f; padding: 12px 16px; border-radius: 8px; margin-bottom: 20px; font-size: 13px; line-height: 1.5; }
+    .resumo-grid { display:grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-bottom: 28px; }
+    @media (max-width: 800px) { .resumo-grid { grid-template-columns: repeat(2, 1fr); } }
+    .resumo-card { background: #fff; border: 1px solid #e5e7eb; border-radius: 10px; padding: 16px 18px; }
+    .resumo-card .label { font-size: 11px; color: #6b7280; text-transform: uppercase; letter-spacing: 0.3px; font-weight: 600; }
+    .resumo-card .valor { font-size: 22px; color: #111827; font-weight: 700; margin-top: 4px; }
+    .resumo-card .sub { font-size: 12px; color: #64748b; margin-top: 2px; }
+    .resumo-card.destaque { background: #111827; color: #fff; }
+    .resumo-card.destaque .label { color: #9ca3af; }
+    .resumo-card.destaque .valor { color: #fff; }
+    .resumo-card.destaque .sub { color: #9ca3af; }
+    .resumo-card.margem { background: #dcfce7; border-color: #86efac; }
+    .resumo-card.margem .label { color: #14532d; }
+    .resumo-card.margem .valor { color: #14532d; }
+
+    /* Tiers comerciais */
+    .tiers-section { margin-bottom: 32px; }
+    .tiers-section h2 { font-size: 18px; color: #111827; margin: 0 0 6px; }
+    .tiers-section .legenda { font-size: 13px; color: #64748b; margin-bottom: 18px; }
+    .tiers-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+    @media (max-width: 900px) { .tiers-grid { grid-template-columns: 1fr; } }
+    .tier-card { background: #fff; border: 1px solid #e5e7eb; border-radius: 14px; padding: 22px; display: flex; flex-direction: column; position: relative; }
+    .tier-card.destaque { border-color: #111827; border-width: 2px; box-shadow: 0 4px 12px rgba(0,0,0,0.08); }
+    .tier-card .badge-top { position: absolute; top: -10px; left: 22px; background: #111827; color: #fff; font-size: 10px; font-weight: 700; letter-spacing: 0.5px; padding: 4px 10px; border-radius: 4px; text-transform: uppercase; }
+    .tier-card h3 { margin: 0 0 4px; font-size: 15px; color: #6b7280; text-transform: uppercase; letter-spacing: 0.6px; font-weight: 700; }
+    .tier-card .preco { font-size: 32px; color: #111827; font-weight: 800; margin: 4px 0 2px; }
+    .tier-card .preco small { font-size: 14px; color: #6b7280; font-weight: 500; }
+    .tier-card .desc { font-size: 12px; color: #64748b; line-height: 1.5; margin: 10px 0 14px; min-height: 52px; }
+    .tier-card .publico { font-size: 11px; color: #111827; background: #f1f5f9; padding: 6px 10px; border-radius: 6px; margin-bottom: 14px; }
+    .tier-card ul { margin: 0; padding: 0; list-style: none; font-size: 12px; color: #334155; }
+    .tier-card ul li { padding: 5px 0; border-top: 1px solid #f1f5f9; font-family: Menlo, monospace; font-size: 11px; }
+    .tier-card ul li:first-child { border-top: none; }
+    .tier-card .rodape { margin-top: auto; padding-top: 14px; border-top: 1px dashed #e5e7eb; font-size: 11px; color: #6b7280; display: flex; justify-content: space-between; }
+    .tier-card .rodape strong { color: #111827; }
+    .tier-card .btn-aplicar { margin-top: 12px; background: #f8fafc; border: 1px solid #cbd5e1; color: #111827; padding: 8px 12px; border-radius: 6px; font-size: 12px; font-weight: 600; cursor: pointer; width: 100%; }
+    .tier-card .btn-aplicar:hover { background: #111827; color: #fff; }
+    .tier-card.destaque .btn-aplicar { background: #111827; color: #fff; border-color: #111827; }
+    .tier-card.destaque .btn-aplicar:hover { background: #374151; }
+
+    /* Add-ons */
+    .addons-box { background: #fffbeb; border: 1px solid #fcd34d; border-radius: 10px; padding: 16px 20px; margin-top: 18px; }
+    .addons-box h4 { margin: 0 0 10px; font-size: 13px; color: #78350f; text-transform: uppercase; letter-spacing: 0.5px; }
+    .addon-linha { display: grid; grid-template-columns: 1fr auto auto; gap: 12px; padding: 8px 0; border-top: 1px solid #fde68a; font-size: 12px; align-items: center; }
+    .addon-linha:first-of-type { border-top: none; }
+    .addon-linha .addon-nome { font-weight: 600; color: #78350f; }
+    .addon-linha .addon-desc { color: #92400e; font-size: 11px; margin-top: 2px; }
+    .addon-linha .addon-preco { font-weight: 700; color: #78350f; font-family: Menlo, monospace; }
+    .addon-linha .addon-margem { font-size: 10px; color: #92400e; }
+
+    .calc-box { background: #fff; border: 1px solid #e5e7eb; border-radius: 12px; padding: 22px 24px; margin-bottom: 24px; }
+    .calc-box h3 { margin: 0 0 14px; font-size: 15px; color: #111827; display:flex; justify-content:space-between; align-items:center; }
+    .calc-box .acoes-calc { display:flex; gap:10px; align-items:center; font-size: 12px; }
+    .calc-box .acoes-calc input { width: 90px; padding: 5px 8px; border: 1px solid #cbd5e1; border-radius: 6px; text-align:right; font-size: 13px; }
+
+    .categoria-grupo { background: #fff; border: 1px solid #e5e7eb; border-radius: 10px; margin-bottom: 16px; overflow: hidden; }
+    .categoria-header { background: #f8fafc; padding: 12px 18px; font-weight: 600; color: #111827; font-size: 14px; display:flex; justify-content:space-between; align-items:center; cursor:pointer; }
+    .categoria-header .contador { font-size: 12px; color: #64748b; font-weight: 400; }
+    .categoria-conteudo { display: block; }
+    .categoria-conteudo.recolhido { display: none; }
+    .servico-row { display:grid; grid-template-columns: 42px 2fr 1fr 110px; gap: 12px; padding: 10px 18px; border-top: 1px solid #f1f5f9; font-size: 13px; align-items:center; }
+    .servico-row:hover { background: #f8fafc; }
+    .servico-row.selecionado { background: #eff6ff; }
+    .servico-row input[type=checkbox] { width: 16px; height: 16px; cursor: pointer; }
+    .servico-nome { font-weight: 600; color: #111827; font-family: Menlo, monospace; font-size: 12px; }
+    .servico-desc { color: #64748b; font-size: 12px; margin-top: 2px; }
+    .custo-valor { text-align: right; font-family: Menlo, monospace; color: #111827; font-weight: 600; }
+
+    .btn-outline { background: #fff; border: 1px solid #cbd5e1; color: #334155; padding: 7px 14px; border-radius: 6px; cursor: pointer; font-size: 12px; font-weight: 500; }
+    .btn-outline:hover { background: #f1f5f9; }
+    .flutuante-total { position: sticky; bottom: 16px; background: #111827; color: #fff; border-radius: 12px; padding: 14px 20px; display:flex; justify-content:space-between; align-items:center; box-shadow: 0 10px 30px rgba(0,0,0,0.25); margin-top: 20px; }
+    .flutuante-total .fim { display:flex; gap:16px; align-items:center; font-size: 13px; }
+    .flutuante-total strong { font-size: 16px; }
+    .margem-ok { color: #86efac; }
+    .margem-baixa { color: #fca5a5; }
+  </style>
+</head>
+<body>
+<nav class="nav">
+  <a href="/dashboard.html" class="nav-logo"><img src="/img/logo-recobro.jpg" alt="Recobro"><div><div class="nav-brand">RASTREIA</div></div></a>
+  <div class="nav-links">
+    <a href="/dashboard.html">Dashboard</a>
+    <a href="/novo-pedido.html">+ Novo Pedido</a>
+    <a href="/clientes.html">Clientes</a>
+    <a href="/custos-api.html">Custos API</a>
+    <a href="/credify.html" class="ativo">Credify</a>
+    <a href="/usuarios.html">Usuários</a>
+    <a href="#" onclick="logout()">Sair</a>
+  </div>
+  <div class="nav-user" id="nav-user"></div>
+</nav>
+
+<div class="container">
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px">
+    <h1 class="page-title" style="margin:0">Catálogo Credify — Consulta Veicular</h1>
+    <a href="#" onclick="aplicarPadrao();return false" class="btn btn-primary">Aplicar pacote padrão</a>
+  </div>
+
+  <div class="header-aviso">
+    <strong>Uso interno.</strong> Tabela oficial da Credify (faixa 0 a 10k consultas/mês, atualizada em 23/04/2026).
+    Selecione os serviços que quer incluir na consulta para ver o custo bruto e a margem em tempo real.
+    <strong>Nenhum desses valores aparece no PDF do cliente.</strong>
+  </div>
+
+  <!-- Tiers comerciais de venda -->
+  <div class="tiers-section">
+    <h2>Tiers de venda — Consulta Veicular</h2>
+    <div class="legenda">Preços sugeridos. Admin pode ajustar por pedido. O custo bruto nunca aparece no PDF do cliente.</div>
+    <div class="tiers-grid" id="tiers-grid">
+      <div style="grid-column:1/-1;padding:30px;text-align:center;color:#9ca3af">Carregando tiers…</div>
+    </div>
+    <div class="addons-box" id="addons-box" style="display:none">
+      <h4>Add-ons (itens avulsos que podem ser anexados a qualquer tier)</h4>
+      <div id="addons-lista"></div>
+    </div>
+  </div>
+
+  <!-- Resumo do pacote padrão -->
+  <div class="resumo-grid" id="resumo-grid">
+    <div class="resumo-card"><div class="label">Total de serviços</div><div class="valor" id="r-total">30</div><div class="sub">disponíveis no catálogo</div></div>
+    <div class="resumo-card destaque"><div class="label">Pacote padrão</div><div class="valor" id="r-padrao">R$ 23,87</div><div class="sub">9 serviços · consulta veicular</div></div>
+    <div class="resumo-card margem"><div class="label">Margem padrão</div><div class="valor" id="r-margem">R$ 73,13</div><div class="sub" id="r-margem-pct">75,4% sobre venda R$ 97</div></div>
+    <div class="resumo-card"><div class="label">Mais caro</div><div class="valor">R$ 31,27</div><div class="sub">VeiculoTotal (combo)</div></div>
+  </div>
+
+  <!-- Calculadora sob medida -->
+  <div class="calc-box">
+    <h3>
+      <span>Calculadora de pacote sob medida</span>
+      <span class="acoes-calc">
+        Venda sugerida: R$ <input type="number" id="preco-venda" value="97" step="1">
+        <button class="btn-outline" onclick="limparSelecao()">Limpar seleção</button>
+      </span>
+    </h3>
+    <div id="catalogo"></div>
+  </div>
+
+  <!-- Barra flutuante com total -->
+  <div class="flutuante-total">
+    <div>
+      <div style="font-size:11px;color:#9ca3af;text-transform:uppercase;letter-spacing:0.5px">Seleção atual</div>
+      <strong id="sel-total">R$ 0,00</strong>
+      <span style="color:#9ca3af;font-size:12px;margin-left:8px"><span id="sel-qtd">0</span> serviços</span>
+    </div>
+    <div class="fim">
+      <div><span style="color:#9ca3af">Venda:</span> <strong id="sel-venda">R$ 97,00</strong></div>
+      <div><span style="color:#9ca3af">Custo:</span> <strong id="sel-custo">R$ 0,00</strong></div>
+      <div><span style="color:#9ca3af">Margem:</span> <strong id="sel-margem" class="margem-ok">R$ 97,00</strong></div>
+      <div><span style="color:#9ca3af">%:</span> <strong id="sel-pct" class="margem-ok">100%</strong></div>
+    </div>
+  </div>
+</div>
+
+<script>
+const token = localStorage.getItem('rastreia_token');
+if (!token) { location.href = '/'; }
+const usuarioLogado = JSON.parse(localStorage.getItem('rastreia_usuario') || '{}');
+document.getElementById('nav-user').textContent = usuarioLogado.nome || '';
+if (usuarioLogado.perfil !== 'admin') {
+  document.body.innerHTML = '<div style="padding:60px;text-align:center"><h2>Acesso restrito</h2><p>Somente administradores podem ver o catálogo Credify.</p><a href="/dashboard.html" class="btn btn-primary">Voltar</a></div>';
+}
+
+function logout() { localStorage.clear(); location.href = '/'; }
+function fmt(v) { return 'R$ ' + v.toFixed(2).replace('.', ','); }
+
+let catalogoData = null;
+let tiersData = null;
+let selecionados = new Set();
+
+async function carregar() {
+  const res = await fetch('/api/admin/custos/credify/catalogo', { headers: { Authorization: 'Bearer ' + token } });
+  if (!res.ok) { document.getElementById('catalogo').innerHTML = '<p style="color:#b91c1c;padding:20px">Erro ao carregar catálogo.</p>'; return; }
+  catalogoData = await res.json();
+  document.getElementById('r-total').textContent = catalogoData.total_servicos;
+  document.getElementById('r-padrao').textContent = catalogoData.pacote_padrao.total_formatado;
+  document.getElementById('r-margem').textContent = fmt(catalogoData.pacote_padrao.margem.margem);
+  document.getElementById('r-margem-pct').textContent = catalogoData.pacote_padrao.margem.margem_pct + '% sobre venda R$ 97';
+  renderCategorias();
+}
+
+function renderCategorias() {
+  const cats = catalogoData.catalogo;
+  const html = Object.entries(cats).map(([catKey, grupo]) => {
+    const itensHtml = grupo.itens.map(item => `
+      <label class="servico-row" data-chave="${item.chave}">
+        <input type="checkbox" onchange="toggle('${item.chave}', this.checked)">
+        <div>
+          <div class="servico-nome">${item.servico}</div>
+          <div class="servico-desc">${item.descricao}</div>
+        </div>
+        <div></div>
+        <div class="custo-valor">${fmt(item.custo)}</div>
+      </label>
+    `).join('');
+    return `
+      <div class="categoria-grupo">
+        <div class="categoria-header" onclick="toggleCategoria(this)">
+          <span>${grupo.nome}</span>
+          <span class="contador">${grupo.itens.length} serviços · soma ${fmt(grupo.itens.reduce((s,i)=>s+i.custo,0))}</span>
+        </div>
+        <div class="categoria-conteudo">${itensHtml}</div>
+      </div>
+    `;
+  }).join('');
+  document.getElementById('catalogo').innerHTML = html;
+}
+
+function toggleCategoria(header) {
+  header.nextElementSibling.classList.toggle('recolhido');
+}
+
+function toggle(chave, check) {
+  if (check) selecionados.add(chave);
+  else selecionados.delete(chave);
+  const row = document.querySelector(`.servico-row[data-chave="${chave}"]`);
+  if (row) row.classList.toggle('selecionado', check);
+  recalcular();
+}
+
+async function recalcular() {
+  const venda = parseFloat(document.getElementById('preco-venda').value) || 0;
+  document.getElementById('sel-venda').textContent = fmt(venda);
+  if (selecionados.size === 0) {
+    document.getElementById('sel-total').textContent = fmt(0);
+    document.getElementById('sel-qtd').textContent = '0';
+    document.getElementById('sel-custo').textContent = fmt(0);
+    document.getElementById('sel-margem').textContent = fmt(venda);
+    document.getElementById('sel-pct').textContent = '100%';
+    pintarMargem(100);
+    return;
+  }
+  try {
+    const r = await fetch('/api/admin/custos/credify/calcular', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
+      body: JSON.stringify({ servicos: Array.from(selecionados), preco_venda: venda })
+    });
+    const d = await r.json();
+    document.getElementById('sel-total').textContent = d.total_formatado;
+    document.getElementById('sel-qtd').textContent = d.qtd_servicos;
+    document.getElementById('sel-custo').textContent = d.total_formatado;
+    if (d.margem) {
+      document.getElementById('sel-margem').textContent = fmt(d.margem.margem);
+      document.getElementById('sel-pct').textContent = d.margem.margem_pct + '%';
+      pintarMargem(d.margem.margem_pct);
+    }
+  } catch (e) { console.error(e); }
+}
+
+function pintarMargem(pct) {
+  const el1 = document.getElementById('sel-margem');
+  const el2 = document.getElementById('sel-pct');
+  const classe = pct >= 50 ? 'margem-ok' : 'margem-baixa';
+  el1.className = classe;
+  el2.className = classe;
+}
+
+function limparSelecao() {
+  selecionados.clear();
+  document.querySelectorAll('.servico-row input[type=checkbox]').forEach(c => c.checked = false);
+  document.querySelectorAll('.servico-row.selecionado').forEach(r => r.classList.remove('selecionado'));
+  recalcular();
+}
+
+function aplicarPadrao() {
+  if (!catalogoData) return;
+  limparSelecao();
+  const padrao = catalogoData.pacote_padrao.servicos;
+  padrao.forEach(chave => {
+    const cb = document.querySelector(`.servico-row[data-chave="${chave}"] input[type=checkbox]`);
+    if (cb) { cb.checked = true; toggle(chave, true); }
+  });
+  // Rola até o primeiro selecionado
+  const primeiro = document.querySelector('.servico-row.selecionado');
+  if (primeiro) primeiro.scrollIntoView({ behavior: 'smooth', block: 'center' });
+}
+
+document.getElementById('preco-venda').addEventListener('input', recalcular);
+
+async function carregarTiers() {
+  const res = await fetch('/api/admin/custos/credify/tiers', { headers: { Authorization: 'Bearer ' + token } });
+  if (!res.ok) { document.getElementById('tiers-grid').innerHTML = '<div style="grid-column:1/-1;padding:20px;color:#b91c1c">Erro ao carregar tiers.</div>'; return; }
+  tiersData = await res.json();
+  renderTiers();
+  renderAddons();
+}
+
+function renderTiers() {
+  const destaqueSlug = 'completo';
+  const html = tiersData.tiers.map(tier => {
+    const isDestaque = tier.slug === destaqueSlug;
+    const servicosHtml = tier.servicos.map(s => `<li>✓ ${s}</li>`).join('');
+    return `
+      <div class="tier-card ${isDestaque ? 'destaque' : ''}">
+        ${isDestaque ? '<span class="badge-top">Mais vendido</span>' : ''}
+        <h3>${tier.nome}</h3>
+        <div class="preco">R$ ${tier.preco_sugerido.toFixed(0)}<small>,00</small></div>
+        <div class="desc">${tier.descricao}</div>
+        <div class="publico"><strong>Ideal para:</strong> ${tier.publico}</div>
+        <ul>${servicosHtml}</ul>
+        <div class="rodape">
+          <span>Custo bruto: <strong>${tier.total_formatado}</strong></span>
+          <span>Margem: <strong>${tier.margem.margem_pct}%</strong></span>
+        </div>
+        <button class="btn-aplicar" onclick="aplicarTier('${tier.slug}')">Aplicar na calculadora ↓</button>
+      </div>
+    `;
+  }).join('');
+  document.getElementById('tiers-grid').innerHTML = html;
+}
+
+function renderAddons() {
+  if (!tiersData || !tiersData.addons || !tiersData.addons.length) return;
+  const html = tiersData.addons.map(a => `
+    <div class="addon-linha">
+      <div>
+        <div class="addon-nome">${a.nome}</div>
+        <div class="addon-desc">${a.descricao}</div>
+      </div>
+      <div style="text-align:right">
+        <div class="addon-preco">+ R$ ${a.preco_adicional.toFixed(2).replace('.', ',')}</div>
+        <div class="addon-margem">custo ${fmt(a.custo_bruto)} · ${a.margem.margem_pct}%</div>
+      </div>
+      <button class="btn-aplicar" style="margin:0;width:auto;padding:6px 10px" onclick="aplicarAddon('${a.slug}')">+ Add</button>
+    </div>
+  `).join('');
+  document.getElementById('addons-lista').innerHTML = html;
+  document.getElementById('addons-box').style.display = 'block';
+}
+
+function aplicarTier(slug) {
+  if (!tiersData) return;
+  const tier = tiersData.tiers.find(t => t.slug === slug);
+  if (!tier) return;
+  limparSelecao();
+  document.getElementById('preco-venda').value = tier.preco_sugerido;
+  tier.servicos.forEach(chave => {
+    const cb = document.querySelector(`.servico-row[data-chave="${chave}"] input[type=checkbox]`);
+    if (cb) { cb.checked = true; toggle(chave, true); }
+  });
+  const primeiro = document.querySelector('.servico-row.selecionado');
+  if (primeiro) primeiro.scrollIntoView({ behavior: 'smooth', block: 'center' });
+}
+
+function aplicarAddon(slug) {
+  if (!tiersData) return;
+  const addon = tiersData.addons.find(a => a.slug === slug);
+  if (!addon) return;
+  const vendaAtual = parseFloat(document.getElementById('preco-venda').value) || 0;
+  document.getElementById('preco-venda').value = (vendaAtual + addon.preco_adicional).toFixed(2);
+  addon.servicos.forEach(chave => {
+    const cb = document.querySelector(`.servico-row[data-chave="${chave}"] input[type=checkbox]`);
+    if (cb && !cb.checked) { cb.checked = true; toggle(chave, true); }
+  });
+}
+
+carregar();
+carregarTiers();
+</script>
+</body>
+</html>

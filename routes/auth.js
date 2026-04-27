@@ -67,7 +67,7 @@ router.get('/usuarios', autenticar, admin, async (req, res) => {
 router.patch('/usuarios/:id', autenticar, admin, async (req, res) => {
   try {
     const { id } = req.params;
-    const { nome, perfil, ativo, senha } = req.body;
+    const { nome, email, perfil, ativo, senha } = req.body;
 
     // Não permite desativar a si mesmo
     if (id === req.usuario.id && ativo === false) {
@@ -80,6 +80,9 @@ router.patch('/usuarios/:id', autenticar, admin, async (req, res) => {
 
     if (typeof nome === 'string' && nome.trim()) {
       campos.push(`nome = $${idx++}`); valores.push(nome.trim());
+    }
+    if (typeof email === 'string' && email.trim()) {
+      campos.push(`email = $${idx++}`); valores.push(email.trim().toLowerCase());
     }
     if (perfil !== undefined) {
       if (!['admin', 'operador'].includes(perfil)) {
@@ -110,7 +113,56 @@ router.patch('/usuarios/:id', autenticar, admin, async (req, res) => {
     res.json(result.rows[0]);
   } catch (e) {
     console.error('Erro ao atualizar usuário:', e);
+    if (e.code === '23505') return res.status(400).json({ erro: 'Email já está em uso por outro usuário' });
     res.status(500).json({ erro: 'Erro ao atualizar usuário' });
+  }
+});
+
+// Excluir usuário (admin only) — remove definitivamente. Não permite auto-exclusão.
+router.delete('/usuarios/:id', autenticar, admin, async (req, res) => {
+  try {
+    const { id } = req.params;
+    if (id === req.usuario.id) return res.status(400).json({ erro: 'Você não pode excluir sua própria conta' });
+    const r = await pool.query('DELETE FROM usuarios WHERE id = $1 RETURNING id, email', [id]);
+    if (r.rows.length === 0) return res.status(404).json({ erro: 'Usuário não encontrado' });
+    res.json({ ok: true, excluido: r.rows[0] });
+  } catch (e) {
+    // Se tiver referências em pedidos/etc, PostgreSQL lança erro 23503 (foreign key)
+    if (e.code === '23503') {
+      return res.status(400).json({ erro: 'Usuário tem registros vinculados (pedidos). Desative em vez de excluir.' });
+    }
+    res.status(500).json({ erro: 'Erro ao excluir usuário' });
+  }
+});
+
+// Reset de emergência — redefine senha de qualquer usuário usando um token secreto do Railway.
+// Único jeito de recuperar acesso quando TODOS os admins esqueceram a senha.
+// Uso: definir EMERGENCY_RESET_TOKEN no Railway, aí chamar este endpoint com o header X-Reset-Token.
+// Depois de recuperar acesso, remover a variável por segurança.
+router.post('/reset-emergencial', async (req, res) => {
+  try {
+    const tokenEnv = process.env.EMERGENCY_RESET_TOKEN;
+    if (!tokenEnv || tokenEnv.length < 12) {
+      return res.status(403).json({ erro: 'Reset de emergência desativado. Configure EMERGENCY_RESET_TOKEN (mín 12 caracteres) no Railway.' });
+    }
+    const tokenRecebido = req.headers['x-reset-token'];
+    if (!tokenRecebido || tokenRecebido !== tokenEnv) {
+      return res.status(403).json({ erro: 'Token de reset inválido' });
+    }
+    const { email, nova_senha } = req.body || {};
+    if (!email || !nova_senha) return res.status(400).json({ erro: 'email e nova_senha são obrigatórios' });
+    if (nova_senha.length < 6) return res.status(400).json({ erro: 'Senha deve ter no mínimo 6 caracteres' });
+    const hash = await bcrypt.hash(nova_senha, 10);
+    const r = await pool.query(
+      'UPDATE usuarios SET senha_hash = $1, ativo = true WHERE email = $2 RETURNING id, nome, email, perfil',
+      [hash, email.trim().toLowerCase()]
+    );
+    if (r.rows.length === 0) return res.status(404).json({ erro: 'Usuário com este email não existe' });
+    console.warn(`[RESET EMERGENCIAL] Senha redefinida para ${email} em ${new Date().toISOString()}`);
+    res.json({ ok: true, usuario: r.rows[0], aviso: 'Senha redefinida. Remova EMERGENCY_RESET_TOKEN do Railway por segurança.' });
+  } catch (e) {
+    console.error('[RESET EMERGENCIAL] Erro:', e);
+    res.status(500).json({ erro: 'Erro ao redefinir senha' });
   }
 });
 

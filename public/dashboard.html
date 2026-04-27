@@ -15,6 +15,7 @@
     <a href="/clientes.html">Clientes</a>
     <a href="/usuarios.html" id="nav-usuarios" style="display:none">Usuários</a>
     <a href="/custos-api.html" id="nav-custos" style="display:none">Custos API</a>
+    <a href="/credify.html" id="nav-credify" style="display:none">Credify</a>
     <a href="#" onclick="logout()">Sair</a>
   </div>
   <div class="nav-user" id="nav-user"></div>
@@ -25,6 +26,9 @@
     <h1 class="page-title" style="margin:0">Painel de Controle</h1>
     <a href="/novo-pedido.html" class="btn btn-primary">+ Novo Pedido</a>
   </div>
+
+  <!-- Banner de alertas operacionais (APIs externas) - visivel apenas para admin -->
+  <div id="banner-alertas" style="display:none;margin-bottom:20px"></div>
 
   <!-- Stats -->
   <div class="stats-grid" id="stats">
@@ -69,8 +73,10 @@
   if (usuario.perfil === 'admin') {
     const navU = document.getElementById('nav-usuarios');
     const navC = document.getElementById('nav-custos');
+    const navCredify = document.getElementById('nav-credify');
     if (navU) navU.style.display = '';
     if (navC) navC.style.display = '';
+    if (navCredify) navCredify.style.display = '';
   }
 
   function esc(str) { const d = document.createElement('div'); d.textContent = str; return d.innerHTML; }
@@ -159,9 +165,40 @@
     window.location.href = '/';
   }
 
+  async function carregarAlertasAPI() {
+    if (usuario.perfil !== 'admin') return;
+    try {
+      const r = await api('/api/admin/status-apis');
+      if (!r || !r.alertas || r.alertas.length === 0) {
+        document.getElementById('banner-alertas').style.display = 'none';
+        return;
+      }
+      const cor = { critico: '#fee2e2', alerta: '#fef3c7', info: '#dbeafe' };
+      const corTexto = { critico: '#7f1d1d', alerta: '#92400e', info: '#1e3a8a' };
+      const corBorda = { critico: '#b91c1c', alerta: '#d97706', info: '#2563eb' };
+      const html = r.alertas.map(a => `
+        <div style="background:${cor[a.nivel] || cor.alerta};border-left:4px solid ${corBorda[a.nivel] || corBorda.alerta};padding:12px 16px;margin-bottom:8px;border-radius:6px">
+          <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px">
+            <div style="flex:1">
+              <div style="color:${corTexto[a.nivel] || corTexto.alerta};font-weight:700;font-size:14px;margin-bottom:4px">${esc(a.titulo)}</div>
+              <div style="color:${corTexto[a.nivel] || corTexto.alerta};font-size:13px;margin-bottom:6px">${esc(a.descricao)}</div>
+              <div style="color:${corTexto[a.nivel] || corTexto.alerta};font-size:12px"><strong>Ação:</strong> ${esc(a.acao)}</div>
+              ${a.origens && a.origens.length > 0 ? `<div style="color:${corTexto[a.nivel] || corTexto.alerta};font-size:11px;margin-top:4px;opacity:0.8">APIs afetadas: ${a.origens.map(esc).join(', ')}</div>` : ''}
+            </div>
+            ${a.nivel === 'critico' ? '<a href="https://app.directd.com.br" target="_blank" class="btn btn-sm btn-primary" style="white-space:nowrap">Recarregar agora</a>' : ''}
+          </div>
+        </div>
+      `).join('');
+      const banner = document.getElementById('banner-alertas');
+      banner.innerHTML = html;
+      banner.style.display = '';
+    } catch (_) { /* silencioso */ }
+  }
+
   carregarStats();
   carregarPedidos();
-  setInterval(() => { carregarStats(); carregarPedidos(); }, 30000);
+  carregarAlertasAPI();
+  setInterval(() => { carregarStats(); carregarPedidos(); carregarAlertasAPI(); }, 30000);
 </script>
 </body>
 </html>
