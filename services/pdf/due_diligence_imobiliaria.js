@@ -18,6 +18,101 @@ const {
   COR, MARGEM, LARGURA, verificarPagina,
   secao, linha, boxEmIntegracao, formatarBRL, formatarDoc
 } = require('./helpers');
+
+// ─── Blocos de análise IA (matrícula/escritura via Claude) ────────
+function corSeveridade(sev) {
+  const s = (sev || '').toLowerCase();
+  if (s === 'alta') return { bg: '#fee2e2', fg: COR.vermelho, label: 'ALTA' };
+  if (s === 'media') return { bg: '#fef3c7', fg: COR.laranja, label: 'MÉDIA' };
+  return { bg: '#dcfce7', fg: '#065f46', label: 'BAIXA' };
+}
+
+function blocoResumoExecutivoIA(doc, y, analise) {
+  if (!analise) return y;
+  y = secao(doc, 'RESUMO EXECUTIVO — ANÁLISE DOS DOCUMENTOS (IA)', y);
+
+  const resumo = (analise.resumo_executivo || '').toString().trim();
+  if (resumo) {
+    const altura = doc.heightOfString(resumo, { width: LARGURA - 16, fontSize: 9 }) + 14;
+    y = verificarPagina(doc, y, altura + 4);
+    doc.rect(MARGEM, y, LARGURA, altura).fill('#eff6ff').stroke('#bfdbfe');
+    doc.fillColor('#1e3a8a').fontSize(9).font('Helvetica').text(resumo, MARGEM + 8, y + 7, { width: LARGURA - 16 });
+    y += altura + 8;
+  }
+
+  const alertas = Array.isArray(analise.alertas) ? analise.alertas : [];
+  if (alertas.length) {
+    doc.fillColor(COR.azul).fontSize(9).font('Helvetica-Bold').text(`ALERTAS IDENTIFICADOS (${alertas.length})`, MARGEM, y);
+    y += 14;
+    for (const a of alertas) {
+      const sev = corSeveridade(a.severidade);
+      const tit = (a.titulo || '-').toString();
+      const desc = (a.descricao || '').toString();
+      const hDesc = desc ? doc.heightOfString(desc, { width: LARGURA - 90, fontSize: 7.5 }) : 0;
+      const altura = Math.max(22, hDesc + 14);
+      y = verificarPagina(doc, y, altura + 4);
+      doc.rect(MARGEM, y, LARGURA, altura).fill(sev.bg).stroke('#e5e7eb');
+      // tag de severidade
+      doc.rect(MARGEM + 6, y + 5, 60, 12).fill(sev.fg);
+      doc.fillColor('#fff').fontSize(7).font('Helvetica-Bold').text(sev.label, MARGEM + 6, y + 8, { width: 60, align: 'center' });
+      doc.fillColor(sev.fg).fontSize(8.5).font('Helvetica-Bold').text(tit, MARGEM + 72, y + 5, { width: LARGURA - 80 });
+      if (desc) {
+        doc.fillColor('#374151').fontSize(7.5).font('Helvetica').text(desc, MARGEM + 72, y + 16, { width: LARGURA - 80 });
+      }
+      y += altura + 4;
+    }
+  }
+  return y + 4;
+}
+
+function blocoIdentificacaoIA(doc, y, analise) {
+  if (!analise) return y;
+  y = secao(doc, 'IDENTIFICAÇÃO DO IMÓVEL (IA)', y);
+  const id = analise.identificacao || {};
+  if (id.matricula_numero) y = linha(doc, 'Matrícula', String(id.matricula_numero), y, 13);
+  if (id.cartorio) y = linha(doc, 'Cartório', String(id.cartorio), y, 13);
+  if (id.endereco_completo) y = linha(doc, 'Endereço', String(id.endereco_completo), y, 13);
+  if (id.area_total_m2 != null) y = linha(doc, 'Área Total', `${id.area_total_m2} m²`, y, 13);
+  if (id.area_construida_m2 != null) y = linha(doc, 'Área Construída', `${id.area_construida_m2} m²`, y, 13);
+  if (id.inscricao_municipal) y = linha(doc, 'Inscrição Municipal', String(id.inscricao_municipal), y, 13);
+  if (id.natureza) y = linha(doc, 'Natureza', String(id.natureza), y, 13);
+  return y + 4;
+}
+
+function blocoProprietariosIA(doc, y, analise) {
+  if (!analise) return y;
+  const props = Array.isArray(analise.proprietarios) ? analise.proprietarios.slice() : [];
+  if (!props.length) return y;
+  y = secao(doc, 'HISTÓRICO DE PROPRIETÁRIOS (IA)', y);
+
+  // ordena: atual primeiro, depois por data desc (mais recente -> mais antigo)
+  props.sort((a, b) => {
+    if (a.atual && !b.atual) return -1;
+    if (!a.atual && b.atual) return 1;
+    return String(b.data_aquisicao || '').localeCompare(String(a.data_aquisicao || ''));
+  });
+
+  for (const p of props) {
+    y = verificarPagina(doc, y, 30);
+    const altura = 28;
+    const bg = p.atual ? '#dcfce7' : '#f9fafb';
+    const borda = p.atual ? '#86efac' : '#e5e7eb';
+    doc.rect(MARGEM, y, LARGURA, altura).fill(bg).stroke(borda);
+    const nome = (p.nome || '-').toString();
+    const cpfCnpj = formatarDoc(p.cpf_cnpj) || '-';
+    const tag = p.atual ? '  [ATUAL]' : '';
+    doc.fillColor('#111827').fontSize(8.5).font('Helvetica-Bold').text(nome + tag, MARGEM + 8, y + 5, { width: LARGURA - 16 });
+    const linha2 = [
+      `CPF/CNPJ: ${cpfCnpj}`,
+      p.tipo_aquisicao ? `Aquisição: ${p.tipo_aquisicao}` : null,
+      p.data_aquisicao ? `Data: ${p.data_aquisicao}` : null,
+      p.valor_transacao != null ? `Valor: ${formatarBRL(p.valor_transacao)}` : null
+    ].filter(Boolean).join('  |  ');
+    doc.fillColor('#4b5563').fontSize(7.5).font('Helvetica').text(linha2, MARGEM + 8, y + 17, { width: LARGURA - 16 });
+    y += altura + 4;
+  }
+  return y + 4;
+}
 const {
   secaoProcessos, secaoProtestos, secaoScoreCredito,
   secaoChecklist, secaoParecerAnalista
@@ -220,6 +315,10 @@ function secaoParecerImobiliario(doc, y, dados, score) {
   return y + 6;
 }
 
+function safeParseJSON(s) {
+  try { return JSON.parse(s); } catch { return null; }
+}
+
 // Monta um objeto "lado" a partir do alvo do pedido (modo legado, alvo único)
 function _montarLadoFromAlvo(dados, pedido) {
   const cad = dados.receita_federal || {};
@@ -249,10 +348,23 @@ function render(doc, pedido, dados, score, checklist, produto) {
   y = chrome.blocoAlvo(doc, y, pedido);
   y = chrome.blocoAlertasDetalhados(doc, y, score);
 
+  // Análise IA — Resumo Executivo + Alertas (só se análise concluída)
+  // Os documentos do imóvel (matrícula/escritura) são lidos pelo Claude
+  // e os dados extraídos viram esses dois blocos abaixo.
+  const analiseIA = (pedido.analise_ia_status === 'concluida') ? pedido.analise_ia : null;
+  const analise = (typeof analiseIA === 'string') ? safeParseJSON(analiseIA) : analiseIA;
+  if (analise) y = blocoResumoExecutivoIA(doc, y, analise);
+
   // COMPRADOR / VENDEDOR / IMÓVEL
   y = secaoComprador(doc, y, dados, pedido);
   y = secaoVendedor(doc, y, dados, pedido);
   y = secaoImovel(doc, y, dados, pedido);
+
+  // Identificação + Proprietários extraídos da matrícula pela IA
+  if (analise) {
+    y = blocoIdentificacaoIA(doc, y, analise);
+    y = blocoProprietariosIA(doc, y, analise);
+  }
 
   // Quando o alvo é uma pessoa, traz o bloco completo de processos/protestos do alvo
   y = secaoProcessos(doc, y, dados, pedido);

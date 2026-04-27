@@ -7,3 +7,6 @@ rastreia2/
 rastreia 3/
 public/relatorios/
 data/monitor_api.json
+uploads/
+.claude/
+.mcp.json
