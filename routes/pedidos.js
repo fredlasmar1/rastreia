@@ -20,7 +20,11 @@ const MIMES_DOCUMENTOS = new Set([
   'application/pdf', 'image/jpeg', 'image/jpg', 'image/png', 'image/webp'
 ]);
 const MAX_DOCS_POR_PEDIDO = 5;
-const TIPOS_DOCUMENTOS_VALIDOS = new Set(['matricula', 'escritura', 'outro']);
+// V2: tipos sao classificados pela IA. O upload aceita o campo `tipo` se o cliente
+// quiser sugerir, mas e opcional — default e null e a IA decide.
+const TIPOS_DOCUMENTOS_VALIDOS = new Set([
+  'matricula', 'escritura', 'iptu', 'contrato', 'certidao_onus', 'itbi', 'outro'
+]);
 
 const uploadDocumentos = multer({
   storage: multer.diskStorage({
@@ -348,9 +352,10 @@ router.get('/:id', autenticar, async (req, res) => {
 
 // ── Upload de documentos do imóvel (Due Diligence Imobiliária) ─────
 // POST /api/pedidos/:id/documentos
-// multipart/form-data, campo "documentos" (array, até 5 arquivos),
-// + body field "tipos" como JSON-array OU múltiplos campos "tipo[]" alinhados
-// com a ordem dos arquivos. Se "tipo" não vier, default 'outro'.
+// multipart/form-data, campo "documentos" (array, até 5 arquivos).
+// V2: o operador NAO escolhe mais o tipo — a IA classifica automaticamente
+// na fase de analise. O campo `tipos` continua aceito (compatibilidade), mas
+// e ignorado se nao vier — o tipo fica NULL ate a IA preencher.
 router.post('/:id/documentos', autenticar, (req, res) => {
   uploadDocumentos.array('documentos', MAX_DOCS_POR_PEDIDO)(req, res, async (err) => {
     if (err) {
@@ -391,8 +396,9 @@ router.post('/:id/documentos', autenticar, (req, res) => {
       const inseridos = [];
       for (let i = 0; i < arquivos.length; i++) {
         const arq = arquivos[i];
-        const rawTipo = (tipos[i] || 'outro').toLowerCase();
-        const tipo = TIPOS_DOCUMENTOS_VALIDOS.has(rawTipo) ? rawTipo : 'outro';
+        // V2: tipo fica NULL se o cliente nao sugeriu um valido — a IA classifica depois.
+        const rawTipo = (tipos[i] || '').toString().toLowerCase();
+        const tipo = TIPOS_DOCUMENTOS_VALIDOS.has(rawTipo) ? rawTipo : null;
         const r = await pool.query(
           `INSERT INTO pedido_documentos (pedido_id, tipo, filename, filepath, size_bytes, mime_type)
            VALUES ($1, $2, $3, $4, $5, $6)

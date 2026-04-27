@@ -244,7 +244,7 @@ ALTER TABLE pedidos ADD COLUMN IF NOT EXISTS analise_ia_status VARCHAR(20) DEFAU
 CREATE TABLE IF NOT EXISTS pedido_documentos (
   id SERIAL PRIMARY KEY,
   pedido_id UUID NOT NULL REFERENCES pedidos(id) ON DELETE CASCADE,
-  tipo VARCHAR(50) NOT NULL,        -- 'matricula' | 'escritura' | 'outro'
+  tipo VARCHAR(50),                 -- 'matricula' | 'escritura' | 'iptu' | 'contrato' | 'certidao_onus' | 'itbi' | 'outro' | NULL (a IA classifica)
   filename VARCHAR(255) NOT NULL,
   filepath VARCHAR(500) NOT NULL,
   size_bytes INTEGER,
@@ -253,9 +253,18 @@ CREATE TABLE IF NOT EXISTS pedido_documentos (
 );
 CREATE INDEX IF NOT EXISTS idx_pedido_documentos_pedido ON pedido_documentos(pedido_id);
 
--- Custo da análise IA (estimativa Sonnet 4.5 com matrícula+escritura)
+-- Fase 6.2 (v2): IA classifica automaticamente. tipo passa a aceitar NULL no upload
+-- (se a tabela ja existia com NOT NULL, removemos a constraint para nao quebrar inserts).
+ALTER TABLE pedido_documentos ALTER COLUMN tipo DROP NOT NULL;
+
+-- metadata JSONB armazena {confianca, irrelevante, resumo_curto} preenchidos pela IA
+-- na etapa de classificacao automatica de documentos imobiliarios.
+ALTER TABLE pedido_documentos ADD COLUMN IF NOT EXISTS metadata JSONB;
+
+-- Custo da análise IA — v2 faz mais chamadas (1 classificação por documento + 1 extração + 1 cruzamento)
+-- Estimativa Sonnet 4.5: 3 a 5 chamadas com PDFs grandes ≈ R$ 0,60 a R$ 1,00 por pedido
 INSERT INTO api_custos (chave, rotulo, valor_brl, fonte, confianca) VALUES
-  ('claude_analise_imovel', 'Claude — Análise de matrícula/escritura (IA)', 0.5000, 'Anthropic Sonnet 4.5 — estimativa por pedido', 'estimado')
+  ('claude_analise_imovel', 'Claude — Análise de documentos imóvel + cruzamento (IA)', 0.8000, 'Anthropic Sonnet 4.5 — v2 com classificação + extração + cruzamento', 'estimado')
 ON CONFLICT (chave) DO UPDATE SET
   rotulo = EXCLUDED.rotulo,
   valor_brl = EXCLUDED.valor_brl,
