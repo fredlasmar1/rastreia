@@ -10,7 +10,6 @@
     .tabela-usuarios th, .tabela-usuarios td { padding: 12px 16px; text-align: left; border-bottom: 1px solid #eef2f7; font-size: 14px; vertical-align: middle; }
     .tabela-usuarios th { background: #f8fafc; font-weight: 600; color: #334155; font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px; }
     .tabela-usuarios tr:last-child td { border-bottom: none; }
-    .tabela-usuarios select, .tabela-usuarios input[type=text] { padding: 6px 10px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 13px; }
     .badge-perfil { display: inline-block; padding: 2px 10px; border-radius: 4px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.3px; }
     .badge-admin { background: #111827; color: #fff; }
     .badge-operador { background: #e5e7eb; color: #374151; }
@@ -28,6 +27,29 @@
     .form-novo-grid input, .form-novo-grid select { padding: 8px 12px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 14px; }
     @media (max-width: 720px) { .form-novo-grid { grid-template-columns: 1fr; } }
     .aviso-admin { background: #fff7ed; border: 1px solid #fed7aa; color: #7c2d12; padding: 12px 16px; border-radius: 8px; margin-bottom: 20px; font-size: 13px; }
+
+    /* Card minha conta */
+    .card-minha { background: #111827; color: #fff; border-radius: 12px; padding: 20px 24px; margin-bottom: 24px; display:flex; justify-content:space-between; align-items:center; gap:16px; flex-wrap:wrap; }
+    .card-minha .info { display:flex; flex-direction:column; gap:2px; }
+    .card-minha .label { font-size: 11px; color:#9ca3af; text-transform:uppercase; letter-spacing:0.5px; }
+    .card-minha .valor { font-size: 16px; font-weight: 600; }
+    .btn-white { background: #fff; color:#111827; border:none; padding: 10px 18px; border-radius:8px; cursor:pointer; font-weight:600; font-size:13px; }
+    .btn-white:hover { background:#f3f4f6; }
+
+    /* Modal */
+    .modal-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,0.55); display:none; align-items:center; justify-content:center; z-index:9999; padding:16px; }
+    .modal-backdrop.ativo { display:flex; }
+    .modal { background:#fff; border-radius:12px; max-width: 440px; width:100%; padding: 24px 26px; box-shadow: 0 20px 50px rgba(0,0,0,0.3); }
+    .modal h3 { margin:0 0 6px; font-size:18px; color:#111827; }
+    .modal .sub { font-size:13px; color:#64748b; margin-bottom:18px; }
+    .modal .field { display:flex; flex-direction:column; gap:6px; margin-bottom:14px; }
+    .modal label { font-size:11px; color:#6b7280; text-transform:uppercase; font-weight:600; letter-spacing:0.3px; }
+    .modal input, .modal select { padding:10px 12px; border:1px solid #cbd5e1; border-radius:8px; font-size:14px; }
+    .modal .actions { display:flex; justify-content:flex-end; gap:8px; margin-top:4px; }
+    .modal .btn-cancel { background:#fff; color:#374151; border:1px solid #cbd5e1; padding:9px 16px; border-radius:8px; cursor:pointer; font-weight:500; }
+    .modal .btn-cancel:hover { background:#f8fafc; }
+    .modal-erro { background:#fee2e2; color:#991b1b; padding:10px 12px; border-radius:6px; font-size:13px; margin-bottom:12px; display:none; }
+    .modal-erro.ativo { display:block; }
   </style>
 </head>
 <body>
@@ -37,6 +59,8 @@
     <a href="/dashboard.html">Dashboard</a>
     <a href="/novo-pedido.html">+ Novo Pedido</a>
     <a href="/clientes.html">Clientes</a>
+    <a href="/custos-api.html">Custos API</a>
+    <a href="/credify.html">Credify</a>
     <a href="/usuarios.html" class="ativo">Usuários</a>
     <a href="#" onclick="logout()">Sair</a>
   </div>
@@ -45,61 +69,142 @@
 
 <div class="container">
   <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px">
-    <h1 class="page-title" style="margin:0">Usuários do Rastreia</h1>
+    <h1 class="page-title" style="margin:0">Gestão de Usuários</h1>
   </div>
 
-  <div class="aviso-admin">
-    <strong>Área administrativa.</strong> Crie operadores para delegar consultas e administradores para gerenciar a plataforma.
-    Admin: acesso total (custos, usuários, relatórios). Operador: cria e executa pedidos.
+  <!-- Card minha conta (sempre visível, admin ou operador) -->
+  <div class="card-minha" id="card-minha" style="display:none">
+    <div class="info">
+      <span class="label">Minha conta</span>
+      <span class="valor" id="minha-nome"></span>
+      <span style="font-size:13px;color:#9ca3af" id="minha-email"></span>
+    </div>
+    <button class="btn-white" onclick="abrirModalMinhaSenha()">Trocar minha senha</button>
   </div>
 
-  <!-- Formulário novo usuário -->
-  <div class="form-novo">
-    <div style="font-weight:700;color:#111827;margin-bottom:12px;font-size:15px">+ Novo usuário</div>
-    <div id="alerta-novo"></div>
-    <div class="form-novo-grid">
-      <div class="field">
-        <label>Nome</label>
-        <input type="text" id="novo-nome" placeholder="Nome completo">
+  <!-- Área admin -->
+  <div id="area-admin" style="display:none">
+    <div class="aviso-admin">
+      <strong>Área administrativa.</strong> Crie operadores para delegar consultas e administradores para gerenciar a plataforma.
+      Admin: acesso total (custos, usuários, relatórios). Operador: cria e executa pedidos.
+    </div>
+
+    <!-- Formulário novo usuário -->
+    <div class="form-novo">
+      <div style="font-weight:700;color:#111827;margin-bottom:12px;font-size:15px">+ Novo usuário</div>
+      <div id="alerta-novo"></div>
+      <div class="form-novo-grid">
+        <div class="field">
+          <label>Nome</label>
+          <input type="text" id="novo-nome" placeholder="Nome completo">
+        </div>
+        <div class="field">
+          <label>Email</label>
+          <input type="email" id="novo-email" placeholder="email@dominio.com">
+        </div>
+        <div class="field">
+          <label>Senha (mín. 6)</label>
+          <input type="password" id="novo-senha" placeholder="••••••">
+        </div>
+        <div class="field">
+          <label>Perfil</label>
+          <select id="novo-perfil">
+            <option value="operador">Operador</option>
+            <option value="admin">Administrador</option>
+          </select>
+        </div>
       </div>
-      <div class="field">
-        <label>Email</label>
-        <input type="email" id="novo-email" placeholder="email@dominio.com">
-      </div>
-      <div class="field">
-        <label>Senha (mín. 6)</label>
-        <input type="password" id="novo-senha" placeholder="••••••">
-      </div>
-      <div class="field">
-        <label>Perfil</label>
-        <select id="novo-perfil">
-          <option value="operador">Operador</option>
-          <option value="admin">Administrador</option>
-        </select>
+      <div style="margin-top:14px;display:flex;justify-content:flex-end">
+        <button class="btn btn-primary" onclick="criarUsuario()">Criar usuário</button>
       </div>
     </div>
-    <div style="margin-top:14px;display:flex;justify-content:flex-end">
-      <button class="btn btn-primary" onclick="criarUsuario()">Criar usuário</button>
+
+    <div id="alerta"></div>
+
+    <table class="tabela-usuarios" id="tabela">
+      <thead>
+        <tr>
+          <th style="width: 22%">Nome</th>
+          <th style="width: 24%">Email</th>
+          <th style="width: 11%">Perfil</th>
+          <th style="width: 10%">Status</th>
+          <th style="width: 12%">Criado em</th>
+          <th style="width: 21%">Ações</th>
+        </tr>
+      </thead>
+      <tbody id="tbody">
+        <tr><td colspan="6" style="text-align:center;padding:32px;color:#64748b">Carregando…</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- Modal: Editar usuário -->
+<div class="modal-backdrop" id="modal-editar">
+  <div class="modal">
+    <h3>Editar usuário</h3>
+    <div class="sub" id="editar-sub"></div>
+    <div class="modal-erro" id="editar-erro"></div>
+    <div class="field"><label>Nome</label><input type="text" id="edit-nome"></div>
+    <div class="field"><label>Email</label><input type="email" id="edit-email"></div>
+    <div class="field"><label>Perfil</label>
+      <select id="edit-perfil">
+        <option value="operador">Operador</option>
+        <option value="admin">Administrador</option>
+      </select>
+    </div>
+    <div class="actions">
+      <button class="btn-cancel" onclick="fecharModal('modal-editar')">Cancelar</button>
+      <button class="btn btn-primary" onclick="salvarEdicao()">Salvar</button>
     </div>
   </div>
+</div>
 
-  <div id="alerta"></div>
+<!-- Modal: Redefinir senha de outro -->
+<div class="modal-backdrop" id="modal-senha">
+  <div class="modal">
+    <h3>Redefinir senha</h3>
+    <div class="sub" id="senha-sub"></div>
+    <div class="modal-erro" id="senha-erro"></div>
+    <div class="field"><label>Nova senha (mín. 6)</label><input type="password" id="senha-nova"></div>
+    <div class="field"><label>Confirmar nova senha</label><input type="password" id="senha-conf"></div>
+    <div class="actions">
+      <button class="btn-cancel" onclick="fecharModal('modal-senha')">Cancelar</button>
+      <button class="btn btn-primary" onclick="salvarSenha()">Redefinir</button>
+    </div>
+  </div>
+</div>
 
-  <table class="tabela-usuarios" id="tabela">
-    <thead>
-      <tr>
-        <th style="width: 25%">Nome</th>
-        <th style="width: 25%">Email</th>
-        <th style="width: 12%">Perfil</th>
-        <th style="width: 10%">Status</th>
-        <th style="width: 13%">Criado em</th>
-        <th style="width: 15%">Ações</th>
-      </tr>
-    </thead>
-    <tbody id="tbody">
-      <tr><td colspan="6" style="text-align:center;padding:32px;color:#64748b">Carregando…</td></tr>
-    </tbody>
-  </table>
+<!-- Modal: Minha senha (requer senha atual) -->
+<div class="modal-backdrop" id="modal-minha-senha">
+  <div class="modal">
+    <h3>Trocar minha senha</h3>
+    <div class="sub">Confirme sua senha atual e defina uma nova.</div>
+    <div class="modal-erro" id="minha-senha-erro"></div>
+    <div class="field"><label>Senha atual</label><input type="password" id="minha-atual"></div>
+    <div class="field"><label>Nova senha (mín. 6)</label><input type="password" id="minha-nova"></div>
+    <div class="field"><label>Confirmar nova senha</label><input type="password" id="minha-conf"></div>
+    <div class="actions">
+      <button class="btn-cancel" onclick="fecharModal('modal-minha-senha')">Cancelar</button>
+      <button class="btn btn-primary" onclick="salvarMinhaSenha()">Trocar senha</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: Confirmar exclusão -->
+<div class="modal-backdrop" id="modal-excluir">
+  <div class="modal">
+    <h3>Excluir usuário</h3>
+    <div class="sub" id="excluir-sub"></div>
+    <div class="modal-erro" id="excluir-erro"></div>
+    <div style="background:#fef3c7;border:1px solid #fcd34d;color:#78350f;padding:10px 12px;border-radius:6px;font-size:13px;margin-bottom:14px">
+      Esta ação é <strong>irreversível</strong>. O histórico de pedidos do usuário permanece, mas ele não poderá mais acessar. Se o usuário tem registros vinculados, prefira desativar.
+    </div>
+    <div class="actions">
+      <button class="btn-cancel" onclick="fecharModal('modal-excluir')">Cancelar</button>
+      <button class="btn btn-danger" style="background:#dc2626;color:#fff;border:none;padding:9px 16px;border-radius:8px;cursor:pointer;font-weight:600" onclick="confirmarExclusao()">Excluir definitivamente</button>
+    </div>
+  </div>
 </div>
 
 <footer style="text-align:center;padding:30px;font-size:12px;color:#6b7280">
@@ -112,10 +217,16 @@
   if (!token) window.location.href = '/';
   const usuarioLogado = JSON.parse(localStorage.getItem('rastreia_usuario') || '{}');
   document.getElementById('nav-user').textContent = usuarioLogado.nome || '';
-
-  if (usuarioLogado.perfil !== 'admin') {
-    document.body.innerHTML = '<div style="padding:60px;text-align:center"><h2>Acesso restrito</h2><p>Somente administradores podem acessar esta página.</p><a href="/dashboard.html" class="btn btn-primary">Voltar ao dashboard</a></div>';
+  document.getElementById('minha-nome').textContent = usuarioLogado.nome || '';
+  document.getElementById('minha-email').textContent = usuarioLogado.email || '';
+  document.getElementById('card-minha').style.display = '';
+  if (usuarioLogado.perfil === 'admin') {
+    document.getElementById('area-admin').style.display = '';
   }
+
+  let idEmEdicao = null;
+  let idParaSenha = null;
+  let idParaExcluir = null;
 
   function esc(s) { const d = document.createElement('div'); d.textContent = s == null ? '' : String(s); return d.innerHTML; }
 
@@ -124,9 +235,24 @@
     setTimeout(() => { document.getElementById(id).innerHTML = ''; }, 4000);
   }
 
+  function erroModal(id, msg) {
+    const el = document.getElementById(id);
+    el.textContent = msg;
+    el.classList.add('ativo');
+  }
+
+  function abrirModal(id) {
+    document.querySelectorAll('.modal-erro').forEach(e => e.classList.remove('ativo'));
+    document.getElementById(id).classList.add('ativo');
+  }
+  function fecharModal(id) {
+    document.getElementById(id).classList.remove('ativo');
+  }
+
   function logout() { localStorage.clear(); window.location.href = '/'; }
 
   async function carregar() {
+    if (usuarioLogado.perfil !== 'admin') return;
     try {
       const res = await fetch('/api/auth/usuarios', {
         headers: { Authorization: 'Bearer ' + token }
@@ -153,6 +279,7 @@
         ? '<span class="badge-perfil badge-ativo">Ativo</span>'
         : '<span class="badge-perfil badge-inativo">Inativo</span>';
       const ehEuMesmo = u.id === usuarioLogado.id;
+      const dadosUsuario = JSON.stringify({ id: u.id, nome: u.nome, email: u.email, perfil: u.perfil, ativo: u.ativo }).replace(/'/g, "\\'").replace(/"/g, '&quot;');
       return `
         <tr id="row-${u.id}">
           <td><strong>${esc(u.nome)}</strong>${ehEuMesmo ? ' <span style="font-size:11px;color:#6b7280">(você)</span>' : ''}</td>
@@ -162,15 +289,17 @@
           <td style="color:#64748b">${data}</td>
           <td>
             <div class="acoes">
-              <button class="btn-sm" onclick="editar('${u.id}', '${esc(u.nome).replace(/'/g, "\\'")}', '${u.perfil}')">Editar</button>
-              <button class="btn-sm" onclick="trocarSenha('${u.id}', '${esc(u.nome).replace(/'/g, "\\'")}')">Senha</button>
+              <button class="btn-sm" onclick='abrirEdicao(${dadosUsuario})'>Editar</button>
+              <button class="btn-sm" onclick='abrirSenha(${dadosUsuario})'>Senha</button>
               ${ehEuMesmo ? '' : `<button class="btn-sm btn-danger-sm" onclick="alternarAtivo('${u.id}', ${!u.ativo})">${u.ativo ? 'Desativar' : 'Reativar'}</button>`}
+              ${ehEuMesmo ? '' : `<button class="btn-sm btn-danger-sm" onclick='abrirExclusao(${dadosUsuario})'>Excluir</button>`}
             </div>
           </td>
         </tr>`;
     }).join('');
   }
 
+  // Criar
   async function criarUsuario() {
     const nome = document.getElementById('novo-nome').value.trim();
     const email = document.getElementById('novo-email').value.trim();
@@ -198,30 +327,121 @@
     }
   }
 
-  async function editar(id, nomeAtual, perfilAtual) {
-    const novoNome = prompt('Nome:', nomeAtual);
-    if (novoNome === null) return;
-    const novoPerfil = prompt("Perfil ('admin' ou 'operador'):", perfilAtual);
-    if (novoPerfil === null) return;
-    if (!['admin', 'operador'].includes(novoPerfil)) return alerta("Perfil deve ser 'admin' ou 'operador'", 'error');
-
-    await patch(id, { nome: novoNome.trim(), perfil: novoPerfil });
+  // Editar
+  function abrirEdicao(u) {
+    idEmEdicao = u.id;
+    document.getElementById('editar-sub').textContent = u.email;
+    document.getElementById('edit-nome').value = u.nome;
+    document.getElementById('edit-email').value = u.email;
+    document.getElementById('edit-perfil').value = u.perfil;
+    abrirModal('modal-editar');
   }
 
-  async function trocarSenha(id, nome) {
-    const senha = prompt('Nova senha para ' + nome + ' (mín. 6 caracteres):');
-    if (senha === null) return;
-    if (senha.length < 6) return alerta('Senha precisa ter no mínimo 6 caracteres', 'error');
-    await patch(id, { senha });
+  async function salvarEdicao() {
+    const nome = document.getElementById('edit-nome').value.trim();
+    const email = document.getElementById('edit-email').value.trim();
+    const perfil = document.getElementById('edit-perfil').value;
+    if (!nome || !email) return erroModal('editar-erro', 'Nome e email são obrigatórios');
+    const ok = await patch(idEmEdicao, { nome, email, perfil }, 'editar-erro');
+    if (ok) {
+      fecharModal('modal-editar');
+      alerta('Usuário atualizado', 'success');
+      // Se editou a si mesmo, atualiza o localStorage
+      if (idEmEdicao === usuarioLogado.id) {
+        usuarioLogado.nome = nome; usuarioLogado.email = email; usuarioLogado.perfil = perfil;
+        localStorage.setItem('rastreia_usuario', JSON.stringify(usuarioLogado));
+        document.getElementById('nav-user').textContent = nome;
+        document.getElementById('minha-nome').textContent = nome;
+        document.getElementById('minha-email').textContent = email;
+      }
+      carregar();
+    }
   }
 
+  // Redefinir senha de outro
+  function abrirSenha(u) {
+    idParaSenha = u.id;
+    document.getElementById('senha-sub').textContent = `${u.nome} (${u.email})`;
+    document.getElementById('senha-nova').value = '';
+    document.getElementById('senha-conf').value = '';
+    abrirModal('modal-senha');
+  }
+
+  async function salvarSenha() {
+    const nova = document.getElementById('senha-nova').value;
+    const conf = document.getElementById('senha-conf').value;
+    if (nova.length < 6) return erroModal('senha-erro', 'Senha precisa ter no mínimo 6 caracteres');
+    if (nova !== conf) return erroModal('senha-erro', 'As senhas não conferem');
+    const ok = await patch(idParaSenha, { senha: nova }, 'senha-erro');
+    if (ok) {
+      fecharModal('modal-senha');
+      alerta('Senha redefinida', 'success');
+    }
+  }
+
+  // Minha senha
+  function abrirModalMinhaSenha() {
+    document.getElementById('minha-atual').value = '';
+    document.getElementById('minha-nova').value = '';
+    document.getElementById('minha-conf').value = '';
+    abrirModal('modal-minha-senha');
+  }
+
+  async function salvarMinhaSenha() {
+    const atual = document.getElementById('minha-atual').value;
+    const nova = document.getElementById('minha-nova').value;
+    const conf = document.getElementById('minha-conf').value;
+    if (!atual) return erroModal('minha-senha-erro', 'Informe sua senha atual');
+    if (nova.length < 6) return erroModal('minha-senha-erro', 'Nova senha precisa ter no mínimo 6 caracteres');
+    if (nova !== conf) return erroModal('minha-senha-erro', 'As novas senhas não conferem');
+    try {
+      const res = await fetch('/api/auth/trocar-senha', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
+        body: JSON.stringify({ senha_atual: atual, nova_senha: nova })
+      });
+      const data = await res.json();
+      if (!res.ok) return erroModal('minha-senha-erro', data.erro || 'Erro ao trocar senha');
+      fecharModal('modal-minha-senha');
+      alerta('Sua senha foi alterada. Faça login novamente.', 'success');
+      setTimeout(() => { logout(); }, 1800);
+    } catch (e) {
+      erroModal('minha-senha-erro', 'Erro de conexão');
+    }
+  }
+
+  // Desativar/Reativar
   async function alternarAtivo(id, novoAtivo) {
     const acao = novoAtivo ? 'reativar' : 'desativar';
     if (!confirm(`Confirma ${acao} este usuário?`)) return;
-    await patch(id, { ativo: novoAtivo });
+    const ok = await patch(id, { ativo: novoAtivo });
+    if (ok) { alerta(`Usuário ${acao === 'reativar' ? 'reativado' : 'desativado'}`, 'success'); carregar(); }
   }
 
-  async function patch(id, body) {
+  // Excluir
+  function abrirExclusao(u) {
+    idParaExcluir = u.id;
+    document.getElementById('excluir-sub').textContent = `${u.nome} (${u.email})`;
+    abrirModal('modal-excluir');
+  }
+
+  async function confirmarExclusao() {
+    try {
+      const res = await fetch('/api/auth/usuarios/' + idParaExcluir, {
+        method: 'DELETE',
+        headers: { Authorization: 'Bearer ' + token }
+      });
+      const data = await res.json();
+      if (!res.ok) return erroModal('excluir-erro', data.erro || 'Erro ao excluir');
+      fecharModal('modal-excluir');
+      alerta('Usuário excluído', 'success');
+      carregar();
+    } catch (e) {
+      erroModal('excluir-erro', 'Erro de conexão');
+    }
+  }
+
+  async function patch(id, body, erroId) {
     try {
       const res = await fetch('/api/auth/usuarios/' + id, {
         method: 'PATCH',
@@ -229,13 +449,27 @@
         body: JSON.stringify(body)
       });
       const data = await res.json();
-      if (!res.ok) return alerta(data.erro || 'Erro ao atualizar', 'error');
-      alerta('Atualizado com sucesso', 'success');
-      carregar();
+      if (!res.ok) {
+        if (erroId) erroModal(erroId, data.erro || 'Erro ao atualizar');
+        else alerta(data.erro || 'Erro ao atualizar', 'error');
+        return false;
+      }
+      return true;
     } catch (e) {
-      alerta('Erro de conexão', 'error');
+      if (erroId) erroModal(erroId, 'Erro de conexão');
+      else alerta('Erro de conexão', 'error');
+      return false;
     }
   }
+
+  // Fecha modal ao clicar fora
+  document.querySelectorAll('.modal-backdrop').forEach(m => {
+    m.addEventListener('click', (e) => { if (e.target === m) m.classList.remove('ativo'); });
+  });
+  // ESC fecha modais
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') document.querySelectorAll('.modal-backdrop').forEach(m => m.classList.remove('ativo'));
+  });
 
   carregar();
 </script>

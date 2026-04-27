@@ -1,4 +1,5 @@
 const axios = require('axios');
+const monitorApi = require('./monitorApi');
 
 // ─────────────────────────────────────────────
 // UTILITÁRIOS
@@ -7,6 +8,41 @@ const axios = require('axios');
 function limparDoc(doc) { return doc.replace(/\D/g, ''); }
 function formatarCPF(cpf) { return cpf.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, '$1.$2.$3-$4'); }
 function formatarCNPJ(cnpj) { return cnpj.replace(/(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})/, '$1.$2.$3/$4-$5'); }
+
+// Classifica erros HTTP/mensagens de API externa em categorias estáveis.
+// Retorna { categoria, etiqueta, mensagem } onde categoria é uma das:
+// 'saldo' | 'token' | 'quota' | 'cpf_invalido' | 'sem_dados' | 'timeout' | 'servidor' | 'rede' | 'outro'
+function classificarErroAPI(status, mensagem) {
+  const m = String(mensagem || '').toLowerCase();
+  if (status === 402 || /saldo.*(insuficient|zero|negativ)|sem\s+saldo|cr[eé]dito.*insuficient|recarg|pagamento\s+pendent/i.test(m))
+    return { categoria: 'saldo', etiqueta: 'SALDO INSUFICIENTE', mensagem: mensagem || 'Saldo insuficiente na API externa' };
+  if (status === 401 || status === 403 || /token.*(invalid|expirad|revogad)|unauthoriz|forbidden|chave.*invalid|api[_ ]?key.*invalid/i.test(m))
+    return { categoria: 'token', etiqueta: 'TOKEN INVÁLIDO/EXPIRADO', mensagem: mensagem || 'Token de autenticação recusado' };
+  if (status === 429 || /rate.?limit|too.?many.?requests|limite.*(atingid|diário|mensal|excedid)/i.test(m))
+    return { categoria: 'quota', etiqueta: 'LIMITE/QUOTA ATINGIDO', mensagem: mensagem || 'Limite de requisições atingido' };
+  if (/cpf.*(invalid|incorret)|documento.*invalid|placa.*invalid|cnpj.*invalid/i.test(m))
+    return { categoria: 'doc_invalido', etiqueta: 'DOCUMENTO INVÁLIDO', mensagem: mensagem || 'Documento rejeitado pela API' };
+  if (status === 404 || /n[aã]o.?encontrad|nao.?localizad|sem.?registr|sem.?dados|sem.?hist[oó]ric/i.test(m))
+    return { categoria: 'sem_dados', etiqueta: 'SEM DADOS', mensagem: mensagem || 'API respondeu sem registros' };
+  if (/timeout|ETIMEDOUT|ECONNABORTED/i.test(m))
+    return { categoria: 'timeout', etiqueta: 'TIMEOUT', mensagem: mensagem || 'API externa não respondeu a tempo' };
+  if (typeof status === 'number' && status >= 500)
+    return { categoria: 'servidor', etiqueta: 'ERRO NO SERVIDOR DA API', mensagem: mensagem || `HTTP ${status}` };
+  if (/ECONNREFUSED|ENOTFOUND|ECONNRESET|EAI_AGAIN|network/i.test(m))
+    return { categoria: 'rede', etiqueta: 'FALHA DE REDE', mensagem: mensagem || 'Erro de rede ao alcançar a API' };
+  return { categoria: 'outro', etiqueta: 'ERRO', mensagem: mensagem || `HTTP ${status || '?'}` };
+}
+
+// Log padrão destacado para falhas de APIs pagas (aparece claro no Railway)
+function logarFalhaAPI(origem, status, mensagem) {
+  const c = classificarErroAPI(status, mensagem);
+  const prefixo = c.categoria === 'saldo' || c.categoria === 'token' || c.categoria === 'quota'
+    ? '[!!! FALHA API]'
+    : '[FALHA API]';
+  console.error(`${prefixo} ${origem} | ${c.etiqueta} | status=${status || '-'} | msg=${c.mensagem}`);
+  try { monitorApi.registrarFalha(origem, c); } catch (_) {}
+  return c;
+}
 
 // ─────────────────────────────────────────────
 // 1. CNPJ — CNPJá (grátis) com fallback CNPJ.ws
@@ -146,15 +182,31 @@ async function consultarCPF(cpf) {
           } else {
             dataNasc = '';
           }
-          // Formatar renda (aceita string BR '3.000,50' também)
+          // Formatar renda (aceita string BR '3.000,50' também) + sanity check
           const rendaRaw = r.rendaEstimada || r.renda || '';
           let rendaFormatada = '';
+          let rendaNumerica = null;
+          let rendaInconsistente = false;
+          let rendaMotivoInconsistencia = '';
           if (rendaRaw) {
             const rendaNum = typeof rendaRaw === 'number'
               ? rendaRaw
               : Number(String(rendaRaw).replace(/\./g, '').replace(',', '.'));
             if (!isNaN(rendaNum) && rendaNum > 0) {
+              rendaNumerica = rendaNum;
               rendaFormatada = `R$ ${rendaNum.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`;
+              // Sanity check: teto por CBO de baixa qualificação + cap absoluto
+              const cboStr = String(r.cbo || r.codigoCBO || '').toLowerCase();
+              const cboBaixaQualif = /motofret|mototaxi|bikeboy|entregad|auxiliar|ajudant|motorista de entrega|atendent|caixa|vigilant|porteir|doméstic|faxineir|zelador|aux\./i.test(cboStr);
+              // Cap geral: renda > R$ 100k/mês é flag (0,3% da população brasileira)
+              if (rendaNum > 100000) {
+                rendaInconsistente = true;
+                rendaMotivoInconsistencia = `Renda estimada (${rendaFormatada}) é improvável e não será usada no cálculo de score`;
+              } else if (cboBaixaQualif && rendaNum > 15000) {
+                // CBO de baixa qualificação com renda > R$ 15k = inconsistente
+                rendaInconsistente = true;
+                rendaMotivoInconsistencia = `Renda estimada (${rendaFormatada}) incompatível com CBO ${cboStr || 'informado'} - descartada do score`;
+              }
             }
           }
           // Normaliza arrays (DirectData às vezes retorna objeto único)
@@ -171,6 +223,9 @@ async function consultarCPF(cpf) {
             situacao_rf: r.situacaoCadastral || r.situacaoReceitaFederal || r.situacao || '',
             obito: r.possuiObito || r.obito || false,
             classe_social: r.classeSocial || '', renda_estimada: rendaFormatada,
+            renda_numerica: rendaNumerica,
+            renda_inconsistente: rendaInconsistente,
+            renda_motivo_inconsistencia: rendaMotivoInconsistencia,
             faixa_salarial: r.rendaFaixaSalarial || '',
             profissao: r.cbo || r.codigoCBO || '',
             signo: r.signo || '',
@@ -202,7 +257,7 @@ async function consultarCPF(cpf) {
         || e.response?.data?.mensagem
         || e.response?.data?.message
         || e.message;
-      console.error(`[Direct Data PF] Erro ${status || ''}: ${msg}`);
+      var _erroDirectd = logarFalhaAPI('Direct Data PF', status, msg);
     }
   }
 
@@ -234,15 +289,37 @@ async function consultarCPF(cpf) {
         };
       }
     } catch (e) {
-      console.error(`[CPF.CNPJ] Erro: ${e.response?.status || e.message}`);
+      var _erroCpfCnpj = logarFalhaAPI('CPF.CNPJ', e.response?.status, e.response?.data?.message || e.message);
     }
   }
 
-  // Nenhuma API disponível ou todas falharam
+  // Nenhuma API disponível ou todas falharam — monta aviso específico com base nas falhas
+  const falhaPrincipal = (typeof _erroDirectd !== 'undefined' && _erroDirectd)
+    || (typeof _erroCpfCnpj !== 'undefined' && _erroCpfCnpj)
+    || null;
+  let aviso = 'Nenhuma API de CPF retornou dados.';
+  let instrucao = 'Verifique DIRECTD_TOKEN ou CPFCNPJ_API_KEY';
+  if (falhaPrincipal) {
+    if (falhaPrincipal.categoria === 'saldo') {
+      aviso = 'Consulta bloqueada por saldo insuficiente no provedor de dados cadastrais.';
+      instrucao = 'Recarregar saldo da DirectData em app.directd.com.br para restabelecer o dossiê completo.';
+    } else if (falhaPrincipal.categoria === 'token') {
+      aviso = 'Provedor de dados cadastrais recusou o token de autenticação.';
+      instrucao = 'Atualizar DIRECTD_TOKEN no Railway (token pode ter sido revogado ou expirou).';
+    } else if (falhaPrincipal.categoria === 'quota') {
+      aviso = 'Limite de requisições do provedor de dados cadastrais foi atingido.';
+      instrucao = 'Aguardar reset da quota ou fazer upgrade do plano na DirectData.';
+    } else if (falhaPrincipal.categoria === 'timeout' || falhaPrincipal.categoria === 'rede' || falhaPrincipal.categoria === 'servidor') {
+      aviso = 'Provedor de dados cadastrais está temporariamente indisponível.';
+      instrucao = 'Reexecutar a consulta em alguns minutos.';
+    }
+  }
   return {
     cpf: doc, cpf_formatado: formatarCPF(doc),
-    aviso: 'Nenhuma API de CPF retornou dados.',
-    instrucao: 'Verifique DIRECTD_TOKEN ou CPFCNPJ_API_KEY',
+    aviso,
+    instrucao,
+    falha_categoria: falhaPrincipal?.categoria || 'indisponivel',
+    falha_detalhes: falhaPrincipal?.mensagem || null,
     fonte: 'Indisponivel', consultado_em: new Date().toISOString()
   };
 }
@@ -539,8 +616,8 @@ async function consultarScore(documento, tipo) {
       || e.response?.data?.mensagem
       || e.response?.data?.message
       || e.message;
-    console.error(`[Score] Erro ${status || ''}: ${msg}`);
-    return { disponivel: false, erro: status || e.message, detalhes: msg, fonte: 'Direct Data Score' };
+    const c = logarFalhaAPI('Score', status, msg);
+    return { disponivel: false, erro: status || e.message, detalhes: msg, falha_categoria: c.categoria, fonte: 'Direct Data Score' };
   }
 }
 
@@ -598,8 +675,8 @@ async function consultarNegativacoes(documento) {
       || e.response?.data?.mensagem
       || e.response?.data?.message
       || e.message;
-    console.error(`[Negativacoes] Erro ${status || ''}: ${msg}`);
-    return { disponivel: false, erro: status || e.message, detalhes: msg, fonte: 'Direct Data Negativacoes' };
+    const c = logarFalhaAPI('Negativacoes', status, msg);
+    return { disponivel: false, erro: status || e.message, detalhes: msg, falha_categoria: c.categoria, fonte: 'Direct Data Negativacoes' };
   }
 }
 
@@ -635,8 +712,8 @@ async function consultarProtestos(documento) {
       || e.response?.data?.mensagem
       || e.response?.data?.message
       || e.message;
-    console.error(`[Protestos] Erro ${status || ''}: ${msg}`);
-    return { disponivel: false, erro: status || e.message, detalhes: msg, fonte: 'Direct Data Protestos' };
+    const c = logarFalhaAPI('Protestos', status, msg);
+    return { disponivel: false, erro: status || e.message, detalhes: msg, falha_categoria: c.categoria, fonte: 'Direct Data Protestos' };
   }
 }
 
@@ -671,7 +748,7 @@ async function consultarPerfilEconomico(cpf) {
       || e.response?.data?.mensagem
       || e.response?.data?.message
       || e.message;
-    console.error(`[NivelSocio] Erro ${status || ''}: ${msg}`);
+    logarFalhaAPI('NivelSocio', status, msg);
     return null;
   }
 }
@@ -714,8 +791,8 @@ async function consultarVinculos(documento) {
       || e.response?.data?.mensagem
       || e.response?.data?.message
       || e.message;
-    console.error(`[Vinculos] Erro ${status || ''}: ${msg}`);
-    return { disponivel: false, erro: status || e.message, detalhes: msg, fonte: 'Direct Data Vinculos' };
+    const c = logarFalhaAPI('Vinculos', status, msg);
+    return { disponivel: false, erro: status || e.message, detalhes: msg, falha_categoria: c.categoria, fonte: 'Direct Data Vinculos' };
   }
 }
 
@@ -967,6 +1044,288 @@ async function consultarVeiculoPorPlaca(placa) {
 }
 
 // =============================================
+// Proprietários Placa — Histórico de donos por exercício
+// Fornecedor: Credify (credifyapis.readme.io).
+// Docs:  POST https://api.credify.com.br/auth  (ClientID + ClientSecret)
+//        POST https://api.credify.com.br/historicoproprietario  (histórico completo via placa)
+//        POST https://api.credify.com.br/veiculoproprietarioplaca (proprietário atual + dados cadastrais)
+//
+// Autenticação: token JWT válido 24h, retornado no campo `Dados`,
+// enviado nas próximas chamadas no header `Authorization: Bearer {token}`.
+//
+// DirectData foi descartada como fonte aqui: o endpoint 'Proprietários Placa'
+// aparece no painel web mas NÃO está exposto no cardápio V4.3 e todas as
+// variações testadas retornaram 404. HistoricoVeiculos (por CPF/CNPJ) continua
+// via DirectData na função abaixo.
+// =============================================
+
+const CREDIFY_BASE = process.env.CREDIFY_BASE_URL || 'https://api.credify.com.br';
+let _credifyTokenCache = { token: null, expiraEm: 0 };
+
+async function _obterTokenCredify() {
+  // Reuso de token por 23h30min (margem de segurança sobre os 24h oficiais).
+  const agora = Date.now();
+  if (_credifyTokenCache.token && _credifyTokenCache.expiraEm > agora) {
+    return _credifyTokenCache.token;
+  }
+  if (!process.env.CREDIFY_CLIENT_ID || !process.env.CREDIFY_CLIENT_SECRET) {
+    const e = new Error('CREDIFY_CLIENT_ID / CREDIFY_CLIENT_SECRET não configurados');
+    e.codigo = 'credenciais_ausentes';
+    throw e;
+  }
+
+  // ClientSecret na doc oficial é integer, mas muitas implementações
+  // aceitam string. Enviamos como número quando possível e caímos para string.
+  const secretRaw = process.env.CREDIFY_CLIENT_SECRET;
+  const secretNum = Number(secretRaw);
+  const clientSecret = Number.isFinite(secretNum) && String(secretNum) === String(secretRaw)
+    ? secretNum
+    : secretRaw;
+
+  const resp = await axios.post(`${CREDIFY_BASE}/auth`, {
+    ClientID: process.env.CREDIFY_CLIENT_ID,
+    ClientSecret: clientSecret
+  }, {
+    headers: { accept: 'application/json', 'content-type': 'application/json' },
+    timeout: 30000
+  });
+
+  const sucesso = resp.data?.Success === true || resp.data?.success === true;
+  const token = resp.data?.Dados || resp.data?.dados || resp.data?.token || resp.data?.Token;
+  if (!sucesso || !token) {
+    const msg = resp.data?.Message || resp.data?.message || 'Autenticação Credify falhou';
+    const e = new Error(msg);
+    e.codigo = 'auth_falhou';
+    throw e;
+  }
+
+  // 23h30min de validade para refresh antecipado.
+  _credifyTokenCache = { token, expiraEm: agora + 23.5 * 3600 * 1000 };
+  return token;
+}
+
+async function consultarProprietariosPlaca(placa) {
+  const placaLimpa = normalizarPlaca(placa);
+  if (!validarPlaca(placaLimpa)) {
+    return { disponivel: false, erro: 'Placa inválida', placa: placaLimpa, fonte: 'Credify HistoricoProprietario' };
+  }
+  if (!process.env.CREDIFY_CLIENT_ID || !process.env.CREDIFY_CLIENT_SECRET) {
+    return {
+      disponivel: false,
+      erro: 'Credify não configurada',
+      detalhes: 'Defina CREDIFY_CLIENT_ID e CREDIFY_CLIENT_SECRET nas variáveis de ambiente',
+      placa: placaLimpa,
+      fonte: 'Credify HistoricoProprietario'
+    };
+  }
+
+  let token;
+  try {
+    token = await _obterTokenCredify();
+  } catch (e) {
+    return {
+      disponivel: false,
+      erro: 'Falha ao autenticar na Credify',
+      detalhes: e.message,
+      placa: placaLimpa,
+      fonte: 'Credify HistoricoProprietario'
+    };
+  }
+
+  const idConsulta = String(Date.now()).slice(-10);
+  let resp;
+  try {
+    resp = await axios.post(`${CREDIFY_BASE}/historicoproprietario`, {
+      IdConsulta: idConsulta,
+      Placa: placaLimpa
+    }, {
+      headers: {
+        accept: 'application/json',
+        'content-type': 'application/json',
+        Authorization: `Bearer ${token}`
+      },
+      timeout: 45000
+    });
+  } catch (e) {
+    const status = e.response?.status;
+    const apiMsg = e.response?.data?.Message
+      || e.response?.data?.message
+      || e.response?.data?.RESPOSTA?.DESCRICAORETORNO
+      || e.message;
+    return {
+      disponivel: false,
+      erro: status ? `Credify retornou HTTP ${status}` : 'Credify indisponível',
+      detalhes: apiMsg,
+      status_http: status || null,
+      placa: placaLimpa,
+      fonte: 'Credify HistoricoProprietario'
+    };
+  }
+
+  try {
+    // A Credify devolve o payload em UPPERCASE. Normalizamos para o shape
+    // estável consumido pelo PDF (idêntico ao que a DirectData devolvia).
+    const data = resp.data || {};
+    const consulta = data.CONSULTA || data.consulta || {};
+    const resposta = data.RESPOSTA || data.resposta || {};
+    const bloco = resposta.VEICULOPROPRIETARIOPLACA
+      || resposta.veiculoproprietarioplaca
+      || resposta.HISTORICOPROPRIETARIO
+      || {};
+
+    // Registros vêm como REGISTRO_1, REGISTRO_2, ... dentro do bloco.
+    const registros = Object.keys(bloco)
+      .filter(k => /^REGISTRO_\d+$/i.test(k))
+      .sort((a, b) => parseInt(a.split('_')[1], 10) - parseInt(b.split('_')[1], 10))
+      .map(k => bloco[k])
+      .filter(r => r && typeof r === 'object');
+
+    if (registros.length === 0) {
+      const codigo = resposta.CODIGO || resposta.codigo;
+      const descr = resposta.DESCRICAORETORNO || resposta.descricaoretorno;
+      return {
+        disponivel: false,
+        erro: descr || 'Sem histórico de proprietários disponível',
+        codigo_api: codigo || null,
+        placa: placaLimpa,
+        fonte: 'Credify HistoricoProprietario'
+      };
+    }
+
+    const proprietarios = registros.map(r => {
+      const doc = String(r.DOCUMENTO || r.NUMERO_DOCUMENTO_PROPRIETARIO || r.documento || '').replace(/\D/g, '');
+      const tipoDoc = doc.length === 14 ? 'CNPJ' : (doc.length === 11 ? 'CPF' : '');
+      const docFormatado = doc.length === 14 ? formatarCNPJ(doc) : (doc.length === 11 ? formatarCPF(doc) : (r.DOCUMENTO || ''));
+      return {
+        documento: doc || String(r.DOCUMENTO || ''),
+        documento_formatado: docFormatado,
+        tipo_documento: tipoDoc,
+        nome: r.NOME_PROPRIETARIO || r.nome_proprietario || r.NOME || '',
+        exercicio: String(r.ANO_EXERCICIO || r.ano_exercicio || '').trim(),
+        data_pagamento: r.DATA_PROCESSAMENTO || r.data_processamento || '',
+        uf_circulacao: r.UF_DUT || r.uf_dut || ''
+      };
+    }).filter(p => p.documento || p.nome);
+
+    // Ordena por exercício decrescente (mais recente primeiro).
+    proprietarios.sort((a, b) => {
+      const ea = parseInt(a.exercicio, 10) || 0;
+      const eb = parseInt(b.exercicio, 10) || 0;
+      return eb - ea;
+    });
+
+    const primeiro = registros[0] || {};
+    const chassi = primeiro.CHASSI || bloco.CHASSI || '';
+    const renavam = primeiro.RENAVAM || bloco.RENAVAM || '';
+
+    return {
+      disponivel: true,
+      placa: placaLimpa,
+      chassi,
+      renavam,
+      total: proprietarios.length,
+      proprietarios,
+      raw: resposta,
+      id_consulta: consulta.IDCONSULTA || idConsulta,
+      fonte: 'Credify HistoricoProprietario',
+      consultado_em: new Date().toISOString()
+    };
+  } catch (e) {
+    return {
+      disponivel: false,
+      erro: 'Falha ao interpretar resposta Credify',
+      detalhes: e.message,
+      placa: placaLimpa,
+      fonte: 'Credify HistoricoProprietario'
+    };
+  }
+}
+
+// =============================================
+// HISTORICO DE VEICULOS (DirectData) - PF/PJ
+// Retorna TODOS os veiculos vinculados a um CPF ou CNPJ.
+// Endpoint publico documentado no cardapio V4.3 (R$ 0,36).
+// =============================================
+async function consultarHistoricoVeiculos(cpfCnpj) {
+  const doc = String(cpfCnpj || '').replace(/\D/g, '');
+  if (!doc || (doc.length !== 11 && doc.length !== 14)) {
+    return { disponivel: false, erro: 'CPF/CNPJ invalido', fonte: 'DirectData HistoricoVeiculos' };
+  }
+  if (!process.env.DIRECTD_TOKEN) {
+    return { disponivel: false, erro: 'DIRECTD_TOKEN nao configurado', fonte: 'DirectData HistoricoVeiculos' };
+  }
+
+  const endpoint = process.env.DIRECTD_HISTORICO_VEICULOS_URL
+    || 'https://apiv3.directd.com.br/api/HistoricoVeiculos';
+
+  const params = { Token: process.env.DIRECTD_TOKEN };
+  if (doc.length === 14) params.Cnpj = doc; else params.Cpf = doc;
+
+  try {
+    const resp = await axios.get(endpoint, { params, timeout: 45000 });
+    const meta = resp.data?.metaDados || {};
+    const retorno = resp.data?.retorno || {};
+    const resultadoId = Number(meta.resultadoId);
+
+    const listaBruta = Array.isArray(retorno.veiculos) ? retorno.veiculos
+      : Array.isArray(retorno.listaVeiculos) ? retorno.listaVeiculos
+      : [];
+
+    if ((resultadoId && resultadoId !== 1) || listaBruta.length === 0) {
+      return {
+        disponivel: false,
+        erro: meta.mensagem || meta.resultado || 'Nenhum veiculo vinculado encontrado',
+        codigo_api: meta.resultadoId || null,
+        documento: doc,
+        tempo_ms: meta.tempoExecucaoMs,
+        fonte: 'DirectData HistoricoVeiculos'
+      };
+    }
+
+    const veiculos = listaBruta.map(v => ({
+      placa: (v.placa || '').toUpperCase().trim(),
+      veiculo: v.veiculo || '',
+      marca: v.marca || '',
+      modelo: v.modelo || '',
+      renavam: String(v.renavam || '').trim(),
+      chassi: String(v.chassi || '').trim(),
+      data_aquisicao: v.dataAquisicao || v.data_aquisicao || ''
+    })).filter(v => v.placa || v.chassi || v.renavam);
+
+    // Ordena por data de aquisicao (mais recente primeiro), placas sem data no fim.
+    veiculos.sort((a, b) => {
+      const parse = (s) => {
+        const m = String(s).match(/(\d{2})\/(\d{2})\/(\d{4})/);
+        return m ? new Date(`${m[3]}-${m[2]}-${m[1]}`).getTime() : 0;
+      };
+      return parse(b.data_aquisicao) - parse(a.data_aquisicao);
+    });
+
+    return {
+      disponivel: true,
+      documento: doc,
+      proprietario: retorno.proprietario || '',
+      total: veiculos.length,
+      veiculos,
+      enderecos: Array.isArray(retorno.enderecos) ? retorno.enderecos : [],
+      raw: retorno,
+      fonte: 'DirectData HistoricoVeiculos',
+      consultado_em: new Date().toISOString()
+    };
+  } catch (e) {
+    const status = e.response?.status;
+    return {
+      disponivel: false,
+      erro: status ? `DirectData retornou HTTP ${status}` : 'DirectData indisponivel',
+      detalhes: e.response?.data?.metaDados?.mensagem || e.message,
+      status_http: status || null,
+      documento: doc,
+      fonte: 'DirectData HistoricoVeiculos'
+    };
+  }
+}
+
+// =============================================
 // ORQUESTRADOR — executa tudo em paralelo
 // =============================================
 
@@ -974,9 +1333,46 @@ async function executarConsultaCompleta(pedido) {
   const { alvo_documento, alvo_tipo, alvo_nome, tipo, alvo_placa } = pedido;
 
   // Produto standalone: Consulta Veicular
+  // Chamadas em paralelo para enriquecer com historico de proprietarios.
+  // Se o veiculo atual tiver CPF/CNPJ do proprietario, consulta tambem o
+  // patrimonio veicular desse dono via HistoricoVeiculos.
   if (tipo === 'consulta_veicular') {
-    const veiculo_placa = await consultarVeiculoPorPlaca(alvo_placa);
-    return { veiculo_placa };
+    // Tier comercial (basico/completo/premium) — gravado no pedido pela rota /api/pedidos.
+    // Padrão é 'completo' (9 serviços) para manter comportamento atual quando vier sem tier.
+    const tier = pedido.tier_veicular || 'completo';
+    const addons = (pedido.addons_veicular || '').split(',').map(s => s.trim()).filter(Boolean);
+
+    const [veiculo_placa, proprietarios_placa] = await Promise.all([
+      consultarVeiculoPorPlaca(alvo_placa),
+      consultarProprietariosPlaca(alvo_placa)
+    ]);
+
+    // Extrai documento do proprietario atual para nova chamada.
+    // consultarVeiculoPorPlaca expoe `proprietario_documento` no root.
+    const docDono = String(
+      veiculo_placa?.proprietario_documento
+      || veiculo_placa?.veiculo?.documento
+      || ''
+    ).replace(/\D/g, '');
+
+    // Histórico de proprietários (incluso só a partir do Completo e no add-on veiculos_por_cpf)
+    const temHistoricoProp = tier !== 'basico' || addons.includes('veiculos_por_cpf');
+    let historico_veiculos_proprietario = null;
+    if (temHistoricoProp && docDono && (docDono.length === 11 || docDono.length === 14)) {
+      historico_veiculos_proprietario = await consultarHistoricoVeiculos(docDono);
+    }
+
+    // TODO(credify): quando a API Credify estiver ativa, chamar APENAS os serviços
+    // do tier + add-ons (ex: LeilaoConjugado só no Premium ou com addon 'leilao').
+    // Por enquanto usamos o agregado DirectData + HistoricoProprietario/Veiculos.
+
+    return {
+      veiculo_placa,
+      proprietarios_placa: temHistoricoProp ? proprietarios_placa : null,
+      historico_veiculos_proprietario,
+      _tier: tier,
+      _addons: addons
+    };
   }
 
   // Consultas comuns a todos os produtos
@@ -1043,6 +1439,7 @@ module.exports = {
   consultarSerasa, consultarScore, consultarNegativacoes, consultarProtestos,
   consultarPerfilEconomico, consultarVinculos, consultarObito,
   consultarONR, consultarMatricula, consultarVeiculos,
-  consultarVeiculoPorPlaca, validarPlaca, normalizarPlaca,
+  consultarVeiculoPorPlaca, consultarProprietariosPlaca, consultarHistoricoVeiculos,
+  validarPlaca, normalizarPlaca,
   executarConsultaCompleta
 };

@@ -271,6 +271,25 @@ app.get('/api/health/apis/escavador-debug', async (req, res) => {
   }
 });
 
+// Monitor de falhas operacionais de APIs externas (saldo/token/quota)
+const monitorApi = require('./services/monitorApi');
+const { autenticar: _autMon, admin: _admMon } = require('./routes/auth');
+app.get('/api/admin/status-apis', _autMon, _admMon, (req, res) => {
+  try {
+    res.json(monitorApi.obterStatus());
+  } catch (e) {
+    res.status(500).json({ erro: e.message });
+  }
+});
+app.post('/api/admin/status-apis/limpar', _autMon, _admMon, (req, res) => {
+  try {
+    monitorApi.limpar();
+    res.json({ ok: true, mensagem: 'Histórico de falhas limpo.' });
+  } catch (e) {
+    res.status(500).json({ erro: e.message });
+  }
+});
+
 // Rotas API
 app.use('/api/auth', require('./routes/auth'));
 app.use('/api/pedidos', require('./routes/pedidos'));

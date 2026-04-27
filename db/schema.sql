@@ -46,6 +46,10 @@ CREATE TABLE IF NOT EXISTS pedidos (
   relatorio_url TEXT,
   observacoes TEXT,
 
+  -- Score calculado no momento da geração do relatório (para histórico)
+  score_calculado INT,
+  score_classificacao VARCHAR(50),
+
   criado_em TIMESTAMP DEFAULT NOW(),
   atualizado_em TIMESTAMP DEFAULT NOW()
 );
@@ -179,22 +183,25 @@ CREATE TABLE IF NOT EXISTS api_custos (
   atualizado_em TIMESTAMP DEFAULT NOW()
 );
 
--- Seed com valores OFICIAIS do Cardapio DirectData V4.1 (2026)
+-- Seed com valores OFICIAIS do Cardapio DirectData V4.3 (2026)
+-- Revisado em Abr/2026: todos os precos V4.3 conferem com V4.1 (sem alteracao)
 -- Atualize manualmente em /custos-api.html quando os precos mudarem
 INSERT INTO api_custos (chave, rotulo, valor_brl, fonte, confianca) VALUES
   ('escavador_processos',    'Escavador — Processos por CPF/CNPJ',        4.5000, 'Tabela publica Escavador',                              'oficial'),
   ('datajud',                'Datajud CNJ (TJGO/TRF1/STJ/TST)',           0.0000, 'API publica gratuita',                                  'oficial'),
   ('cnpja',                  'CNPJa — Receita Federal CNPJ',              0.0000, 'Plano gratuito',                                        'oficial'),
-  ('directd_pf_plus',        'DirectData — Cadastro PF Plus',             0.3600, 'Cardapio DirectData V4.1 (Cadastral)',                  'oficial'),
-  ('directd_cnpj',           'DirectData — Cadastro PJ Plus',             0.3600, 'Cardapio DirectData V4.1 (Cadastral)',                  'oficial'),
-  ('directd_score_quod',     'DirectData — Score QUOD',                   1.9800, 'Cardapio DirectData V4.1 (Credito)',                    'oficial'),
-  ('directd_negativacoes',   'DirectData — Detalhamento Negativo',        2.3800, 'Cardapio DirectData V4.1 (Credito)',                    'oficial'),
-  ('directd_perfil_economico','DirectData — Nivel Socioeconomico e Renda', 0.3600, 'Cardapio DirectData V4.1 (Credito)',                   'oficial'),
-  ('directd_vinculos',       'DirectData — Vinculos Societarios',         1.8400, 'Cardapio DirectData V4.1 (Cadastral)',                  'oficial'),
-  ('directd_veiculos',       'DirectData — Consulta Veicular (placa)',    5.4000, 'Cardapio DirectData V4.1 (Veicular)',                   'oficial'),
-  ('directd_protestos',      'DirectData — Protestos Nacional',           0.7200, 'Cardapio DirectData V4.1 (Credito)',                    'oficial'),
-  ('directd_obito',          'DirectData — Obito (PF)',                   0.3600, 'Cardapio DirectData V4.1 (Cadastral)',                  'oficial'),
-  ('directd_beneficiario_final','DirectData — Beneficiario Final (UBO)',  1.4400, 'Cardapio DirectData V4.1 (Societario)',                 'oficial'),
+  ('directd_pf_plus',        'DirectData — Cadastro PF Plus',             0.3600, 'Cardapio DirectData V4.3 (Cadastral)',                  'oficial'),
+  ('directd_cnpj',           'DirectData — Cadastro PJ Plus',             0.3600, 'Cardapio DirectData V4.3 (Cadastral)',                  'oficial'),
+  ('directd_score_quod',     'DirectData — Score QUOD',                   1.9800, 'Cardapio DirectData V4.3 (Credito)',                    'oficial'),
+  ('directd_negativacoes',   'DirectData — Detalhamento Negativo',        2.3800, 'Cardapio DirectData V4.3 (Credito)',                    'oficial'),
+  ('directd_perfil_economico','DirectData — Nivel Socioeconomico e Renda', 0.3600, 'Cardapio DirectData V4.3 (Credito)',                   'oficial'),
+  ('directd_vinculos',       'DirectData — Vinculos Societarios',         1.8400, 'Cardapio DirectData V4.3 (Cadastral)',                  'oficial'),
+  ('directd_veiculos',       'DirectData — Consulta Veicular (placa)',    5.4000, 'Cardapio DirectData V4.3 (Veicular)',                   'oficial'),
+  ('credify_historico_proprietario','Credify — Historico de Proprietarios (por placa)', 0.9000, 'Credify (credifyapis.readme.io) — valor referencia, acertar via contato comercial', 'estimado'),
+  ('directd_historico_veiculos','DirectData — Historico de Veiculos (PF/PJ)', 0.3600, 'Cardapio DirectData V4.3 (Veicular)',                  'oficial'),
+  ('directd_protestos',      'DirectData — Protestos Nacional',           0.7200, 'Cardapio DirectData V4.3 (Credito)',                    'oficial'),
+  ('directd_obito',          'DirectData — Obito (PF)',                   0.3600, 'Cardapio DirectData V4.3 (Cadastral)',                  'oficial'),
+  ('directd_beneficiario_final','DirectData — Beneficiario Final (UBO)',  1.4400, 'Cardapio DirectData V4.3 (Societario)',                 'oficial'),
   ('transparencia',          'Portal da Transparencia (CGU)',             0.0000, 'API publica gratuita',                                  'oficial'),
   ('infosimples_detran_go',  'InfoSimples DETRAN-GO',                     0.2600, 'Tabela publica InfoSimples',                            'oficial'),
   ('onr_matricula',          'ONR — Matricula de imovel',                 0.0000, 'Depende do cartorio, variavel',                         'estimado')
@@ -205,3 +212,54 @@ ON CONFLICT (chave) DO UPDATE SET
   confianca = EXCLUDED.confianca,
   atualizado_em = NOW()
 WHERE api_custos.confianca != 'manual';  -- preserva edicoes manuais feitas em /custos-api.html
+
+-- ==========================================================================
+-- MIGRATIONS IDEMPOTENTES (ALTER TABLE) - rodam a cada boot, seguras
+-- ==========================================================================
+
+-- Fase 3: armazenar score calculado no momento da geração do PDF, permite
+-- histórico por CPF/CNPJ e tendência de risco entre consultas.
+ALTER TABLE pedidos ADD COLUMN IF NOT EXISTS score_calculado INT;
+ALTER TABLE pedidos ADD COLUMN IF NOT EXISTS score_classificacao VARCHAR(50);
+CREATE INDEX IF NOT EXISTS idx_pedidos_alvo_doc_data ON pedidos(alvo_documento, criado_em DESC);
+
+-- ==========================================================================
+-- Fase 5: tiers comerciais da Consulta Veicular (Básico / Completo / Premium)
+-- ==========================================================================
+ALTER TABLE pedidos ADD COLUMN IF NOT EXISTS tier_veicular VARCHAR(20);      -- basico | completo | premium
+ALTER TABLE pedidos ADD COLUMN IF NOT EXISTS addons_veicular TEXT;            -- CSV: leilao,cnh_proprietario,veiculos_por_cpf
+
+-- ==========================================================================
+-- Fase 6: Análise de documentos do imóvel via IA (Claude Sonnet 4.5)
+-- Aplicável a due_diligence_imobiliaria. Usuário anexa matrícula/escritura,
+-- Claude extrai dados estruturados que são renderizados no PDF final.
+-- ==========================================================================
+
+-- Resultado da análise (JSONB) + status do processamento
+ALTER TABLE pedidos ADD COLUMN IF NOT EXISTS analise_ia JSONB;
+ALTER TABLE pedidos ADD COLUMN IF NOT EXISTS analise_ia_status VARCHAR(20) DEFAULT 'desabilitada';
+-- valores: pendente | concluida | falhou | desabilitada
+
+-- Tabela de documentos anexados ao pedido (matrícula, escritura, outros)
+CREATE TABLE IF NOT EXISTS pedido_documentos (
+  id SERIAL PRIMARY KEY,
+  pedido_id UUID NOT NULL REFERENCES pedidos(id) ON DELETE CASCADE,
+  tipo VARCHAR(50) NOT NULL,        -- 'matricula' | 'escritura' | 'outro'
+  filename VARCHAR(255) NOT NULL,
+  filepath VARCHAR(500) NOT NULL,
+  size_bytes INTEGER,
+  mime_type VARCHAR(100),
+  criado_em TIMESTAMP DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_pedido_documentos_pedido ON pedido_documentos(pedido_id);
+
+-- Custo da análise IA (estimativa Sonnet 4.5 com matrícula+escritura)
+INSERT INTO api_custos (chave, rotulo, valor_brl, fonte, confianca) VALUES
+  ('claude_analise_imovel', 'Claude — Análise de matrícula/escritura (IA)', 0.5000, 'Anthropic Sonnet 4.5 — estimativa por pedido', 'estimado')
+ON CONFLICT (chave) DO UPDATE SET
+  rotulo = EXCLUDED.rotulo,
+  valor_brl = EXCLUDED.valor_brl,
+  fonte = EXCLUDED.fonte,
+  confianca = EXCLUDED.confianca,
+  atualizado_em = NOW()
+WHERE api_custos.confianca != 'manual';
