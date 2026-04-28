@@ -46,6 +46,14 @@ function rotularTipoOnus(t) {
   return LABELS_ONUS_TIPO[k] || (t ? String(t).toUpperCase().replace(/_/g, ' ') : 'GRAVAME');
 }
 
+// Verdadeiro quando a IA processou ao menos um documento do tipo MATRÍCULA
+// (e este não foi marcado como irrelevante). Nesse caso a matrícula já foi
+// analisada e o aviso de "consulta posterior ao ONR" não faz sentido.
+function temMatriculaAnalisada(analise) {
+  const docs = Array.isArray(analise?.documentos_processados) ? analise.documentos_processados : [];
+  return docs.some(d => String(d?.tipo || '').toLowerCase() === 'matricula' && !d?.irrelevante);
+}
+
 // ─── Blocos de análise IA (matrícula/escritura via Claude) ────────
 function corSeveridade(sev) {
   const s = (sev || '').toLowerCase();
@@ -307,11 +315,15 @@ function secaoVendedor(doc, y, dados, pedido) {
 }
 
 // ─── Imóvel (matrícula + ônus) ─────────────────────────────────────
-function secaoImovel(doc, y, dados, pedido) {
+function secaoImovel(doc, y, dados, pedido, analise) {
   const imovel = dados.imovel || {};
   y = secao(doc, 'IMÓVEL', y);
 
   if (!imovel.endereco && !imovel.matricula) {
+    // Se a IA já analisou a matrícula, os dados do imóvel virão dos blocos
+    // de identificação/proprietários/ônus (extraídos do documento) — não
+    // faz sentido exibir o aviso de consulta posterior ao ONR.
+    if (temMatriculaAnalisada(analise)) return y;
     return boxEmIntegracao(doc, y,
       'DADOS DO IMÓVEL — Em integração',
       'Matrícula digital e pesquisa de ônus/gravames via ONR (Operador Nacional do Registro) em integração. Para consulta imediata, solicitar certidão de matrícula atualizada ao cartório de registro do imóvel.'
@@ -539,7 +551,7 @@ function render(doc, pedido, dados, score, checklist, produto) {
   // blocos costumam ficar vazios (em integração).
   y = secaoComprador(doc, y, dados, pedido);
   y = secaoVendedor(doc, y, dados, pedido);
-  y = secaoImovel(doc, y, dados, pedido);
+  y = secaoImovel(doc, y, dados, pedido, analise);
 
   // Identificação + Proprietários + Ônus + Transmissões extraídos pela IA
   if (analise) {
@@ -559,7 +571,12 @@ function render(doc, pedido, dados, score, checklist, produto) {
   y = secaoChecklist(doc, y, checklist);
   y = secaoParecerAnalista(doc, y, pedido);
 
-  chrome.blocoFinal(doc, y, ['ONR - Operador Nacional do Registro (em integração)']);
+  // Quando a matrícula já foi analisada pela IA, o ONR não é "fonte em
+  // integração" relevante — os dados saíram do próprio documento enviado.
+  const fontesExtras = temMatriculaAnalisada(analise)
+    ? ['Matrícula do imóvel analisada por IA (documento enviado pelo solicitante)']
+    : ['ONR - Operador Nacional do Registro (em integração)'];
+  chrome.blocoFinal(doc, y, fontesExtras);
 }
 
 module.exports = { render };
