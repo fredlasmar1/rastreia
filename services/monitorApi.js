@@ -7,8 +7,10 @@
 
 const fs = require('fs');
 const path = require('path');
+const storagePaths = require('./storage_paths');
 
-const LOG_DIR = path.join(__dirname, '..', 'data');
+// BUG #2: respeita DATA_DIR (Railway Volume) com fallback ./data em dev.
+const LOG_DIR = storagePaths.DATA_DIR;
 const LOG_FILE = path.join(LOG_DIR, 'monitor_api.json');
 const COOLDOWN_ALERTA_MS = 6 * 60 * 60 * 1000; // 6h entre alertas para não spammar
 const JANELA_STATUS_MS = 60 * 60 * 1000; // 1h para considerar falha como "recente"

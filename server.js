@@ -330,12 +330,18 @@ app.post('/webhook/mp', express.json(), async (req, res) => {
 });
 
 // Servir PDF — regenera se arquivo não existir (Railway ephemeral storage)
+// BUG #2: tenta primeiro RELATORIOS_DIR (Railway Volume) e cai no caminho antigo
+// public/relatorios para compat com PDFs gerados antes da migração para volume.
+const storagePaths = require('./services/storage_paths');
 app.get('/relatorios/:filename', async (req, res) => {
   // Bloquear path traversal (../../ etc)
   const fname = path.basename(req.params.filename);
-  const filePath = path.join(__dirname, 'public', 'relatorios', fname);
-  if (fs.existsSync(filePath)) {
-    return res.sendFile(filePath);
+  const candidatos = [
+    path.join(storagePaths.RELATORIOS_DIR, fname),
+    path.join(__dirname, 'public', 'relatorios', fname)
+  ];
+  for (const candidato of candidatos) {
+    if (fs.existsSync(candidato)) return res.sendFile(candidato);
   }
   // Arquivo não existe (apagado no deploy). Tentar regenerar.
   try {
