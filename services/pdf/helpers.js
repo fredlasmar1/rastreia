@@ -7,8 +7,9 @@
  *
  * Regras:
  *  - Não importa PDFKit nem I/O. Recebe `doc` como parâmetro.
- *  - Fonte padrão Helvetica (PDFKit não renderiza setas Unicode).
- *  - ASCII-safe: nunca usar ↑ ↓ → em strings renderizadas.
+ *  - Fonte padrão Helvetica (WinAnsi/Latin-1: aceita acentos do português,
+ *    mas NÃO aceita setas Unicode como ↑ ↓ →).
+ *  - Use `->` em vez de `→` em strings renderizadas.
  */
 
 const COR = {
@@ -60,11 +61,20 @@ function secao(doc, titulo, y) {
 }
 
 // Renderiza linha label: valor. Garante paginação correta e retorna novo y.
+// Quando o valor é longo (ex.: endereço completo), quebra em múltiplas linhas
+// e calcula a altura real ocupada para evitar sobreposição com o próximo bloco.
 function linha(doc, label, valor, y, altura) {
-  const h = altura || 13;
+  const minH = altura || 13;
+  const labelLargura = 140;
+  const valorX = 195;
+  const valorLargura = MARGEM + LARGURA - valorX;
+  const texto = String(valor || '-');
+  doc.font('Helvetica').fontSize(8.5);
+  const hValor = doc.heightOfString(texto, { width: valorLargura });
+  const h = Math.max(minH, hValor + 3);
   y = verificarPagina(doc, y, h);
-  doc.font('Helvetica-Bold').fontSize(8.5).fillColor(COR.cinza).text(label + ':', MARGEM, y, { width: 140, lineBreak: false });
-  doc.font('Helvetica').fontSize(8.5).fillColor('#111827').text(String(valor || '-'), 195, y, { width: 350, lineBreak: false });
+  doc.font('Helvetica-Bold').fontSize(8.5).fillColor(COR.cinza).text(label + ':', MARGEM, y, { width: labelLargura, lineBreak: false });
+  doc.font('Helvetica').fontSize(8.5).fillColor('#111827').text(texto, valorX, y, { width: valorLargura });
   return y + h;
 }
 
@@ -213,7 +223,7 @@ function rodape(doc) {
   const y = doc.page.height - RODAPE_H;
   doc.rect(0, y, 595, RODAPE_H).fill('#f3f4f6');
   doc.fillColor(COR.cinza).fontSize(6).font('Helvetica')
-    .text('Documento informativo gerado pelo sistema Rastreia. Nao substitui consulta juridica. Recobro Recuperacao de Credito | Anapolis - GO', MARGEM, y + 10, { align: 'center', width: LARGURA });
+    .text('Documento informativo gerado pelo sistema Rastreia. Não substitui consulta jurídica. Recobro Recuperação de Crédito | Anápolis - GO', MARGEM, y + 10, { align: 'center', width: LARGURA });
 }
 
 module.exports = {

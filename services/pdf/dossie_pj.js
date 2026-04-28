@@ -21,10 +21,10 @@ const { secao, linha, boxEmIntegracao, COR, MARGEM, LARGURA, verificarPagina } =
 function secaoSituacaoFiscalPJ(doc, y, dados) {
   const cadastral = dados.receita_federal || {};
   y = secao(doc, 'SITUAÇÃO FISCAL E REGULARIDADE', y);
-  y = linha(doc, 'Situacao RF', cadastral.situacao || '-', y, 13);
-  y = linha(doc, 'Divida Ativa PGFN', dados.pgfn?.status || 'Em integração (Credify)', y, 13);
+  y = linha(doc, 'Situação RF', cadastral.situacao || '-', y, 13);
+  y = linha(doc, 'Dívida Ativa PGFN', dados.pgfn?.status || 'Em integração (Credify)', y, 13);
   y = linha(doc, 'Regularidade FGTS', dados.fgts?.status || 'Em integração (Credify)', y, 13);
-  y = linha(doc, 'Debitos Estaduais', dados.debitos_estaduais?.status || 'Em integração (Credify)', y, 13);
+  y = linha(doc, 'Débitos Estaduais', dados.debitos_estaduais?.status || 'Em integração (Credify)', y, 13);
   return y + 4;
 }
 

@@ -21,25 +21,25 @@ function secaoCadastralPJ(doc, y, dados) {
   y = secao(doc, 'DADOS CADASTRAIS - RECEITA FEDERAL', y);
 
   if (!cadastral.razao_social) {
-    return avisoBox(doc, y, 'Dados cadastrais nao retornados pela API. Verifique CNPJA_API_KEY.');
+    return avisoBox(doc, y, 'Dados cadastrais não retornados pela API. Verifique CNPJA_API_KEY.');
   }
 
-  y = linha(doc, 'Razao Social', cadastral.razao_social, y, 13);
+  y = linha(doc, 'Razão Social', cadastral.razao_social, y, 13);
   if (cadastral.nome_fantasia) y = linha(doc, 'Nome Fantasia', cadastral.nome_fantasia, y, 13);
   y = linha(doc, 'CNPJ', cadastral.cnpj_formatado || cadastral.cnpj, y, 13);
-  y = linha(doc, 'Situacao RF', cadastral.situacao || '-', y, 13);
+  y = linha(doc, 'Situação RF', cadastral.situacao || '-', y, 13);
   y = linha(doc, 'Abertura', cadastral.data_abertura || '-', y, 13);
   y = linha(doc, 'Porte', cadastral.porte || '-', y, 13);
   y = linha(doc, 'Capital Social', cadastral.capital_social ? `R$ ${Number(cadastral.capital_social).toLocaleString('pt-BR')}` : '-', y, 13);
   y = linha(doc, 'Atividade', cadastral.atividade_principal || '-', y, 13);
   if (cadastral.simples_nacional) y = linha(doc, 'Simples Nacional', cadastral.simples_nacional, y, 13);
-  y = linha(doc, 'Endereco', cadastral.endereco || '-', y, 13);
+  y = linha(doc, 'Endereço', cadastral.endereco || '-', y, 13);
   if (cadastral.email) y = linha(doc, 'Email', cadastral.email, y, 13);
   if (cadastral.telefone) y = linha(doc, 'Telefone', cadastral.telefone, y, 13);
 
   if (cadastral.socios?.length > 0) {
     y += 4;
-    doc.fillColor(COR.azul).fontSize(9).font('Helvetica-Bold').text('QUADRO SOCIETARIO', MARGEM, y); y += 14;
+    doc.fillColor(COR.azul).fontSize(9).font('Helvetica-Bold').text('QUADRO SOCIETÁRIO', MARGEM, y); y += 14;
     cadastral.socios.forEach((s, i) => {
       y = verificarPagina(doc, y, 22);
       doc.rect(MARGEM, y, LARGURA, 20).fill(i % 2 === 0 ? '#f9fafb' : '#ffffff');
@@ -59,12 +59,12 @@ function secaoRegimeTributario(doc, y, dados) {
   if (!cadastral.razao_social) return y;
 
   y = secao(doc, 'REGIME TRIBUTÁRIO', y);
-  const optante = cadastral.simples_nacional || cadastral.simples || 'Nao informado';
-  const mei = (cadastral.mei === true || cadastral.mei === 'Sim') ? 'Sim' : (cadastral.mei === false || cadastral.mei === 'Nao') ? 'Nao' : 'Nao informado';
+  const optante = cadastral.simples_nacional || cadastral.simples || 'Não informado';
+  const mei = (cadastral.mei === true || cadastral.mei === 'Sim') ? 'Sim' : (cadastral.mei === false || cadastral.mei === 'Nao' || cadastral.mei === 'Não') ? 'Não' : 'Não informado';
   y = linha(doc, 'Simples Nacional', optante, y, 13);
   y = linha(doc, 'MEI', mei, y, 13);
   y = linha(doc, 'Regime', cadastral.regime_tributario || 'Lucro Real/Presumido - verificar contabilidade', y, 13);
-  if (cadastral.data_opcao_simples) y = linha(doc, 'Opcao Simples', cadastral.data_opcao_simples, y, 13);
+  if (cadastral.data_opcao_simples) y = linha(doc, 'Opção Simples', cadastral.data_opcao_simples, y, 13);
   return y + 6;
 }
 
@@ -73,7 +73,7 @@ function secaoRegimeTributario(doc, y, dados) {
 // ───────────────────────────────────────────────────────────────
 function secaoCadastralPF(doc, y, dados) {
   const cadastral = dados.receita_federal || {};
-  y = secao(doc, 'DADOS CADASTRAIS - PESSOA FISICA', y);
+  y = secao(doc, 'DADOS CADASTRAIS - PESSOA FÍSICA', y);
 
   if (cadastral.aviso) {
     // Aviso destacado em vermelho para falhas operacionais críticas (saldo/token/quota)
@@ -90,10 +90,10 @@ function secaoCadastralPF(doc, y, dados) {
     return avisoBox(doc, y, `${cadastral.aviso} ${cadastral.instrucao || ''}`);
   }
   if (!cadastral.nome && cadastral.erro) {
-    return avisoBox(doc, y, 'Dados cadastrais indisponiveis. API retornou erro. Verifique DIRECTD_TOKEN.');
+    return avisoBox(doc, y, 'Dados cadastrais indisponíveis. API retornou erro. Verifique DIRECTD_TOKEN.');
   }
   if (!cadastral.nome) {
-    return avisoBox(doc, y, 'Dados cadastrais nao retornados. Configure DIRECTD_TOKEN.');
+    return avisoBox(doc, y, 'Dados cadastrais não retornados. Configure DIRECTD_TOKEN.');
   }
 
   y = linha(doc, 'Nome', cadastral.nome, y, 13);
@@ -101,16 +101,16 @@ function secaoCadastralPF(doc, y, dados) {
   if (cadastral.data_nascimento) y = linha(doc, 'Nascimento', cadastral.data_nascimento, y, 13);
   if (cadastral.idade) y = linha(doc, 'Idade', `${cadastral.idade} anos`, y, 13);
   if (cadastral.sexo) y = linha(doc, 'Sexo', cadastral.sexo, y, 13);
-  if (cadastral.nome_mae) y = linha(doc, 'Mae', cadastral.nome_mae, y, 13);
+  if (cadastral.nome_mae) y = linha(doc, 'Mãe', cadastral.nome_mae, y, 13);
   if (cadastral.nome_pai) y = linha(doc, 'Pai', cadastral.nome_pai, y, 13);
-  y = linha(doc, 'Situacao RF', cadastral.situacao_rf || '-', y, 13);
+  y = linha(doc, 'Situação RF', cadastral.situacao_rf || '-', y, 13);
   if (cadastral.obito) {
     y = verificarPagina(doc, y, 18);
     doc.rect(MARGEM, y, LARGURA, 16).fill('#fee2e2');
-    doc.fillColor(COR.vermelho).fontSize(9).font('Helvetica-Bold').text('REGISTRO DE OBITO ENCONTRADO', MARGEM + 6, y + 3);
+    doc.fillColor(COR.vermelho).fontSize(9).font('Helvetica-Bold').text('REGISTRO DE ÓBITO ENCONTRADO', MARGEM + 6, y + 3);
     y += 20;
   }
-  if (cadastral.profissao) y = linha(doc, 'Profissao (CBO)', cadastral.profissao, y, 13);
+  if (cadastral.profissao) y = linha(doc, 'Profissão (CBO)', cadastral.profissao, y, 13);
   if (cadastral.classe_social) y = linha(doc, 'Classe Social', cadastral.classe_social, y, 13);
   if (cadastral.renda_estimada) {
     const rotulo = cadastral.renda_inconsistente ? 'Renda Estimada (inconsistente)' : 'Renda Estimada';
@@ -123,13 +123,13 @@ function secaoCadastralPF(doc, y, dados) {
     const h = doc.heightOfString(nomes, { width: LARGURA - 12, fontSize: 7 });
     y = verificarPagina(doc, y, h + 16);
     y += 2;
-    doc.fillColor(COR.azul).fontSize(8).font('Helvetica-Bold').text('VINCULOS FAMILIARES', MARGEM, y); y += 10;
+    doc.fillColor(COR.azul).fontSize(8).font('Helvetica-Bold').text('VÍNCULOS FAMILIARES', MARGEM, y); y += 10;
     doc.fillColor('#111827').fontSize(7).font('Helvetica').text(nomes, MARGEM + 6, y, { width: LARGURA - 12 });
     y += h + 4;
   }
   if (cadastral.enderecos?.length > 0) {
     y = verificarPagina(doc, y, 12 + cadastral.enderecos.length * 10);
-    doc.fillColor(COR.azul).fontSize(8).font('Helvetica-Bold').text('ENDERECOS', MARGEM, y); y += 10;
+    doc.fillColor(COR.azul).fontSize(8).font('Helvetica-Bold').text('ENDEREÇOS', MARGEM, y); y += 10;
     cadastral.enderecos.forEach((e, i) => {
       y = verificarPagina(doc, y, 11);
       const end = [e.logradouro, e.numero, e.bairro, e.cidade, e.uf, e.cep].filter(Boolean).join(', ');
@@ -170,7 +170,7 @@ function secaoProcessos(doc, y, dados, pedido) {
 
   if (totalP === 0 && processos.escavador_falhou) {
     doc.rect(MARGEM, y, LARGURA, 30).fill('#fef3c7');
-    doc.fillColor('#92400e').fontSize(9).font('Helvetica-Bold').text('Consulta de processos indisponivel.', MARGEM + 8, y + 4);
+    doc.fillColor('#92400e').fontSize(9).font('Helvetica-Bold').text('Consulta de processos indisponível.', MARGEM + 8, y + 4);
     doc.fillColor('#92400e').fontSize(7).font('Helvetica').text(`Escavador retornou ${processos.escavador_status_http || 'erro'}: ${processos.escavador_detalhes || 'falha na autenticação/token'}. Datajud (TJGO/TRF1/STJ/TST) também vazio. Recomenda-se reexecutar a consulta após corrigir o token do Escavador.`, MARGEM + 8, y + 16, { width: LARGURA - 16 });
     y += 40;
   } else if (totalP === 0) {
@@ -260,7 +260,7 @@ function secaoProcessos(doc, y, dados, pedido) {
   }
 
   if (processos.aviso) {
-    doc.fillColor(COR.vermelho).fontSize(7).font('Helvetica-Bold').text(`Atencao: ${processos.aviso}`, MARGEM, y, { width: LARGURA });
+    doc.fillColor(COR.vermelho).fontSize(7).font('Helvetica-Bold').text(`Atenção: ${processos.aviso}`, MARGEM, y, { width: LARGURA });
     y += 14;
   }
   if (processos.nota) {
@@ -287,12 +287,12 @@ function secaoListasNegras(doc, y, dados) {
     todos.forEach(r => {
       y = verificarPagina(doc, y, 18);
       doc.fillColor(COR.vermelho).fontSize(7).font('Helvetica-Bold').text(`${r.tipo}: ${r.sancao}`, MARGEM + 6, y);
-      doc.fillColor(COR.cinza).font('Helvetica').text(`Orgao: ${r.orgao}`, MARGEM + 6, y + 9);
+      doc.fillColor(COR.cinza).font('Helvetica').text(`Órgão: ${r.orgao}`, MARGEM + 6, y + 9);
       y += 20;
     });
   } else {
     doc.rect(MARGEM, y, LARGURA, 20).fill('#dcfce7');
-    doc.fillColor('#14532d').fontSize(9).font('Helvetica').text('Nao consta em lista negra federal (CEIS/CNEP).', MARGEM + 8, y + 4);
+    doc.fillColor('#14532d').fontSize(9).font('Helvetica').text('Não consta em lista negra federal (CEIS/CNEP).', MARGEM + 8, y + 4);
     y += 26;
   }
   return y;
@@ -312,7 +312,7 @@ function secaoListasNegrasDetalhadas(doc, y, dados) {
   const cepim = transparencia.cepim || [];
 
   if (!transparencia.em_lista_negra && ceis.length === 0 && cnep.length === 0 && cepim.length === 0) {
-    return boxPositivo(doc, y, 'NADA CONSTA', 'Nao localizado em CEIS (Cadastro de Empresas Inidoneas), CNEP (Cadastro Nacional de Empresas Punidas) nem CEPIM (Entidades Privadas sem fins lucrativos impedidas).');
+    return boxPositivo(doc, y, 'NADA CONSTA', 'Não localizado em CEIS (Cadastro de Empresas Inidôneas), CNEP (Cadastro Nacional de Empresas Punidas) nem CEPIM (Entidades Privadas sem fins lucrativos impedidas).');
   }
 
   y = verificarPagina(doc, y, 20);
@@ -347,7 +347,7 @@ function secaoScoreCredito(doc, y, dados) {
   const scoreCredito = dados.score_credito || {};
   if (!scoreCredito.score) return y;
 
-  y = secao(doc, 'SCORE DE CREDITO (QUOD)', y);
+  y = secao(doc, 'SCORE DE CRÉDITO (QUOD)', y);
   const scoreCred = Number(scoreCredito.score) || 0;
   const corCred = scoreCred >= 700 ? COR.verde : scoreCred >= 400 ? COR.laranja : COR.vermelho;
   doc.rect(MARGEM, y, LARGURA, 40).fill('#f8fafc').stroke(COR.borda);
@@ -368,38 +368,38 @@ function secaoScoreCredito(doc, y, dados) {
 // ───────────────────────────────────────────────────────────────
 function secaoProtestos(doc, y, dados) {
   const negativacoes = dados.negativacoes || {};
-  y = secao(doc, 'PROTESTOS E NEGATIVACOES', y);
+  y = secao(doc, 'PROTESTOS E NEGATIVAÇÕES', y);
 
-  if (!negativacoes.status || negativacoes.status === 'Nao consultado') {
-    doc.fillColor(COR.cinza).fontSize(8).font('Helvetica').text('Consulta de protestos/negativacoes nao realizada.', MARGEM, y);
+  if (!negativacoes.status || negativacoes.status === 'Nao consultado' || negativacoes.status === 'Não consultado') {
+    doc.fillColor(COR.cinza).fontSize(8).font('Helvetica').text('Consulta de protestos/negativações não realizada.', MARGEM, y);
     return y + 16;
   }
 
-  const temPendencia = negativacoes.total_pendencias > 0 || negativacoes.status === 'Consta Pendencia';
+  const temPendencia = negativacoes.total_pendencias > 0 || negativacoes.status === 'Consta Pendencia' || negativacoes.status === 'Consta Pendência';
   if (!temPendencia) {
     doc.rect(MARGEM, y, LARGURA, 18).fill('#dcfce7');
-    doc.fillColor('#14532d').fontSize(8).font('Helvetica-Bold').text('NADA CONSTA - Nenhum protesto ou negativacao encontrada.', MARGEM + 8, y + 4);
+    doc.fillColor('#14532d').fontSize(8).font('Helvetica-Bold').text('NADA CONSTA - Nenhum protesto ou negativação encontrada.', MARGEM + 8, y + 4);
     return y + 26;
   }
 
   const valorTotal = Number(negativacoes.total_pendencias || 0);
   doc.rect(MARGEM, y, LARGURA, 18).fill('#fee2e2');
   doc.fillColor(COR.vermelho).fontSize(8).font('Helvetica-Bold')
-    .text(`CONSTA PENDENCIA | Valor total: R$ ${valorTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`, MARGEM + 8, y + 4);
+    .text(`CONSTA PENDÊNCIA | Valor total: R$ ${valorTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`, MARGEM + 8, y + 4);
   y += 22;
 
   if (negativacoes.protestos?.length > 0) {
-    doc.fillColor(COR.vermelho).fontSize(7).font('Helvetica-Bold').text('PROTESTOS EM CARTORIO:', MARGEM, y); y += 10;
+    doc.fillColor(COR.vermelho).fontSize(7).font('Helvetica-Bold').text('PROTESTOS EM CARTÓRIO:', MARGEM, y); y += 10;
     negativacoes.protestos.slice(0, 8).forEach(p => {
       y = verificarPagina(doc, y, 14);
       doc.rect(MARGEM, y, 3, 10).fill(COR.vermelho);
-      doc.fillColor('#111827').fontSize(6.5).font('Helvetica-Bold').text(`${p.nome_cartorio || 'Cartorio'}`, MARGEM + 8, y);
+      doc.fillColor('#111827').fontSize(6.5).font('Helvetica-Bold').text(`${p.nome_cartorio || 'Cartório'}`, MARGEM + 8, y);
       doc.fillColor(COR.cinza).font('Helvetica').fontSize(6).text(`R$ ${Number(p.valor_total_protesto || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })} | ${p.situacao || ''}`, MARGEM + 250, y);
       y += 12;
       (p.titulos || []).slice(0, 3).forEach(t => {
         y = verificarPagina(doc, y, 10);
         doc.fillColor(COR.cinza).fontSize(5.5).font('Helvetica')
-          .text(`    ${t.tipo || 'Titulo'} - R$ ${Number(t.valor || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })} - ${t.data || ''}`, MARGEM + 16, y);
+          .text(`    ${t.tipo || 'Título'} - R$ ${Number(t.valor || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })} - ${t.data || ''}`, MARGEM + 16, y);
         y += 9;
       });
     });
@@ -407,11 +407,11 @@ function secaoProtestos(doc, y, dados) {
   }
 
   if (negativacoes.acoes_judiciais?.length > 0) {
-    doc.fillColor(COR.vermelho).fontSize(7).font('Helvetica-Bold').text('ACOES JUDICIAIS:', MARGEM, y); y += 10;
+    doc.fillColor(COR.vermelho).fontSize(7).font('Helvetica-Bold').text('AÇÕES JUDICIAIS:', MARGEM, y); y += 10;
     negativacoes.acoes_judiciais.slice(0, 5).forEach(a => {
       y = verificarPagina(doc, y, 10);
       doc.fillColor('#111827').fontSize(6.5).font('Helvetica')
-        .text(`- ${a.tipo || 'Acao'} | R$ ${Number(a.valor || 0).toLocaleString('pt-BR')} | ${a.data || ''}`, MARGEM + 8, y);
+        .text(`- ${a.tipo || 'Ação'} | R$ ${Number(a.valor || 0).toLocaleString('pt-BR')} | ${a.data || ''}`, MARGEM + 8, y);
       y += 10;
     });
     y += 4;
@@ -437,7 +437,7 @@ function secaoVinculosSocietarios(doc, y, dados) {
   const vinculos = dados.vinculos || {};
   if (!vinculos.total) return y;
 
-  y = secao(doc, 'VINCULOS SOCIETARIOS', y);
+  y = secao(doc, 'VÍNCULOS SOCIETÁRIOS', y);
   doc.fillColor('#111827').fontSize(9).font('Helvetica-Bold').text(`${vinculos.total} empresa(s) vinculada(s)`, MARGEM, y); y += 14;
   (vinculos.empresas || []).slice(0, 10).forEach((emp, i) => {
     y = verificarPagina(doc, y, 24);
@@ -456,7 +456,7 @@ function secaoVinculosSocietarios(doc, y, dados) {
 // ───────────────────────────────────────────────────────────────
 function secaoChecklist(doc, y, checklist) {
   if (!checklist || checklist.length === 0) return y;
-  y = secao(doc, 'VERIFICACOES COMPLEMENTARES', y);
+  y = secao(doc, 'VERIFICAÇÕES COMPLEMENTARES', y);
   checklist.forEach(c => {
     y = verificarPagina(doc, y, 11);
     const prefixo = c.obrigatorio ? '[!]' : '[o]';
@@ -497,7 +497,7 @@ function secaoPerfilFinanceiroPF(doc, y, dados) {
   const scoreQ = Number(scoreCredito.score || 0);
   const totalProcessos = processos.total || 0;
 
-  if (perfilEco.nivel_socioeconomico) y = linha(doc, 'Nivel Socioeconomico', perfilEco.nivel_socioeconomico, y, 12);
+  if (perfilEco.nivel_socioeconomico) y = linha(doc, 'Nível Socioeconômico', perfilEco.nivel_socioeconomico, y, 12);
   if (perfilEco.poder_aquisitivo) y = linha(doc, 'Poder Aquisitivo', perfilEco.poder_aquisitivo, y, 12);
   if (perfilEco.renda_presumida) y = linha(doc, 'Renda Presumida', `R$ ${Number(perfilEco.renda_presumida).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`, y, 12);
   y += 2;
@@ -506,28 +506,28 @@ function secaoPerfilFinanceiroPF(doc, y, dados) {
   let corEndiv = COR.verde;
   if (pendencias > 0 && renda > 0) {
     const razao = pendencias / (renda * 12);
-    if (razao > 5) { nivelEndividamento = 'Critico (divida > 5x renda anual)'; corEndiv = COR.vermelho; }
-    else if (razao > 2) { nivelEndividamento = 'Alto (divida > 2x renda anual)'; corEndiv = COR.vermelho; }
-    else if (razao > 0.5) { nivelEndividamento = 'Moderado (divida > 50% renda anual)'; corEndiv = COR.laranja; }
-    else { nivelEndividamento = 'Baixo (divida < 50% renda anual)'; corEndiv = COR.verde; }
+    if (razao > 5) { nivelEndividamento = 'Crítico (dívida > 5x renda anual)'; corEndiv = COR.vermelho; }
+    else if (razao > 2) { nivelEndividamento = 'Alto (dívida > 2x renda anual)'; corEndiv = COR.vermelho; }
+    else if (razao > 0.5) { nivelEndividamento = 'Moderado (dívida > 50% renda anual)'; corEndiv = COR.laranja; }
+    else { nivelEndividamento = 'Baixo (dívida < 50% renda anual)'; corEndiv = COR.verde; }
   } else if (pendencias > 0) {
-    nivelEndividamento = 'Possui pendencias (renda nao informada)';
+    nivelEndividamento = 'Possui pendências (renda não informada)';
     corEndiv = COR.laranja;
   } else {
-    nivelEndividamento = 'Sem pendencias financeiras';
+    nivelEndividamento = 'Sem pendências financeiras';
     corEndiv = COR.verde;
   }
 
   y += 2;
-  doc.fillColor(COR.azul).fontSize(9).font('Helvetica-Bold').text('ANALISE DE CAPACIDADE FINANCEIRA', MARGEM, y); y += 14;
+  doc.fillColor(COR.azul).fontSize(9).font('Helvetica-Bold').text('ANÁLISE DE CAPACIDADE FINANCEIRA', MARGEM, y); y += 14;
   doc.fillColor(corEndiv).fontSize(8).font('Helvetica-Bold').text(`Endividamento: ${nivelEndividamento}`, MARGEM + 6, y); y += 12;
 
   let capacidade = 'Indeterminada';
   let corCap = COR.cinza;
-  if (scoreQ >= 700 && pendencias === 0) { capacidade = 'ALTA - bom pagador, sem restricoes'; corCap = COR.verde; }
-  else if (scoreQ >= 500 && pendencias === 0) { capacidade = 'MEDIA - score moderado, sem restricoes'; corCap = COR.laranja; }
-  else if (scoreQ >= 500) { capacidade = 'MEDIA COM RESSALVAS - score ok mas possui pendencias'; corCap = COR.laranja; }
-  else if (scoreQ > 0) { capacidade = 'BAIXA - score ruim e/ou pendencias ativas'; corCap = COR.vermelho; }
+  if (scoreQ >= 700 && pendencias === 0) { capacidade = 'ALTA - bom pagador, sem restrições'; corCap = COR.verde; }
+  else if (scoreQ >= 500 && pendencias === 0) { capacidade = 'MÉDIA - score moderado, sem restrições'; corCap = COR.laranja; }
+  else if (scoreQ >= 500) { capacidade = 'MÉDIA COM RESSALVAS - score ok mas possui pendências'; corCap = COR.laranja; }
+  else if (scoreQ > 0) { capacidade = 'BAIXA - score ruim e/ou pendências ativas'; corCap = COR.vermelho; }
   doc.fillColor(corCap).fontSize(8).font('Helvetica-Bold').text(`Capacidade de Pagamento: ${capacidade}`, MARGEM + 6, y); y += 12;
 
   const processosAtivos = (processos.processos || []).filter(p => p.status === 'Ativo').length;
