@@ -14,7 +14,7 @@
 const chrome = require('./chrome');
 const {
   COR, MARGEM, LARGURA, verificarPagina,
-  secao, linha, boxEmIntegracao, formatarBRL, parseValorCausa
+  secao, linha, boxEmIntegracao, formatarBRL, parseValorCausa, faixaRendaQualitativa
 } = require('./helpers');
 const {
   secaoCadastralPF, secaoCadastralPJ,
@@ -93,7 +93,13 @@ function secaoCapacidadePagamento(doc, y, dados, pedido) {
   y = secao(doc, 'CAPACIDADE DE PAGAMENTO', y);
 
   if (pedido.alvo_tipo === 'PF') {
-    y = linha(doc, 'Renda Estimada', cadastral.renda_estimada || perfilEco.renda_presumida ? (cadastral.renda_estimada || `R$ ${Number(perfilEco.renda_presumida).toLocaleString('pt-BR')}`) : 'Em integração (Credify)', y, 13);
+    const rendaSrc = cadastral.renda_numerica != null
+      ? cadastral.renda_numerica
+      : (cadastral.renda_estimada || perfilEco.renda_presumida || null);
+    const valorRenda = rendaSrc
+      ? faixaRendaQualitativa(rendaSrc, { improvavel: !!cadastral.renda_inconsistente })
+      : 'Em integração (Credify)';
+    y = linha(doc, 'Faixa de Renda (estimada)', valorRenda, y, 13);
     y = linha(doc, 'Classe Social', cadastral.classe_social || perfilEco.nivel_socioeconomico || '-', y, 13);
     y = linha(doc, 'Profissão (CBO)', cadastral.profissao || '-', y, 13);
     y = linha(doc, 'Situação RF', cadastral.situacao_rf || '-', y, 13);

@@ -16,7 +16,7 @@
 const chrome = require('./chrome');
 const {
   COR, MARGEM, LARGURA, verificarPagina,
-  secao, linha, boxEmIntegracao, formatarBRL, formatarDoc
+  secao, linha, boxEmIntegracao, formatarBRL, formatarDoc, faixaRendaQualitativa
 } = require('./helpers');
 
 // Mapeamento de tipos do enum (snake_case/lowercase no banco) para
@@ -383,7 +383,13 @@ function blocoPessoa(doc, y, titulo, pessoa) {
   y = linha(doc, 'CPF/CNPJ', formatarDoc(pessoa.documento) || '-', y, 13);
   if (pessoa.data_nascimento) y = linha(doc, 'Nascimento', pessoa.data_nascimento, y, 13);
   if (pessoa.situacao_rf) y = linha(doc, 'Situação RF', pessoa.situacao_rf, y, 13);
-  if (pessoa.renda_estimada) y = linha(doc, 'Renda Estimada', pessoa.renda_estimada, y, 13);
+  if (pessoa.renda_estimada || pessoa.renda_numerica) {
+    const faixa = faixaRendaQualitativa(
+      pessoa.renda_numerica != null ? pessoa.renda_numerica : pessoa.renda_estimada,
+      { improvavel: !!pessoa.renda_inconsistente }
+    );
+    y = linha(doc, 'Faixa de Renda (estimada)', faixa, y, 13);
+  }
   if (pessoa.score_credito) y = linha(doc, 'Score de Crédito', `${pessoa.score_credito}/1000`, y, 13);
   if (pessoa.processos_total != null) y = linha(doc, 'Processos', `${pessoa.processos_total} total${pessoa.processos_ativos != null ? ` (${pessoa.processos_ativos} ativo(s))` : ''}`, y, 13);
   if (pessoa.protestos_valor) y = linha(doc, 'Protestos (valor)', formatarBRL(pessoa.protestos_valor), y, 13);
@@ -636,6 +642,8 @@ function _montarLadoFromAlvo(dados, pedido) {
     data_nascimento: cad.data_nascimento,
     situacao_rf: cad.situacao_rf,
     renda_estimada: cad.renda_estimada,
+    renda_numerica: cad.renda_numerica,
+    renda_inconsistente: cad.renda_inconsistente,
     score_credito: sc.score,
     processos_total: proc.total,
     processos_ativos: (proc.processos || []).filter(p => p.status === 'Ativo').length,
