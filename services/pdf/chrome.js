@@ -33,7 +33,7 @@ function cabecalho(doc, pedido, produto) {
     }
   }
   doc.fillColor(COR.azul).fontSize(22).font('Helvetica-Bold').text('RASTREIA', 0, 16, { width: 595 - MARGEM, align: 'right' });
-  doc.fillColor(COR.cinza).fontSize(7).font('Helvetica').text('Sistema de Inteligencia de Dados', 0, 40, { width: 595 - MARGEM, align: 'right' });
+  doc.fillColor(COR.cinza).fontSize(7).font('Helvetica').text('Sistema de Inteligência de Dados', 0, 40, { width: 595 - MARGEM, align: 'right' });
   doc.fillColor(COR.cinza).fontSize(6.5).text(
     `Emitido em: ${new Date().toLocaleString('pt-BR')}  |  Protocolo: #${pedido.numero || pedido.id.substring(0, 8).toUpperCase()}`,
     0, 52, { width: 595 - MARGEM, align: 'right' }
@@ -96,7 +96,7 @@ function blocoAlvo(doc, y, pedido) {
   y = secao(doc, 'ALVO DA CONSULTA', y);
   y = linha(doc, 'Nome', pedido.alvo_nome, y, 14);
   y = linha(doc, 'CPF / CNPJ', formatarDoc(pedido.alvo_documento), y, 14);
-  y = linha(doc, 'Tipo', pedido.alvo_tipo === 'PF' ? 'Pessoa Fisica' : 'Pessoa Juridica', y, 14);
+  y = linha(doc, 'Tipo', pedido.alvo_tipo === 'PF' ? 'Pessoa Física' : 'Pessoa Jurídica', y, 14);
   y = linha(doc, 'Solicitante', pedido.cliente_nome, y, 20);
   return y;
 }
@@ -198,17 +198,17 @@ function blocoHistoricoScores(doc, y, dados, pedido, score) {
 function blocoFinal(doc, y, fontesExtras) {
   const fontes = [
     'Receita Federal do Brasil (CPF/CNPJ)',
-    'Direct Data - Cadastro, Score QUOD, Protestos e Negativacoes',
+    'Direct Data - Cadastro, Score QUOD, Protestos e Negativações',
     'Escavador - Processos Judiciais estruturados',
     'Datajud CNJ - Processos nos tribunais (TJGO, TRF1, STJ, TST)',
-    'Portal da Transparencia (CGU) - Listas CEIS/CNEP',
+    'Portal da Transparência (CGU) - Listas CEIS/CNEP',
     'CNPJa / CNPJ.ws - Dados empresariais'
   ];
   if (Array.isArray(fontesExtras)) fontesExtras.forEach(f => { if (f) fontes.push(f); });
 
   const fontesJoin = fontes.join('  |  ');
-  const textoLgpd = 'Este documento contem dados pessoais protegidos pela Lei Geral de Protecao de Dados. E PROIBIDO compartilhar, reproduzir ou repassar este relatorio a terceiros sem autorizacao. O uso indevido sujeita o responsavel as sancoes previstas nos artigos 42 a 45 da LGPD, incluindo multa de ate 2% do faturamento. Uso exclusivo para a finalidade declarada no momento da contratacao.';
-  const textoRessalva = 'Caso alguma informacao esteja incorreta ou desatualizada, solicitamos que o titular entre em contato diretamente com a base de dados de origem para solicitar a correcao. A Recobro Recuperacao de Credito nao se responsabiliza por inexatidoes ou desatualizacoes nas bases consultadas.';
+  const textoLgpd = 'Este documento contém dados pessoais protegidos pela Lei Geral de Proteção de Dados. É PROIBIDO compartilhar, reproduzir ou repassar este relatório a terceiros sem autorização. O uso indevido sujeita o responsável às sanções previstas nos artigos 42 a 45 da LGPD, incluindo multa de até 2% do faturamento. Uso exclusivo para a finalidade declarada no momento da contratação.';
+  const textoRessalva = 'Caso alguma informação esteja incorreta ou desatualizada, solicitamos que o titular entre em contato diretamente com a base de dados de origem para solicitar a correção. A Recobro Recuperação de Crédito não se responsabiliza por inexatidões ou desatualizações nas bases consultadas.';
 
   doc.font('Helvetica').fontSize(6);
   const hLgpdTexto = doc.heightOfString(textoLgpd, { width: LARGURA - 16 });
@@ -229,7 +229,7 @@ function blocoFinal(doc, y, fontesExtras) {
   y += hLgpdBox + 6;
 
   doc.fillColor(COR.azul).fontSize(7).font('Helvetica-Bold').text('FONTES DE DADOS CONSULTADAS', MARGEM, y); y += 10;
-  doc.fillColor(COR.cinza).fontSize(6).font('Helvetica').text('As informacoes deste relatorio foram extraidas das seguintes bases de dados publicas e privadas:', MARGEM, y, { width: LARGURA });
+  doc.fillColor(COR.cinza).fontSize(6).font('Helvetica').text('As informações deste relatório foram extraídas das seguintes bases de dados públicas e privadas:', MARGEM, y, { width: LARGURA });
   y += 10;
   doc.fillColor(COR.cinza).fontSize(5.5).font('Helvetica').text(fontesJoin, MARGEM, y, { width: LARGURA });
   y += hFontes + 6;
@@ -238,7 +238,7 @@ function blocoFinal(doc, y, fontesExtras) {
   y += hRessalva + 6;
 
   doc.fillColor(COR.cinza).fontSize(5.5).font('Helvetica')
-    .text('Documento gerado pelo sistema Rastreia. Nao substitui consulta juridica especializada. Recobro Recuperacao de Credito | Anapolis - GO', MARGEM, y, { align: 'center', width: LARGURA });
+    .text('Documento gerado pelo sistema Rastreia. Não substitui consulta jurídica especializada. Recobro Recuperação de Crédito | Anápolis - GO', MARGEM, y, { align: 'center', width: LARGURA });
 
   return y;
 }

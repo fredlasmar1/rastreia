@@ -63,12 +63,12 @@ function secaoAnaliseSocios(doc, y, dados) {
 function secaoSituacaoFiscalCompleta(doc, y, dados) {
   const cadastral = dados.receita_federal || {};
   y = secao(doc, 'SITUAÇÃO FISCAL E REGULARIDADE', y);
-  y = linha(doc, 'Situacao RF', cadastral.situacao || '-', y, 13);
+  y = linha(doc, 'Situação RF', cadastral.situacao || '-', y, 13);
   y = linha(doc, 'CND Federal (PGFN)', dados.pgfn?.status || 'Em integração (Credify)', y, 13);
   y = linha(doc, 'Regularidade FGTS', dados.fgts?.status || 'Em integração (Credify)', y, 13);
-  y = linha(doc, 'Debitos Estaduais (SEFAZ-GO)', dados.debitos_estaduais?.status || 'Em integração (Credify)', y, 13);
-  y = linha(doc, 'Certidao Municipal', dados.cnd_municipal?.status || 'Em integração', y, 13);
-  y = linha(doc, 'Debitos Simples', dados.debitos_simples?.status || 'Em integração', y, 13);
+  y = linha(doc, 'Débitos Estaduais (SEFAZ-GO)', dados.debitos_estaduais?.status || 'Em integração (Credify)', y, 13);
+  y = linha(doc, 'Certidão Municipal', dados.cnd_municipal?.status || 'Em integração', y, 13);
+  y = linha(doc, 'Débitos Simples', dados.debitos_simples?.status || 'Em integração', y, 13);
   return y + 4;
 }
 

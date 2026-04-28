@@ -517,15 +517,15 @@ function gerarChecklist(tipo, dadosAutomaticos) {
     ],
   };
   checklists.due_diligence_imobiliaria = [
-    { item: 'Consultar matricula do imovel no Cartorio de Registro de Imoveis', link: 'https://registradores.onr.org.br', obrigatorio: true },
-    { item: 'Verificar onus e gravames na matricula (hipoteca, alienacao fiduciaria)', link: '', obrigatorio: true },
-    { item: 'Confirmar proprietario registrado na matricula x vendedor', link: '', obrigatorio: true },
-    { item: 'Verificar certidoes negativas do vendedor (Federal, Estadual, Municipal)', link: 'https://solucoes.receita.fazenda.gov.br/servicos/certidaointernet/pf/emitir', obrigatorio: true },
-    { item: 'Confirmar IPTU em dia e inexistencia de debitos municipais', link: '', obrigatorio: true },
+    { item: 'Consultar matrícula do imóvel no Cartório de Registro de Imóveis', link: 'https://registradores.onr.org.br', obrigatorio: true },
+    { item: 'Verificar ônus e gravames na matrícula (hipoteca, alienação fiduciária)', link: '', obrigatorio: true },
+    { item: 'Confirmar proprietário registrado na matrícula x vendedor', link: '', obrigatorio: true },
+    { item: 'Verificar certidões negativas do vendedor (Federal, Estadual, Municipal)', link: 'https://solucoes.receita.fazenda.gov.br/servicos/certidaointernet/pf/emitir', obrigatorio: true },
+    { item: 'Confirmar IPTU em dia e inexistência de débitos municipais', link: '', obrigatorio: true },
     { item: 'Verificar processos do vendedor no Escavador', link: 'https://painel.escavador.com', obrigatorio: true },
-    { item: 'Solicitar parecer juridico do Balladao Advogados', link: '', obrigatorio: true },
-    { item: 'Verificar se imovel esta em area de protecao ambiental', link: '', obrigatorio: false },
-    { item: 'Confirmar inexistencia de inventario/usucapiao sobre o imovel', link: '', obrigatorio: false },
+    { item: 'Solicitar parecer jurídico do Balladão Advogados', link: '', obrigatorio: true },
+    { item: 'Verificar se imóvel está em área de proteção ambiental', link: '', obrigatorio: false },
+    { item: 'Confirmar inexistência de inventário/usucapião sobre o imóvel', link: '', obrigatorio: false },
   ];
 
   return checklists[tipo] || [];

@@ -95,13 +95,13 @@ function secaoCapacidadePagamento(doc, y, dados, pedido) {
   if (pedido.alvo_tipo === 'PF') {
     y = linha(doc, 'Renda Estimada', cadastral.renda_estimada || perfilEco.renda_presumida ? (cadastral.renda_estimada || `R$ ${Number(perfilEco.renda_presumida).toLocaleString('pt-BR')}`) : 'Em integração (Credify)', y, 13);
     y = linha(doc, 'Classe Social', cadastral.classe_social || perfilEco.nivel_socioeconomico || '-', y, 13);
-    y = linha(doc, 'Profissao (CBO)', cadastral.profissao || '-', y, 13);
-    y = linha(doc, 'Situacao RF', cadastral.situacao_rf || '-', y, 13);
+    y = linha(doc, 'Profissão (CBO)', cadastral.profissao || '-', y, 13);
+    y = linha(doc, 'Situação RF', cadastral.situacao_rf || '-', y, 13);
   } else {
     y = linha(doc, 'Faturamento Presumido', dados.faturamento_presumido?.valor_formatado || 'Em integração (Credify)', y, 13);
     y = linha(doc, 'Porte', cadastral.porte || '-', y, 13);
     y = linha(doc, 'Regime Tributário', cadastral.simples_nacional || cadastral.regime_tributario || '-', y, 13);
-    y = linha(doc, 'Situacao RF', cadastral.situacao || '-', y, 13);
+    y = linha(doc, 'Situação RF', cadastral.situacao || '-', y, 13);
   }
   if (scoreCredito.score) {
     y = linha(doc, 'Score QUOD', `${scoreCredito.score}/1000 (${scoreCredito.faixa || '-'})`, y, 13);

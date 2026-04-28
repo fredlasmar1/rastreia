@@ -19,6 +19,33 @@ const {
   secao, linha, boxEmIntegracao, formatarBRL, formatarDoc
 } = require('./helpers');
 
+// Mapeamento de tipos do enum (snake_case/lowercase no banco) para
+// rótulos em português acentuado para exibição no PDF.
+const LABELS_DOC_TIPO = {
+  matricula: 'MATRÍCULA',
+  escritura: 'ESCRITURA',
+  iptu: 'IPTU',
+  contrato: 'CONTRATO',
+  certidao_onus: 'CERTIDÃO DE ÔNUS',
+  itbi: 'ITBI',
+  outro: 'OUTRO'
+};
+const LABELS_ONUS_TIPO = {
+  alienacao_fiduciaria: 'ALIENAÇÃO FIDUCIÁRIA',
+  hipoteca: 'HIPOTECA',
+  penhora: 'PENHORA',
+  arresto: 'ARRESTO',
+  usufruto: 'USUFRUTO'
+};
+function rotularTipoDoc(t) {
+  const k = String(t || '').toLowerCase();
+  return LABELS_DOC_TIPO[k] || (t ? String(t).toUpperCase() : 'OUTRO');
+}
+function rotularTipoOnus(t) {
+  const k = String(t || '').toLowerCase();
+  return LABELS_ONUS_TIPO[k] || (t ? String(t).toUpperCase().replace(/_/g, ' ') : 'GRAVAME');
+}
+
 // ─── Blocos de análise IA (matrícula/escritura via Claude) ────────
 function corSeveridade(sev) {
   const s = (sev || '').toLowerCase();
@@ -49,7 +76,7 @@ function blocoDocumentosAnalisados(doc, y, analise) {
     const bg = irrel ? '#fef3c7' : '#f3f4f6';
     const fg = irrel ? '#92400e' : '#111827';
     doc.rect(MARGEM, y, LARGURA, 16).fill(bg).stroke('#e5e7eb');
-    const tipoLbl = irrel ? `${(d.tipo || 'outro').toUpperCase()} (não reconhecido)` : (d.tipo || '-').toUpperCase();
+    const tipoLbl = irrel ? `${rotularTipoDoc(d.tipo)} (não reconhecido)` : rotularTipoDoc(d.tipo);
     doc.fillColor(fg).fontSize(7.5).font('Helvetica-Bold').text(tipoLbl, MARGEM + 6, y + 4, { width: 160, lineBreak: false });
     const linhaResumo = [
       d.filename || '-',
@@ -125,7 +152,7 @@ function blocoOnusIA(doc, y, analise) {
     const bg = ativo ? '#fef2f2' : '#f9fafb';
     const borda = ativo ? '#fecaca' : '#e5e7eb';
     doc.rect(MARGEM, y, LARGURA, 20).fill(bg).stroke(borda);
-    const tipo = (o.tipo || 'gravame').toString().toUpperCase();
+    const tipo = rotularTipoOnus(o.tipo);
     const tag = ativo ? '[ATIVO]' : '[BAIXADO]';
     doc.fillColor(ativo ? COR.vermelho : '#6b7280').fontSize(8).font('Helvetica-Bold').text(`${tipo}  ${tag}`, MARGEM + 6, y + 4, { width: 200, lineBreak: false });
     const linha2 = [
@@ -150,9 +177,9 @@ function blocoTransmissoesIA(doc, y, analise) {
     doc.fillColor('#111827').fontSize(7.5).font('Helvetica-Bold').text(cab, MARGEM + 6, y + 3, { width: LARGURA - 12, lineBreak: false });
     const linha2 = [
       `${t.de_nome || '-'}${t.de_cpf_cnpj ? ' (' + formatarDoc(t.de_cpf_cnpj) + ')' : ''}`,
-      '→',
+      '->',
       `${t.para_nome || '-'}${t.para_cpf_cnpj ? ' (' + formatarDoc(t.para_cpf_cnpj) + ')' : ''}`,
-      t.valor != null ? `· ${formatarBRL(t.valor)}` : ''
+      t.valor != null ? `- ${formatarBRL(t.valor)}` : ''
     ].join(' ');
     doc.fillColor('#374151').fontSize(7).font('Helvetica').text(linha2, MARGEM + 6, y + 11, { width: LARGURA - 12, lineBreak: false });
     y += 18;
@@ -225,13 +252,13 @@ function blocoPessoa(doc, y, titulo, pessoa) {
   y = linha(doc, 'Nome', pessoa.nome || '-', y, 13);
   y = linha(doc, 'CPF/CNPJ', formatarDoc(pessoa.documento) || '-', y, 13);
   if (pessoa.data_nascimento) y = linha(doc, 'Nascimento', pessoa.data_nascimento, y, 13);
-  if (pessoa.situacao_rf) y = linha(doc, 'Situacao RF', pessoa.situacao_rf, y, 13);
+  if (pessoa.situacao_rf) y = linha(doc, 'Situação RF', pessoa.situacao_rf, y, 13);
   if (pessoa.renda_estimada) y = linha(doc, 'Renda Estimada', pessoa.renda_estimada, y, 13);
-  if (pessoa.score_credito) y = linha(doc, 'Score Credito', `${pessoa.score_credito}/1000`, y, 13);
+  if (pessoa.score_credito) y = linha(doc, 'Score de Crédito', `${pessoa.score_credito}/1000`, y, 13);
   if (pessoa.processos_total != null) y = linha(doc, 'Processos', `${pessoa.processos_total} total${pessoa.processos_ativos != null ? ` (${pessoa.processos_ativos} ativo(s))` : ''}`, y, 13);
   if (pessoa.protestos_valor) y = linha(doc, 'Protestos (valor)', formatarBRL(pessoa.protestos_valor), y, 13);
   if (pessoa.penhoras_ativas) y = linha(doc, 'Penhoras Ativas', String(pessoa.penhoras_ativas), y, 13);
-  if (pessoa.outros_imoveis) y = linha(doc, 'Outros Imoveis', String(pessoa.outros_imoveis), y, 13);
+  if (pessoa.outros_imoveis) y = linha(doc, 'Outros Imóveis', String(pessoa.outros_imoveis), y, 13);
   return y + 6;
 }
 
@@ -291,10 +318,10 @@ function secaoImovel(doc, y, dados, pedido) {
     );
   }
 
-  if (imovel.endereco) y = linha(doc, 'Endereco', imovel.endereco, y, 13);
-  if (imovel.matricula) y = linha(doc, 'Matricula', imovel.matricula, y, 13);
-  if (imovel.cartorio) y = linha(doc, 'Cartorio', imovel.cartorio, y, 13);
-  if (imovel.area_total) y = linha(doc, 'Area Total', `${imovel.area_total} m²`, y, 13);
+  if (imovel.endereco) y = linha(doc, 'Endereço', imovel.endereco, y, 13);
+  if (imovel.matricula) y = linha(doc, 'Matrícula', imovel.matricula, y, 13);
+  if (imovel.cartorio) y = linha(doc, 'Cartório', imovel.cartorio, y, 13);
+  if (imovel.area_total) y = linha(doc, 'Área Total', `${imovel.area_total} m²`, y, 13);
   if (imovel.valor_venal) y = linha(doc, 'Valor Venal', formatarBRL(imovel.valor_venal), y, 13);
   if (imovel.valor_mercado) y = linha(doc, 'Valor de Mercado', formatarBRL(imovel.valor_mercado), y, 13);
 
