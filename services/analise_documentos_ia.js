@@ -139,6 +139,49 @@ const SCHEMA_CRUZAMENTO = {
         },
         required: ['severidade', 'categoria', 'titulo', 'descricao']
       }
+    },
+    analise_matricula: {
+      type: ['object', 'null'],
+      description: 'Análise didática (linguagem leiga) da matrícula para o cliente final. Só preencher se houver pelo menos 1 documento do tipo matrícula entre os processados.',
+      properties: {
+        status: {
+          type: 'string',
+          enum: ['ok', 'atencao', 'critico'],
+          description: 'ok = matrícula sem problemas que impeçam a transação; atencao = problemas contornáveis; critico = problemas que devem bloquear a compra até saneamento.'
+        },
+        resumo: {
+          type: 'string',
+          description: 'Frase curta (1-2 linhas) em linguagem simples, sem juridiquês, resumindo a situação da matrícula para um cliente leigo.'
+        },
+        problemas: {
+          type: 'array',
+          description: 'Lista de problemas detectados na matrícula. Vazio se status=ok.',
+          items: {
+            type: 'object',
+            properties: {
+              tipo: {
+                type: 'string',
+                description: 'Identificador curto em snake_case. Ex.: alienacao_fiduciaria_ativa, penhora, hipoteca_nao_baixada, usufruto_vitalicio, acao_reipersecutoria, cadeia_dominial_inconsistente, area_divergente, proprietario_diverge_vendedor, indisponibilidade.'
+              },
+              descricao: {
+                type: 'string',
+                description: 'Descrição clara do problema em linguagem simples (sem juridiquês), explicando ao cliente leigo o que foi encontrado e por que importa.'
+              },
+              solucao: {
+                type: 'string',
+                description: 'Passo prático que o comprador deve tomar para resolver o problema, em linguagem simples e direta.'
+              },
+              severidade: {
+                type: 'string',
+                enum: ['atencao', 'critico'],
+                description: 'critico = bloqueia a compra até resolução; atencao = pode prosseguir com ressalvas/cláusulas.'
+              }
+            },
+            required: ['tipo', 'descricao', 'solucao', 'severidade']
+          }
+        }
+      },
+      required: ['status', 'resumo', 'problemas']
     }
   },
   required: ['resumo_executivo', 'alertas']
@@ -370,8 +413,34 @@ async function cruzarDados(client, contexto) {
     'diligence. Foque em: divergência de proprietários, possível ocultação patrimonial',
     'via PJ vinculada, ônus do documento vs bases públicas, endereço do imóvel cruzado',
     'com veículos/processos. Cada problema vira um alerta classificado por severidade',
-    'e categoria. Se nada divergir, devolva alertas vazios e um resumo positivo.'
-  ].join(' ');
+    'e categoria. Se nada divergir, devolva alertas vazios e um resumo positivo.',
+    '',
+    'ALÉM DISSO, preencha o campo `analise_matricula` SEMPRE QUE houver pelo menos um',
+    'documento do tipo "matricula" entre os processados (veja `documentos_processados`).',
+    'Esse campo é exibido diretamente para o cliente final (leigo, sem formação jurídica)',
+    'no PDF de due diligence — ele precisa entender o que foi encontrado na matrícula',
+    'e o que precisa fazer. Regras:',
+    '- Use português simples, frases curtas, sem juridiquês ("registro de propriedade"',
+    '  em vez de "domínio", "dívida com banco" em vez de "alienação fiduciária", etc).',
+    '- Se a matrícula está limpa (sem ônus ativos, sem litígios, cadeia dominial coerente,',
+    '  proprietários conferem com o vendedor anunciado): status="ok", problemas=[],',
+    '  e `resumo` confirmando conformidade ("Matrícula analisada e está em conformidade.',
+    '  Não foram identificados problemas que impeçam a transação.").',
+    '- Se há ônus ATIVO (alienação fiduciária não baixada, hipoteca não baixada, penhora,',
+    '  arresto, indisponibilidade): para CADA um, gere um item em `problemas` com tipo,',
+    '  descricao em linguagem simples, solucao prática (o que pedir ao vendedor/cartório/',
+    '  banco), e severidade="critico".',
+    '- Outros problemas que devem virar item em `problemas`: usufruto vitalício',
+    '  (severidade depende do contexto), ação reipersecutória ou litígio sobre o imóvel',
+    '  (critico), cadeia dominial com lacunas/divergência de nomes ou CPFs (atencao),',
+    '  área divergente entre matrícula e IPTU (atencao), proprietário da matrícula',
+    '  diferente do vendedor anunciado (critico).',
+    '- O `status` geral segue a maior severidade dos problemas: se houver QUALQUER',
+    '  "critico", status="critico"; senão se houver "atencao", status="atencao";',
+    '  caso contrário status="ok".',
+    '- Se NENHUM documento do tipo "matricula" foi processado, deixe `analise_matricula`',
+    '  como null (não invente análise sem matrícula).'
+  ].join('\n');
 
   const txt = [
     'CONTEXTO DA DUE DILIGENCE:',
@@ -695,6 +764,19 @@ async function analisarDocumentosImovel(pedidoId) {
       documentos_processados: documentosProcessados,
       resumo_executivo: cruzamento.resumo_executivo || '',
       alertas: Array.isArray(cruzamento.alertas) ? cruzamento.alertas : [],
+      analise_matricula: (cruzamento.analise_matricula && typeof cruzamento.analise_matricula === 'object')
+        ? {
+            status: ['ok', 'atencao', 'critico'].includes(cruzamento.analise_matricula.status)
+              ? cruzamento.analise_matricula.status
+              : 'ok',
+            resumo: typeof cruzamento.analise_matricula.resumo === 'string'
+              ? cruzamento.analise_matricula.resumo
+              : '',
+            problemas: Array.isArray(cruzamento.analise_matricula.problemas)
+              ? cruzamento.analise_matricula.problemas.filter(p => p && typeof p === 'object')
+              : []
+          }
+        : null,
       identificacao: {
         matricula_numero: dadosExtraidos.matricula?.numero || null,
         cartorio: dadosExtraidos.matricula?.cartorio || null,

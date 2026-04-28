@@ -195,6 +195,128 @@ function blocoTransmissoesIA(doc, y, analise) {
   return y + 4;
 }
 
+// Rótulos amigáveis para os tipos retornados pela IA em analise_matricula.problemas[].tipo
+const LABELS_PROBLEMA_MATRICULA = {
+  alienacao_fiduciaria_ativa: 'Imóvel ainda dado em garantia ao banco (alienação fiduciária ativa)',
+  alienacao_fiduciaria: 'Imóvel ainda dado em garantia ao banco (alienação fiduciária ativa)',
+  hipoteca_nao_baixada: 'Hipoteca não baixada na matrícula',
+  hipoteca: 'Hipoteca não baixada na matrícula',
+  penhora: 'Penhora registrada na matrícula',
+  arresto: 'Arresto registrado na matrícula',
+  indisponibilidade: 'Indisponibilidade de bens',
+  usufruto_vitalicio: 'Usufruto vitalício de terceiro',
+  usufruto: 'Usufruto registrado',
+  acao_reipersecutoria: 'Ação judicial sobre o imóvel (reipersecutória/litígio)',
+  litigio: 'Litígio judicial envolvendo o imóvel',
+  cadeia_dominial_inconsistente: 'Cadeia dominial com inconsistências',
+  area_divergente: 'Área divergente entre matrícula e IPTU',
+  proprietario_diverge_vendedor: 'Proprietário registrado difere do vendedor'
+};
+function rotularProblemaMatricula(t) {
+  const k = String(t || '').toLowerCase();
+  if (LABELS_PROBLEMA_MATRICULA[k]) return LABELS_PROBLEMA_MATRICULA[k];
+  // Fallback: snake_case -> Sentença
+  if (!t) return 'Problema identificado';
+  return String(t).replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+}
+
+// Bloco didático "ANÁLISE DA MATRÍCULA" para o cliente final.
+// Só renderiza quando a matrícula foi efetivamente analisada pela IA.
+// Fallback gracioso: se `analise_matricula` ausente (pedidos antigos),
+// retorna y sem renderizar — não quebra o PDF.
+function blocoAnaliseMatricula(doc, y, analise) {
+  if (!temMatriculaAnalisada(analise)) return y;
+  const am = analise && analise.analise_matricula;
+  if (!am || typeof am !== 'object') return y;
+
+  y = secao(doc, 'ANÁLISE DA MATRÍCULA', y);
+
+  const status = String(am.status || '').toLowerCase();
+  const problemas = Array.isArray(am.problemas) ? am.problemas : [];
+
+  if (status === 'ok' && !problemas.length) {
+    const titulo = '✓ Matrícula analisada e está em conformidade';
+    const desc = (am.resumo && String(am.resumo).trim())
+      || 'Não foram identificados problemas que impeçam a transação.';
+    const hDesc = doc.heightOfString(desc, { width: LARGURA - 20, fontSize: 8 });
+    const altura = Math.max(34, hDesc + 26);
+    y = verificarPagina(doc, y, altura + 4);
+    doc.rect(MARGEM, y, LARGURA, altura).fill('#dcfce7').stroke('#86efac');
+    doc.rect(MARGEM, y, 4, altura).fill('#16a34a');
+    doc.fillColor('#065f46').fontSize(10).font('Helvetica-Bold').text(titulo, MARGEM + 12, y + 7, { width: LARGURA - 20 });
+    doc.fillColor('#065f46').fontSize(8).font('Helvetica').text(desc, MARGEM + 12, y + 22, { width: LARGURA - 20 });
+    return y + altura + 6;
+  }
+
+  // Há problemas: resumo no topo + cards com Problema + Solução
+  const resumoTxt = (am.resumo && String(am.resumo).trim()) || '';
+  if (resumoTxt) {
+    const hRes = doc.heightOfString(resumoTxt, { width: LARGURA - 20, fontSize: 8.5 });
+    const aRes = Math.max(22, hRes + 12);
+    y = verificarPagina(doc, y, aRes + 4);
+    const corStatus = status === 'critico'
+      ? { bg: '#fee2e2', borda: '#fecaca', barra: COR.vermelho, fg: '#991b1b' }
+      : { bg: '#fef3c7', borda: '#fde68a', barra: COR.laranja, fg: '#92400e' };
+    doc.rect(MARGEM, y, LARGURA, aRes).fill(corStatus.bg).stroke(corStatus.borda);
+    doc.rect(MARGEM, y, 4, aRes).fill(corStatus.barra);
+    doc.fillColor(corStatus.fg).fontSize(8.5).font('Helvetica').text(resumoTxt, MARGEM + 12, y + 6, { width: LARGURA - 20 });
+    y += aRes + 6;
+  }
+
+  if (!problemas.length) return y + 2;
+
+  for (const p of problemas) {
+    const sev = String(p?.severidade || '').toLowerCase() === 'critico' ? 'critico' : 'atencao';
+    const cores = sev === 'critico'
+      ? { bg: '#fef2f2', borda: '#fecaca', barra: COR.vermelho, fgTit: '#991b1b', rotulo: 'CRÍTICO' }
+      : { bg: '#fff7ed', borda: '#fed7aa', barra: COR.laranja, fgTit: '#9a3412', rotulo: 'ATENÇÃO' };
+
+    const titulo = rotularProblemaMatricula(p?.tipo);
+    const descricao = (p?.descricao && String(p.descricao).trim()) || '';
+    const solucao = (p?.solucao && String(p.solucao).trim()) || '';
+
+    const larguraTxt = LARGURA - 20;
+    doc.font('Helvetica').fontSize(8);
+    const hDesc = descricao ? doc.heightOfString(descricao, { width: larguraTxt, fontSize: 8 }) : 0;
+    const labelSol = 'Como resolver: ';
+    const hSolLabel = solucao ? 12 : 0;
+    const hSolTxt = solucao ? doc.heightOfString(labelSol + solucao, { width: larguraTxt, fontSize: 8 }) : 0;
+    const altura = 22 // título + rótulo
+      + (hDesc ? hDesc + 4 : 0)
+      + (solucao ? hSolTxt + 8 : 0)
+      + 10;
+
+    y = verificarPagina(doc, y, altura + 6);
+    doc.rect(MARGEM, y, LARGURA, altura).fill(cores.bg).stroke(cores.borda);
+    doc.rect(MARGEM, y, 4, altura).fill(cores.barra);
+
+    // Rótulo de severidade
+    doc.rect(MARGEM + 12, y + 6, 56, 12).fill(cores.barra);
+    doc.fillColor('#fff').fontSize(7).font('Helvetica-Bold').text(cores.rotulo, MARGEM + 12, y + 9, { width: 56, align: 'center' });
+
+    // Título do problema
+    doc.fillColor(cores.fgTit).fontSize(9).font('Helvetica-Bold').text(titulo, MARGEM + 74, y + 7, { width: LARGURA - 84 });
+
+    let yCursor = y + 22;
+
+    if (descricao) {
+      doc.fillColor('#374151').fontSize(8).font('Helvetica').text(descricao, MARGEM + 12, yCursor, { width: larguraTxt });
+      yCursor += hDesc + 4;
+    }
+
+    if (solucao) {
+      // "Como resolver:" em negrito, seguido do texto da solução
+      doc.fillColor(cores.fgTit).fontSize(8).font('Helvetica-Bold').text('Como resolver: ', MARGEM + 12, yCursor, { continued: true, width: larguraTxt });
+      doc.fillColor('#111827').font('Helvetica').text(solucao, { width: larguraTxt });
+      yCursor += hSolTxt + 4;
+    }
+
+    y += altura + 6;
+  }
+
+  return y + 2;
+}
+
 function blocoIdentificacaoIA(doc, y, analise) {
   if (!analise) return y;
   y = secao(doc, 'IDENTIFICAÇÃO DO IMÓVEL (IA)', y);
@@ -553,9 +675,12 @@ function render(doc, pedido, dados, score, checklist, produto) {
   y = secaoVendedor(doc, y, dados, pedido);
   y = secaoImovel(doc, y, dados, pedido, analise);
 
-  // Identificação + Proprietários + Ônus + Transmissões extraídos pela IA
+  // Identificação + ANÁLISE DA MATRÍCULA (didática) + Proprietários + Ônus + Transmissões extraídos pela IA
   if (analise) {
     y = blocoIdentificacaoIA(doc, y, analise);
+    // Bloco didático para o cliente final: status + problemas + soluções.
+    // Renderiza somente quando há matrícula analisada pela IA.
+    y = blocoAnaliseMatricula(doc, y, analise);
     y = blocoProprietariosIA(doc, y, analise);
     y = blocoOnusIA(doc, y, analise);
     y = blocoTransmissoesIA(doc, y, analise);
