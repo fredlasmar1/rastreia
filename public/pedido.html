@@ -63,6 +63,9 @@
   function esc(str) { if (!str) return ''; const d = document.createElement('div'); d.textContent = String(str); return d.innerHTML; }
 
   let pedidoAtual;
+  // Trava em memória: enquanto /consultar está em voo, não deixamos o operador
+  // disparar /concluir (causava PDF gerado antes das APIs terminarem).
+  let consultasEmAndamento = false;
 
   async function carregar() {
     const data = await api(`/api/pedidos/${id}`);
@@ -419,18 +422,26 @@
   }
 
   async function executarConsultas() {
-    document.getElementById('btn-consultar').textContent = '⏳ Consultando... aguarde';
-    document.getElementById('btn-consultar').disabled = true;
+    consultasEmAndamento = true;
+    const btnConsultar = document.getElementById('btn-consultar');
+    if (btnConsultar) {
+      btnConsultar.textContent = '⏳ Consultando... aguarde';
+      btnConsultar.disabled = true;
+    }
     mostrarAlerta('Executando consultas automáticas nas bases de dados...', 'info');
-    const data = await api(`/api/pedidos/${id}/consultar`, { method: 'POST', body: '{}' });
-    if (data?.ok) {
-      mostrarAlerta('Consultas concluídas! Verifique os dados abaixo.', 'success');
-      setTimeout(carregar, 1500);
-    } else if (data?.erro === 'cpf_ilegivel') {
-      mostrarAlerta(data.mensagem || 'IA não extraiu CPF dos documentos. Informe manualmente abaixo.', 'error');
-      setTimeout(carregar, 800);
-    } else {
-      mostrarAlerta('Erro nas consultas: ' + (data?.erro || 'Desconhecido'), 'error');
+    try {
+      const data = await api(`/api/pedidos/${id}/consultar`, { method: 'POST', body: '{}' });
+      if (data?.ok) {
+        mostrarAlerta('Consultas concluídas! Verifique os dados abaixo.', 'success');
+        setTimeout(carregar, 1500);
+      } else if (data?.erro === 'cpf_ilegivel') {
+        mostrarAlerta(data.mensagem || 'IA não extraiu CPF dos documentos. Informe manualmente abaixo.', 'error');
+        setTimeout(carregar, 800);
+      } else {
+        mostrarAlerta('Erro nas consultas: ' + (data?.erro || 'Desconhecido'), 'error');
+      }
+    } finally {
+      consultasEmAndamento = false;
     }
   }
 
@@ -440,12 +451,19 @@
   }
 
   async function concluir() {
+    if (consultasEmAndamento) {
+      mostrarAlerta('Aguarde as consultas automáticas terminarem antes de gerar o PDF.', 'error');
+      return;
+    }
     const observacoes = document.getElementById('observacoes').value;
     mostrarAlerta('Gerando PDF...', 'info');
     const data = await api(`/api/pedidos/${id}/concluir`, { method: 'POST', body: JSON.stringify({ observacoes }) });
     if (data?.ok) {
       mostrarAlerta('✅ Relatório gerado e cliente notificado!', 'success');
       setTimeout(carregar, 1500);
+    } else if (data?.erro === 'cpf_ilegivel') {
+      mostrarAlerta(data.mensagem || 'CPF ilegível — informe manualmente o alvo antes de concluir.', 'error');
+      setTimeout(carregar, 800);
     } else {
       mostrarAlerta('Erro: ' + (data?.erro || 'Desconhecido'), 'error');
     }

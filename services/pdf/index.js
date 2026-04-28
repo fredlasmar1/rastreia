@@ -17,6 +17,7 @@ const PDFDocument = require('pdfkit');
 const fs = require('fs');
 const path = require('path');
 const { PRODUTOS, calcularScore, gerarChecklist } = require('../produtos');
+const storagePaths = require('../storage_paths');
 
 const renderers = {
   dossie_pf: require('./dossie_pf').render,
@@ -42,8 +43,9 @@ function gerarDossie(pedido, dadosDB) {
     try {
       const doc = new PDFDocument({ margin: 50, size: 'A4' });
       const filename = `rastreia_${pedido.tipo}_${pedido.id.substring(0, 8)}_${Date.now()}.pdf`;
-      const dirRelatorios = path.join(__dirname, '../../public/relatorios');
-      if (!fs.existsSync(dirRelatorios)) fs.mkdirSync(dirRelatorios, { recursive: true });
+      // BUG #2: usa RELATORIOS_DIR (Railway Volume) com fallback ./public/relatorios em dev.
+      const dirRelatorios = storagePaths.RELATORIOS_DIR;
+      storagePaths.garantirDiretorio(dirRelatorios);
       const filepath = path.join(dirRelatorios, filename);
       const stream = fs.createWriteStream(filepath);
       doc.pipe(stream);

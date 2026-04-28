@@ -14,9 +14,11 @@ const { PRODUTOS } = require('../services/produtos');
 const credifyCatalogo = require('../services/credify/catalogo');
 const analiseIA = require('../services/analise_documentos_ia');
 const pedidoAlvos = require('../services/pedido_alvos');
+const storagePaths = require('../services/storage_paths');
 
 // ─── Upload de documentos do imóvel (Due Diligence Imobiliária) ───
-const UPLOADS_ROOT = path.join(__dirname, '..', 'uploads', 'imoveis');
+// BUG #2: respeita UPLOADS_DIR (Railway Volume) com fallback pra ./uploads/imoveis em dev.
+const UPLOADS_ROOT = storagePaths.UPLOADS_DIR;
 const MIMES_DOCUMENTOS = new Set([
   'application/pdf', 'image/jpeg', 'image/jpg', 'image/png', 'image/webp'
 ]);
@@ -580,84 +582,89 @@ router.patch('/:id/iniciar', autenticar, async (req, res) => {
   }
 });
 
+// Lógica compartilhada das consultas externas — usada por /consultar e por /concluir.
+// Retorna { ok: true, resultados, analise_ia } ou { erro, mensagem, status } em caso
+// de bloqueio (ex.: cpf_ilegivel). Nunca lança — encapsula erros operacionais.
+async function executarConsultasParaPedido(pedidoId, usuarioId) {
+  const pResult = await pool.query('SELECT * FROM pedidos WHERE id = $1', [pedidoId]);
+  if (pResult.rows.length === 0) return { erro: 'pedido_nao_encontrado', status: 404 };
+  let pedido = pResult.rows[0];
+
+  // V3: Due Diligence Imobiliária com CPF opcional + documentos.
+  // Se está aguardando extração, roda a IA primeiro para popular pedido_alvos
+  // a partir dos documentos. Só depois roda as consultas externas.
+  if (pedido.tipo === 'due_diligence_imobiliaria') {
+    const totalAlvos = await pedidoAlvos.contarAlvos(pedido.id);
+    const precisaExtrair = pedido.analise_ia_status === 'aguardando_extracao' || totalAlvos === 0;
+    if (precisaExtrair) {
+      console.log(`[v3] pedido ${pedido.id}: rodando análise IA antes das consultas (extração de alvos)`);
+      const out = await analiseIA.analisarDocumentosImovel(pedido.id);
+      if (out.status === 'cpf_ilegivel') {
+        return {
+          erro: 'cpf_ilegivel',
+          mensagem: out.erro || 'IA não conseguiu extrair CPF/CNPJ dos documentos. Informe manualmente em /alvos.',
+          status: 400
+        };
+      }
+      const refresh = await pool.query('SELECT * FROM pedidos WHERE id = $1', [pedido.id]);
+      pedido = refresh.rows[0];
+    }
+    if (pedido.analise_ia_status === 'cpf_ilegivel') {
+      return {
+        erro: 'cpf_ilegivel',
+        mensagem: pedido.erro_processamento || 'Pedido bloqueado: CPF ilegível. Informe manualmente em /alvos.',
+        status: 400
+      };
+    }
+  }
+
+  const nomePlaceholder = !pedido.alvo_nome || pedido.alvo_nome === 'A identificar';
+  if (nomePlaceholder) pedido.alvo_nome = '';
+
+  const resultados = await executarConsultaCompleta(pedido);
+
+  if (nomePlaceholder) {
+    const cad = resultados.receita_federal || {};
+    const nomeReal = cad.nome || cad.razao_social || cad.nome_fantasia || null;
+    if (nomeReal) {
+      await pool.query('UPDATE pedidos SET alvo_nome = $1 WHERE id = $2', [nomeReal, pedido.id]);
+      pedido.alvo_nome = nomeReal;
+    }
+  }
+
+  await pool.query('DELETE FROM dados_consulta WHERE pedido_id = $1', [pedido.id]);
+  for (const [fonte, dados] of Object.entries(resultados)) {
+    await pool.query(
+      'INSERT INTO dados_consulta (pedido_id, fonte, dados) VALUES ($1, $2, $3)',
+      [pedido.id, fonte, JSON.stringify(dados)]
+    );
+  }
+
+  await pool.query('INSERT INTO logs (pedido_id, usuario_id, acao) VALUES ($1, $2, $3)',
+    [pedido.id, usuarioId, 'Consultas automáticas executadas']);
+
+  let analiseOut = null;
+  if (pedido.tipo === 'due_diligence_imobiliaria') {
+    try {
+      analiseOut = await analiseIA.analisarDocumentosImovel(pedido.id);
+      await pool.query('INSERT INTO logs (pedido_id, usuario_id, acao, detalhes) VALUES ($1, $2, $3, $4)',
+        [pedido.id, usuarioId, 'Análise IA documentos', `status: ${analiseOut.status}`]);
+    } catch (eIa) {
+      console.warn('[pedidos] análise IA falhou (não bloqueia):', eIa.message);
+    }
+  }
+
+  return { ok: true, resultados, analise_ia: analiseOut };
+}
+
 // Executar consultas automáticas
 router.post('/:id/consultar', autenticar, async (req, res) => {
   try {
-    const pResult = await pool.query('SELECT * FROM pedidos WHERE id = $1', [req.params.id]);
-    if (pResult.rows.length === 0) return res.status(404).json({ erro: 'Pedido não encontrado' });
-    let pedido = pResult.rows[0];
-
-    // V3: Due Diligence Imobiliária com CPF opcional + documentos.
-    // Se está aguardando extração, roda a IA primeiro para popular pedido_alvos
-    // a partir dos documentos. Só depois roda as consultas externas.
-    if (pedido.tipo === 'due_diligence_imobiliaria') {
-      const totalAlvos = await pedidoAlvos.contarAlvos(pedido.id);
-      const precisaExtrair = pedido.analise_ia_status === 'aguardando_extracao' || totalAlvos === 0;
-      if (precisaExtrair) {
-        console.log(`[v3] pedido ${pedido.id}: rodando análise IA antes das consultas (extração de alvos)`);
-        const out = await analiseIA.analisarDocumentosImovel(pedido.id);
-        if (out.status === 'cpf_ilegivel') {
-          return res.status(400).json({
-            erro: 'cpf_ilegivel',
-            mensagem: out.erro || 'IA não conseguiu extrair CPF/CNPJ dos documentos. Informe manualmente em /alvos.'
-          });
-        }
-        // Recarrega pedido para pegar alvo_documento atualizado pela IA
-        const refresh = await pool.query('SELECT * FROM pedidos WHERE id = $1', [pedido.id]);
-        pedido = refresh.rows[0];
-      }
-      // Se ainda está em cpf_ilegivel após tentativa, bloqueia
-      if (pedido.analise_ia_status === 'cpf_ilegivel') {
-        return res.status(400).json({
-          erro: 'cpf_ilegivel',
-          mensagem: pedido.erro_processamento || 'Pedido bloqueado: CPF ilegível. Informe manualmente em /alvos.'
-        });
-      }
+    const out = await executarConsultasParaPedido(req.params.id, req.usuario.id);
+    if (out.erro) {
+      return res.status(out.status || 400).json({ erro: out.erro, mensagem: out.mensagem });
     }
-
-    // Se alvo_nome for placeholder, tenta auto-preencher depois com nome real
-    const nomePlaceholder = !pedido.alvo_nome || pedido.alvo_nome === 'A identificar';
-    if (nomePlaceholder) pedido.alvo_nome = '';
-
-    const resultados = await executarConsultaCompleta(pedido);
-
-    // Auto-fill: se nome estava vazio, extrai da Receita Federal / DirectData
-    if (nomePlaceholder) {
-      const cad = resultados.receita_federal || {};
-      const nomeReal = cad.nome || cad.razao_social || cad.nome_fantasia || null;
-      if (nomeReal) {
-        await pool.query('UPDATE pedidos SET alvo_nome = $1 WHERE id = $2', [nomeReal, pedido.id]);
-        pedido.alvo_nome = nomeReal;
-      }
-    }
-
-    // Limpar dados antigos deste pedido antes de salvar novos (evita duplicatas)
-    await pool.query('DELETE FROM dados_consulta WHERE pedido_id = $1', [pedido.id]);
-
-    for (const [fonte, dados] of Object.entries(resultados)) {
-      await pool.query(
-        'INSERT INTO dados_consulta (pedido_id, fonte, dados) VALUES ($1, $2, $3)',
-        [pedido.id, fonte, JSON.stringify(dados)]
-      );
-    }
-
-    await pool.query('INSERT INTO logs (pedido_id, usuario_id, acao) VALUES ($1, $2, $3)',
-      [pedido.id, req.usuario.id, 'Consultas automáticas executadas']);
-
-    // Análise IA dos documentos do imóvel (Due Diligence Imobiliária).
-    // Falha graciosamente se ANTHROPIC_API_KEY não estiver setado ou se não houver documentos.
-    let analiseOut = null;
-    if (pedido.tipo === 'due_diligence_imobiliaria') {
-      try {
-        analiseOut = await analiseIA.analisarDocumentosImovel(pedido.id);
-        await pool.query('INSERT INTO logs (pedido_id, usuario_id, acao, detalhes) VALUES ($1, $2, $3, $4)',
-          [pedido.id, req.usuario.id, 'Análise IA documentos', `status: ${analiseOut.status}`]);
-      } catch (eIa) {
-        console.warn('[pedidos] análise IA falhou (não bloqueia):', eIa.message);
-      }
-    }
-
-    res.json({ ok: true, resultados, analise_ia: analiseOut });
+    res.json(out);
   } catch (e) {
     console.error('Erro ao executar consultas:', e);
     res.status(500).json({ erro: 'Erro ao executar consultas' });
@@ -670,8 +677,29 @@ router.post('/:id/concluir', autenticar, async (req, res) => {
     const { observacoes } = req.body;
     const pResult = await pool.query('SELECT * FROM pedidos WHERE id = $1', [req.params.id]);
     if (pResult.rows.length === 0) return res.status(404).json({ erro: 'Pedido não encontrado' });
-    const pedido = pResult.rows[0];
-    const dadosResult = await pool.query('SELECT * FROM dados_consulta WHERE pedido_id = $1', [pedido.id]);
+    let pedido = pResult.rows[0];
+    let dadosResult = await pool.query('SELECT * FROM dados_consulta WHERE pedido_id = $1', [pedido.id]);
+
+    // BUG #1 — fix: para Due Diligence Imobiliária, garantir que as consultas
+    // externas (Receita Federal, Escavador, DirectData, etc.) tenham terminado
+    // ANTES de gerar o PDF. Caso contrário o relatório saía com "INDISPONÍVEL"
+    // mesmo com APIs configuradas (ver pedido c52eb88d-309f-4765-8ddf-ecbb639342aa
+    // onde o PDF foi gerado 15s antes do log de consultas concluídas).
+    // Se não há linhas em dados_consulta, executamos as consultas inline e
+    // recarregamos antes de chamar gerarDossie.
+    if (pedido.tipo === 'due_diligence_imobiliaria' && dadosResult.rows.length === 0) {
+      console.log(`[concluir] pedido ${pedido.id}: dados_consulta vazio — executando consultas inline antes do PDF`);
+      const consultaOut = await executarConsultasParaPedido(pedido.id, req.usuario.id);
+      if (consultaOut.erro) {
+        return res.status(consultaOut.status || 400).json({
+          erro: consultaOut.erro,
+          mensagem: consultaOut.mensagem || 'Consultas externas falharam — corrija antes de gerar o PDF.'
+        });
+      }
+      const refresh = await pool.query('SELECT * FROM pedidos WHERE id = $1', [pedido.id]);
+      pedido = refresh.rows[0];
+      dadosResult = await pool.query('SELECT * FROM dados_consulta WHERE pedido_id = $1', [pedido.id]);
+    }
 
     // V3: anexa lista de alvos consultados ao pedido para o PDF renderizar
     try {

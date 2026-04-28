@@ -36,6 +36,30 @@ NODE_ENV=production
 2. Vá em "Data" → "Query"
 3. Cole o conteúdo de `db/schema.sql` e execute
 
+### 4.1. Criar Railway Volume para arquivos persistentes (OBRIGATÓRIO em produção)
+
+> ⚠️ Sem volume persistente, **TODOS os PDFs gerados e os documentos
+> anexados (matrículas, escrituras etc.) são apagados a cada deploy**, porque
+> o filesystem do container Railway é efêmero.
+
+1. No serviço da aplicação no Railway, vá em **Settings → Volumes**
+2. Clique em **+ New Volume**
+3. **Mount path:** `/app/data` (ou outro caminho à sua escolha)
+4. Em **Variables**, adicione:
+
+```
+UPLOADS_DIR=/app/data/uploads/imoveis
+RELATORIOS_DIR=/app/data/relatorios
+DATA_DIR=/app/data/monitor
+```
+
+- `UPLOADS_DIR`: onde os PDFs/imagens da Due Diligence Imobiliária ficam armazenados.
+- `RELATORIOS_DIR`: onde os PDFs gerados (dossiês) são gravados e servidos via `/relatorios/*`.
+- `DATA_DIR`: histórico do monitor de APIs externas (`monitor_api.json`).
+
+Em **dev local**, basta NÃO setar essas variáveis — a aplicação cai no
+fallback antigo (`./uploads/imoveis`, `./public/relatorios`, `./data`).
+
 ### 5. Trocar a senha do admin
 Após o deploy, acesse o sistema e troque a senha padrão:
 - Email: `admin@recobro.com.br`
