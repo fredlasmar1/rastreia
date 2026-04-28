@@ -185,6 +185,23 @@ function formatarBRL(valor) {
   return `R$ ${n.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
+// Converte renda numérica (anual em R$) em faixa qualitativa descritiva.
+// Direct Data retorna estimativa estatística pouco confiável; exibir o
+// valor numérico no PDF passa falsa impressão de renda declarada.
+// opts.improvavel = true força a string "Estimativa pouco confiável".
+function faixaRendaQualitativa(valorAnual, opts) {
+  const o = opts || {};
+  if (o.improvavel) return 'Estimativa pouco confiável';
+  let n = valorAnual;
+  if (typeof n !== 'number') n = parseValorCausa(n);
+  if (!n || !Number.isFinite(n) || n <= 0) return 'Não disponível';
+  if (n <= 24000) return 'Faixa baixa (até R$ 2 mil/mês)';
+  if (n <= 60000) return 'Faixa média-baixa (R$ 2 a 5 mil/mês)';
+  if (n <= 120000) return 'Faixa média (R$ 5 a 10 mil/mês)';
+  if (n <= 240000) return 'Faixa média-alta (R$ 10 a 20 mil/mês)';
+  return 'Faixa alta (acima de R$ 20 mil/mês)';
+}
+
 function construirResumoJudicial(lista, cpf, nome) {
   if (!lista || !lista.length) return '';
   const ativos = lista.filter(p => String(p.status || '').toLowerCase() === 'ativo');
@@ -231,6 +248,6 @@ module.exports = {
   formatarDoc, corScore, limiteY, verificarPagina,
   secao, linha, avisoBox, boxPositivo, boxEmIntegracao,
   normalizarAlerta, renderAlerta, ordenarAlertas, contarPorSeveridade,
-  truncar, isAlvoNoPolo, parseValorCausa, formatarBRL,
+  truncar, isAlvoNoPolo, parseValorCausa, formatarBRL, faixaRendaQualitativa,
   construirResumoJudicial, rodape
 };

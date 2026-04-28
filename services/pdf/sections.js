@@ -10,7 +10,8 @@ const {
   COR, MARGEM, LARGURA,
   formatarDoc, verificarPagina,
   secao, linha, avisoBox, boxPositivo,
-  truncar, isAlvoNoPolo, construirResumoJudicial, parseValorCausa, formatarBRL
+  truncar, isAlvoNoPolo, construirResumoJudicial, parseValorCausa, formatarBRL,
+  faixaRendaQualitativa
 } = require('./helpers');
 
 // ───────────────────────────────────────────────────────────────
@@ -112,10 +113,12 @@ function secaoCadastralPF(doc, y, dados) {
   }
   if (cadastral.profissao) y = linha(doc, 'Profissão (CBO)', cadastral.profissao, y, 13);
   if (cadastral.classe_social) y = linha(doc, 'Classe Social', cadastral.classe_social, y, 13);
-  if (cadastral.renda_estimada) {
-    const rotulo = cadastral.renda_inconsistente ? 'Renda Estimada (inconsistente)' : 'Renda Estimada';
-    const valor = cadastral.renda_inconsistente ? `${cadastral.renda_estimada} - descartada do score` : cadastral.renda_estimada;
-    y = linha(doc, rotulo, valor, y, 13);
+  if (cadastral.renda_estimada || cadastral.renda_numerica) {
+    const valor = faixaRendaQualitativa(
+      cadastral.renda_numerica != null ? cadastral.renda_numerica : cadastral.renda_estimada,
+      { improvavel: !!cadastral.renda_inconsistente }
+    );
+    y = linha(doc, 'Faixa de Renda (estimada)', valor, y, 13);
   }
 
   if (cadastral.parentescos?.length > 0) {
