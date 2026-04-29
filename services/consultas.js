@@ -630,6 +630,28 @@ async function consultarScore(documento, tipo) {
 //   credores/apontamentos (pendenciasFinanceiras.ocorrencias).
 // ─────────────────────────────────────────────
 
+// A Boa Vista marca envolvimento em falência sem detalhes (sem CNPJ, sem
+// data, sem natureza). Filtramos itens vazios e deduplicamos pela chave
+// estruturada para não exibir "Falência / Falência" repetido no PDF.
+function normalizarFalencias(arr) {
+  if (!Array.isArray(arr)) return [];
+  const limparData = (s) => String(s || '').replace(/\s+00:00:00$/, '').trim();
+  const vistos = new Set();
+  const result = [];
+  for (const f of arr) {
+    const cnpj = String(f.cnpj || f.documento || '').replace(/\D/g, '');
+    const data = limparData(f.data || f.dataAbertura || '');
+    const desc = String(f.descricao || f.tipo || f.natureza || '').trim();
+    const temDados = !!(cnpj || data || (desc && desc.toLowerCase() !== 'falencia' && desc.toLowerCase() !== 'falência'));
+    if (!temDados) continue;
+    const chave = `${cnpj}|${data}|${desc.toLowerCase()}`;
+    if (vistos.has(chave)) continue;
+    vistos.add(chave);
+    result.push({ ...f, data, descricao: desc });
+  }
+  return result;
+}
+
 async function consultarApontamentosBoaVista(doc) {
   // Retorna o array de apontamentos (credor, valor, data, contrato...) via
   // Boa Vista Acerta Completo (PF) / Define Limite Positivo (PJ).
@@ -648,13 +670,14 @@ async function consultarApontamentosBoaVista(doc) {
       ? (retorno.pendenciasFinanceiras || {})
       : (retorno.restricoes?.pendenciasFinanceiras || {});
     const ocorrencias = Array.isArray(pend.ocorrencias) ? pend.ocorrencias : [];
+    const limparData = (s) => String(s || '').replace(/\s+00:00:00$/, '').trim();
     return ocorrencias.map(o => ({
       credor: o.credor || o.informante || '',
       contrato: o.contrato || '',
       tipo_contrato: o.modalidade || o.origem || '',
       valor: Number(String(o.valor || '0').replace(',', '.')) || 0,
-      data_inclusao: o.dataInclusao || '',
-      data_ocorrencia: o.dataVencimento || '',
+      data_inclusao: limparData(o.dataInclusao),
+      data_ocorrencia: limparData(o.dataVencimento),
       cidade: '',
       uf: '',
       telefone: '',
@@ -721,7 +744,7 @@ async function consultarNegativacoes(documento) {
       pendencias: itensNeg,
       acoes_judiciais: pf.acoesJudiciais || pf.acoes || [],
       cheques_sem_fundo: pf.chequesSemFundo || pf.cheques || [],
-      falencias: pf.recuperacoesJudiciaisFalencia || pf.falencias || [],
+      falencias: normalizarFalencias(pf.recuperacoesJudiciaisFalencia || pf.falencias || []),
       fonte: itensNeg.length > 0
         ? 'Direct Data (Detalhamento Negativo + Boa Vista Acerta Completo)'
         : 'Direct Data (Detalhamento Negativo)',

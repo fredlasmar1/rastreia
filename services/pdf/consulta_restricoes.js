@@ -22,13 +22,24 @@ const {
   secao, linha, formatarDoc, formatarBRL
 } = require('./helpers');
 
+// Códigos de tipo de pendência da Boa Vista (siglas internas).
+// Sem mapeamento → omitimos o prefixo no card.
+const LABELS_TIPO_BOAVISTA = {
+  RG: 'Registro/Apontamento',
+  CH: 'Cheque',
+  PR: 'Protesto',
+  AC: 'Ação',
+};
+
 // dd/mm/yyyy a partir de string ISO, "yyyy-mm-dd", "dd/mm/yyyy" ou Date.
+// Remove sufixo " 00:00:00" que algumas APIs (Boa Vista) anexam às datas.
 function formatarData(v) {
   if (!v) return '';
   if (typeof v === 'string') {
-    const m = v.match(/^(\d{4})-(\d{2})-(\d{2})/);
+    const limpo = v.replace(/\s+00:00:00$/, '').trim();
+    const m = limpo.match(/^(\d{4})-(\d{2})-(\d{2})/);
     if (m) return `${m[3]}/${m[2]}/${m[1]}`;
-    if (/^\d{2}\/\d{2}\/\d{4}$/.test(v)) return v;
+    if (/^\d{2}\/\d{2}\/\d{4}$/.test(limpo)) return limpo;
   }
   const d = new Date(v);
   if (!isNaN(d)) {
@@ -37,6 +48,10 @@ function formatarData(v) {
     return `${dd}/${mm}/${d.getFullYear()}`;
   }
   return String(v);
+}
+
+function pluralApontamentos(n) {
+  return `${n} ${n === 1 ? 'apontamento' : 'apontamentos'}`;
 }
 
 function cidadeUf(c, uf) {
@@ -226,7 +241,7 @@ function blocoNegativacoes(doc, y, dados) {
     y = verificarPagina(doc, y, 24);
     doc.rect(MARGEM, y, LARGURA, 20).fill('#fee2e2');
     doc.fillColor(COR.vermelho).fontSize(9).font('Helvetica-Bold')
-      .text(`Total em pendências: ${formatarBRL(valorPend)}${pendencias.length ? ` — ${pendencias.length} apontamento(s)` : ''}`, MARGEM + 8, y + 5);
+      .text(`Total em pendências: ${formatarBRL(valorPend)}${pendencias.length ? ` — ${pluralApontamentos(pendencias.length)}` : ''}`, MARGEM + 8, y + 5);
     y += 26;
   }
 
@@ -235,20 +250,27 @@ function blocoNegativacoes(doc, y, dados) {
       .text('DETALHAMENTO POR CREDOR', MARGEM, y);
     y += 11;
 
+    let valoresIndividuaisAusentes = 0;
     pendencias.slice(0, 20).forEach(p => {
       const credor = p.credor || 'Credor não informado';
       const valor = Number(p.valor || 0);
+      const temValor = valor > 0;
+      if (!temValor) valoresIndividuaisAusentes++;
       const dataInc = formatarData(p.data_inclusao);
       const dataOco = formatarData(p.data_ocorrencia);
       const local = cidadeUf(p.cidade, p.uf);
-      const tipo = p.tipo_contrato || '';
+      const tipoCodigo = (p.tipo_contrato || '').trim();
+      const tipoLabel = LABELS_TIPO_BOAVISTA[tipoCodigo.toUpperCase()] || tipoCodigo;
+      // "RG" sem mapeamento conhecido → omite prefixo (mostramos só "Contrato XYZ").
+      const tipoExibir = tipoCodigo && tipoLabel && tipoLabel !== tipoCodigo ? tipoLabel
+        : (tipoCodigo && tipoCodigo.length > 2 ? tipoCodigo : '');
       const contrato = p.contrato || '';
       const situacao = p.situacao || '';
 
       // Linhas auxiliares (só as que tiverem conteúdo)
       const auxLinhas = [];
-      if (tipo || contrato) {
-        const partes = [tipo, contrato ? `Contrato ${contrato}` : ''].filter(Boolean);
+      if (tipoExibir || contrato) {
+        const partes = [tipoExibir, contrato ? `Contrato ${contrato}` : ''].filter(Boolean);
         auxLinhas.push(partes.join(' — '));
       }
       const dataLine = [dataInc ? `Inclusão: ${dataInc}` : '', dataOco && dataOco !== dataInc ? `Ocorrência: ${dataOco}` : '']
@@ -267,11 +289,14 @@ function blocoNegativacoes(doc, y, dados) {
       // Barra lateral vermelha
       doc.rect(MARGEM, y, 3, alturaTotal - 4).fill(COR.vermelho);
 
-      // Cabeçalho: credor à esquerda, valor à direita
+      // Cabeçalho: credor à esquerda, valor à direita (omitido se 0/ausente)
+      const larguraCredor = temValor ? LARGURA - 130 : LARGURA - 20;
       doc.fillColor('#111827').fontSize(8).font('Helvetica-Bold')
-        .text(credor, MARGEM + 10, y, { width: LARGURA - 130 });
-      doc.fillColor(COR.vermelho).fontSize(8).font('Helvetica-Bold')
-        .text(formatarBRL(valor), MARGEM + LARGURA - 110, y, { width: 110, align: 'right' });
+        .text(credor, MARGEM + 10, y, { width: larguraCredor });
+      if (temValor) {
+        doc.fillColor(COR.vermelho).fontSize(8).font('Helvetica-Bold')
+          .text(formatarBRL(valor), MARGEM + LARGURA - 110, y, { width: 110, align: 'right' });
+      }
       y += 11;
 
       // Linhas auxiliares
@@ -284,10 +309,18 @@ function blocoNegativacoes(doc, y, dados) {
       y += 4;
     });
 
+    const exibidas = Math.min(pendencias.length, 20);
+    if (exibidas > 0 && valoresIndividuaisAusentes === exibidas) {
+      y = verificarPagina(doc, y, 14);
+      doc.fillColor(COR.cinza).fontSize(7).font('Helvetica-Oblique')
+        .text('Valores individuais não detalhados pela base; o total agregado é apresentado acima.', MARGEM, y, { width: LARGURA });
+      y += 12;
+    }
+
     if (pendencias.length > 20) {
       y = verificarPagina(doc, y, 12);
       doc.fillColor(COR.cinza).fontSize(7).font('Helvetica-Oblique')
-        .text(`... mais ${pendencias.length - 20} apontamento(s) não exibido(s).`, MARGEM, y);
+        .text(`... mais ${pluralApontamentos(pendencias.length - 20)} não exibido${pendencias.length - 20 === 1 ? '' : 's'}.`, MARGEM, y);
       y += 10;
     }
     y += 4;
@@ -327,16 +360,41 @@ function blocoNegativacoes(doc, y, dados) {
   }
 
   if (falencias.length > 0) {
-    doc.fillColor(COR.vermelho).fontSize(8).font('Helvetica-Bold').text('FALÊNCIAS / RECUPERAÇÕES', MARGEM, y); y += 11;
-    falencias.slice(0, 3).forEach(f => {
-      const txt = `• ${f.tipo || 'Falência'}${f.data ? ' — ' + formatarData(f.data) : ''}`;
-      doc.font('Helvetica').fontSize(7);
-      const h = doc.heightOfString(txt, { width: LARGURA - 12 });
-      y = verificarPagina(doc, y, h + 2);
-      doc.fillColor('#111827').text(txt, MARGEM + 6, y, { width: LARGURA - 12 });
-      y += h + 1;
+    // "Estruturada" = tem ao menos um campo de identificação (CNPJ, data ou
+    // descrição com algo além do rótulo solto "Falência").
+    const estruturadas = falencias.filter(f => {
+      const cnpj = String(f.cnpj || f.documento || '').replace(/\D/g, '');
+      const data = formatarData(f.data || f.dataAbertura);
+      const desc = String(f.descricao || f.tipo || f.natureza || '').trim().toLowerCase();
+      const descUtil = desc && desc !== 'falencia' && desc !== 'falência';
+      return cnpj || data || descUtil;
     });
-    y += 4;
+
+    if (estruturadas.length > 0) {
+      doc.fillColor(COR.vermelho).fontSize(8).font('Helvetica-Bold').text('FALÊNCIAS / RECUPERAÇÕES', MARGEM, y); y += 11;
+      estruturadas.slice(0, 3).forEach(f => {
+        const tipo = f.tipo || f.natureza || f.descricao || 'Falência';
+        const data = formatarData(f.data || f.dataAbertura);
+        const cnpj = f.cnpj || f.documento || '';
+        const partes = [tipo, cnpj ? `CNPJ ${cnpj}` : '', data].filter(Boolean);
+        const txt = `• ${partes.join(' — ')}`;
+        doc.font('Helvetica').fontSize(7);
+        const h = doc.heightOfString(txt, { width: LARGURA - 12 });
+        y = verificarPagina(doc, y, h + 2);
+        doc.fillColor('#111827').text(txt, MARGEM + 6, y, { width: LARGURA - 12 });
+        y += h + 1;
+      });
+      y += 4;
+    } else {
+      // Boa Vista marcou envolvimento mas não trouxe dados estruturados.
+      // Renderiza apenas um alerta textual em vez da seção repetida.
+      const aviso = '⚠ Possível envolvimento em processo falimentar (sem detalhes na base) — verificar manualmente no Datajud/Escavador.';
+      doc.font('Helvetica').fontSize(7);
+      const h = doc.heightOfString(aviso, { width: LARGURA - 12 });
+      y = verificarPagina(doc, y, h + 4);
+      doc.fillColor(COR.laranja || '#92400e').text(aviso, MARGEM, y, { width: LARGURA });
+      y += h + 4;
+    }
   }
 
   doc.fillColor(COR.cinza).fontSize(6).font('Helvetica')
