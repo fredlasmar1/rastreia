@@ -1375,6 +1375,26 @@ async function executarConsultaCompleta(pedido) {
     };
   }
 
+  // Produto standalone: Consulta de Restrições
+  // Subset leve do Direct Data — apenas o necessário para responder
+  // se o CPF/CNPJ está negativado/protestado/com score ruim.
+  if (tipo === 'consulta_restricoes') {
+    if (!alvo_documento) return {};
+    const tipoAlvoCR = alvo_tipo || (limparDoc(alvo_documento).length === 14 ? 'PJ' : 'PF');
+    const [cadastral, score_credito, negativacoes, protestos] = await Promise.all([
+      tipoAlvoCR === 'PJ' ? consultarCNPJ(alvo_documento) : consultarCPF(alvo_documento),
+      consultarScore(alvo_documento),
+      consultarNegativacoes(alvo_documento),
+      consultarProtestos(alvo_documento)
+    ]);
+    return {
+      receita_federal: cadastral,
+      ...(score_credito?.score ? { score_credito } : {}),
+      ...(negativacoes?.status ? { negativacoes } : {}),
+      ...(protestos && protestos.disponivel !== false ? { protestos } : {})
+    };
+  }
+
   // Vínculos societários para produtos premium
   const precisaVinculos = ['due_diligence', 'investigacao_patrimonial', 'due_diligence_imobiliaria'].includes(tipo);
   // Veículos e imóveis para investigação patrimonial e imobiliária

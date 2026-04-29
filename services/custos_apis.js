@@ -115,6 +115,13 @@ const APIS_POR_PRODUTO = {
     'escavador_processos',
     'portal_transparencia',
     'datajud_cnj'
+  ],
+  consulta_restricoes: [
+    // Apenas Direct Data — produto leve focado em restrições financeiras.
+    'directdata_cpf_plus',          // identificação básica + situação RF
+    'directdata_score_quod',        // score QUOD com faixa
+    'directdata_negativacoes',      // SCPC/Serasa via DirectData (Detalhamento Negativo)
+    'directdata_protestos'          // protestos em cartório
   ]
 };
 

@@ -55,7 +55,8 @@ const PRECOS = {
   due_diligence_imobiliaria: 997,
   analise_devedor: 250,
   investigacao_patrimonial: 497,
-  consulta_veicular: 97
+  consulta_veicular: 97,
+  consulta_restricoes: 19
 };
 
 const PRAZOS = {
@@ -65,7 +66,8 @@ const PRAZOS = {
   due_diligence_imobiliaria: 24,
   analise_devedor: 2,
   investigacao_patrimonial: 4,
-  consulta_veicular: 0.5
+  consulta_veicular: 0.5,
+  consulta_restricoes: 0.25
 };
 
 const PLACA_REGEX = /^[A-Z]{3}[0-9][A-Z0-9][0-9]{2}$/;

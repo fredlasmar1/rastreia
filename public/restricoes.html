@@ -1,0 +1,395 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Rastreia - Consulta de Restrições</title>
+  <link rel="stylesheet" href="/css/style.css">
+  <style>
+    .res-card { background:#fff; border:1px solid #e5e7eb; border-radius:10px; padding:18px; margin-bottom:14px; }
+    .res-card h3 { margin:0 0 10px; font-size:14px; color:#374151; text-transform:uppercase; letter-spacing:0.4px; }
+    .status-banner { padding:20px; border-radius:10px; text-align:center; font-weight:800; font-size:22px; margin-bottom:18px; }
+    .status-com { background:#fee2e2; color:#991b1b; border:2px solid #dc2626; }
+    .status-sem { background:#dcfce7; color:#14532d; border:2px solid #16a34a; }
+    .status-banner small { display:block; margin-top:6px; font-size:13px; font-weight:500; opacity:0.85; }
+    .score-box { display:flex; align-items:center; gap:18px; }
+    .score-num { font-size:44px; font-weight:800; line-height:1; }
+    .score-num small { font-size:14px; color:#6b7280; font-weight:500; }
+    .score-faixa { font-size:14px; font-weight:700; }
+    .score-good { color:#16a34a; } .score-mid { color:#d97706; } .score-bad { color:#dc2626; }
+    .lista-item { padding:10px 12px; border-left:3px solid #dc2626; background:#fafafa; margin-bottom:8px; border-radius:4px; }
+    .lista-item .titulo { font-weight:700; font-size:13px; color:#111827; }
+    .lista-item .meta { font-size:11px; color:#6b7280; margin-top:2px; }
+    .nada-consta { background:#dcfce7; color:#14532d; padding:12px; border-radius:6px; font-weight:700; text-align:center; }
+    .custo-admin { background:#fef9c3; border:1px solid #facc15; padding:10px 12px; border-radius:6px; font-size:12px; color:#713f12; margin-bottom:12px; }
+  </style>
+</head>
+<body>
+<nav class="nav">
+  <a href="/dashboard.html" class="nav-logo"><img src="/img/logo-recobro.jpg" alt="Recobro"><div><div class="nav-brand">RASTREIA</div></div></a>
+  <div class="nav-links">
+    <a href="/dashboard.html">Dashboard</a>
+    <a href="/novo-pedido.html">+ Novo Pedido</a>
+    <a href="/restricoes.html" class="ativo">🚦 Restrições</a>
+    <a href="/clientes.html">Clientes</a>
+    <a href="#" onclick="logout()">Sair</a>
+  </div>
+  <div class="nav-user" id="nav-user"></div>
+</nav>
+
+<div class="container" style="max-width:780px">
+  <h1 class="page-title">🚦 Consulta de Restrições</h1>
+  <p style="color:#6b7280;font-size:13px;margin-bottom:20px">
+    Versão leve e barata: descobre em segundos se um CPF ou CNPJ tem
+    <strong>protestos, negativações ou score de crédito crítico</strong>.
+    Custo de venda: <strong>R$ 19,00</strong>.
+  </p>
+
+  <div id="alerta"></div>
+
+  <!-- FORM -->
+  <div class="card" id="form-card">
+    <div id="custo-admin" class="custo-admin" style="display:none"></div>
+    <div class="form-grid">
+      <div class="form-group full">
+        <label>Nome (opcional)</label>
+        <input type="text" id="alvo_nome" placeholder="Nome ou Razão Social">
+      </div>
+      <div class="form-group full">
+        <label>CPF ou CNPJ *</label>
+        <input type="text" id="alvo_documento" placeholder="000.000.000-00 ou 00.000.000/0000-00" oninput="onDocChange()">
+        <div id="tipo-detectado" style="font-size:11px;color:#6b7280;margin-top:4px"></div>
+      </div>
+      <div class="form-group">
+        <label>Cliente (quem solicita) *</label>
+        <input type="text" id="cliente_nome" placeholder="Nome do solicitante">
+      </div>
+      <div class="form-group">
+        <label>Finalidade *</label>
+        <select id="finalidade">
+          <option value="analise_credito">Análise de crédito</option>
+          <option value="prevencao_fraude">Prevenção de fraude</option>
+          <option value="verificacao_idoneidade">Verificação de idoneidade</option>
+          <option value="instrucao_processo">Instrução de processo</option>
+        </select>
+      </div>
+      <div class="form-group full">
+        <label style="display:flex;gap:8px;align-items:flex-start;font-weight:400;font-size:13px;color:#374151">
+          <input type="checkbox" id="aceite_termos" style="margin-top:3px">
+          <span>Declaro que tenho base legal para esta consulta e aceito os <a href="/termos.html" target="_blank">Termos</a> e a <a href="/privacidade.html" target="_blank">Política de Privacidade</a> (LGPD).</span>
+        </label>
+      </div>
+    </div>
+    <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:14px">
+      <button class="btn btn-primary" onclick="criarPedido()">Consultar — R$ 19,00</button>
+    </div>
+  </div>
+
+  <!-- AGUARDANDO PAGAMENTO -->
+  <div class="card" id="pgto-card" style="display:none">
+    <h3 style="margin-top:0">Pagamento</h3>
+    <p style="font-size:13px;color:#374151">Pedido criado. Conclua o pagamento para liberar o resultado.</p>
+    <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:10px">
+      <a id="link-mp" href="#" target="_blank" class="btn btn-primary">Pagar com Mercado Pago</a>
+      <button class="btn btn-outline" id="btn-marcar-pago" onclick="marcarPago()">Marcar como pago (admin)</button>
+      <button class="btn btn-outline" onclick="checarStatus()">Já paguei — atualizar</button>
+    </div>
+    <div id="pgto-status" style="margin-top:10px;font-size:12px;color:#6b7280"></div>
+  </div>
+
+  <!-- PROCESSANDO -->
+  <div class="card" id="processing-card" style="display:none">
+    <div class="loading"><div class="spinner"></div>Consultando bases (Direct Data)…</div>
+  </div>
+
+  <!-- RESULTADO -->
+  <div id="resultado-card" style="display:none">
+    <div id="status-banner" class="status-banner"></div>
+
+    <div class="res-card">
+      <h3>Identificação</h3>
+      <div id="r-identificacao"></div>
+    </div>
+
+    <div class="res-card">
+      <h3>Score de Crédito (QUOD)</h3>
+      <div id="r-score"></div>
+    </div>
+
+    <div class="res-card">
+      <h3>Protestos em cartório</h3>
+      <div id="r-protestos"></div>
+    </div>
+
+    <div class="res-card">
+      <h3>Negativações e pendências</h3>
+      <div id="r-negativacoes"></div>
+    </div>
+
+    <div style="display:flex;gap:10px;flex-wrap:wrap">
+      <button class="btn btn-primary" id="btn-gerar-pdf" onclick="gerarPDF()">📄 Gerar PDF</button>
+      <a id="btn-baixar-pdf" href="#" target="_blank" class="btn btn-outline" style="display:none">⬇ Baixar PDF</a>
+      <button class="btn btn-outline" onclick="resetar()">+ Nova consulta</button>
+    </div>
+  </div>
+</div>
+
+<script>
+  const token = localStorage.getItem('rastreia_token');
+  if (!token) window.location.href = '/';
+  const usuario = JSON.parse(localStorage.getItem('rastreia_usuario') || '{}');
+  document.getElementById('nav-user').textContent = usuario.nome || '';
+  const isAdmin = usuario.perfil === 'admin' || usuario.perfil === 'operador';
+
+  let pedidoAtual = null;
+
+  function esc(str) { if (str == null) return ''; const d = document.createElement('div'); d.textContent = String(str); return d.innerHTML; }
+  function logout() { localStorage.clear(); window.location.href = '/'; }
+  function alerta(msg, tipo) {
+    const cor = tipo === 'erro' ? '#fee2e2' : '#dcfce7';
+    const txt = tipo === 'erro' ? '#991b1b' : '#14532d';
+    document.getElementById('alerta').innerHTML = `<div style="background:${cor};color:${txt};padding:10px 14px;border-radius:6px;margin-bottom:10px;font-size:13px">${esc(msg)}</div>`;
+    setTimeout(() => { document.getElementById('alerta').innerHTML = ''; }, 6000);
+  }
+
+  function limparDoc(d) { return (d || '').replace(/\D/g, ''); }
+  function onDocChange() {
+    const d = limparDoc(document.getElementById('alvo_documento').value);
+    const el = document.getElementById('tipo-detectado');
+    if (d.length === 11) el.textContent = 'CPF detectado';
+    else if (d.length === 14) el.textContent = 'CNPJ detectado';
+    else if (d.length > 0) el.textContent = `${d.length} dígitos — esperado 11 (CPF) ou 14 (CNPJ)`;
+    else el.textContent = '';
+  }
+
+  async function api(url, opts = {}) {
+    const headers = { Authorization: `Bearer ${token}`, ...(opts.headers || {}) };
+    if (opts.body && !headers['Content-Type']) headers['Content-Type'] = 'application/json';
+    const res = await fetch(url, { ...opts, headers });
+    if (res.status === 401) { logout(); return null; }
+    return res;
+  }
+
+  async function carregarCustoAdmin() {
+    if (usuario.perfil !== 'admin') return;
+    try {
+      const r = await api('/api/admin/custos/produtos/consulta_restricoes');
+      if (!r || !r.ok) return;
+      const c = await r.json();
+      if (!c || !c.produtoKey) return;
+      const box = document.getElementById('custo-admin');
+      box.style.display = '';
+      box.innerHTML = `
+        <strong>💰 Interno (admin/operador):</strong>
+        Preço de venda <strong>R$ ${c.precoVenda.toFixed(2).replace('.', ',')}</strong> ·
+        Custo APIs <strong>R$ ${c.custoBruto.toFixed(2).replace('.', ',')}</strong> ·
+        Margem <strong>${c.margemPct.toFixed(0)}%</strong> ·
+        Lucro <strong>R$ ${c.margem.toFixed(2).replace('.', ',')}</strong>
+      `;
+    } catch (_) { /* opcional */ }
+  }
+
+  async function criarPedido() {
+    const docLimpo = limparDoc(document.getElementById('alvo_documento').value);
+    const alvoTipo = docLimpo.length === 14 ? 'PJ' : 'PF';
+    const cliente = document.getElementById('cliente_nome').value.trim();
+    const finalidade = document.getElementById('finalidade').value;
+    const aceite = document.getElementById('aceite_termos').checked;
+
+    if (docLimpo.length !== 11 && docLimpo.length !== 14) return alerta('Informe CPF (11 dígitos) ou CNPJ (14 dígitos).', 'erro');
+    if (!cliente) return alerta('Informe o nome do cliente solicitante.', 'erro');
+    if (!aceite) return alerta('Você precisa aceitar os termos (LGPD).', 'erro');
+
+    const body = {
+      tipo: 'consulta_restricoes',
+      cliente_nome: cliente,
+      cliente_email: usuario.email || cliente,
+      alvo_nome: document.getElementById('alvo_nome').value.trim() || 'A identificar',
+      alvo_documento: docLimpo,
+      alvo_tipo: alvoTipo,
+      finalidade,
+      aceite_termos: true
+    };
+    const res = await api('/api/pedidos', { method: 'POST', body: JSON.stringify(body) });
+    if (!res) return;
+    if (!res.ok) {
+      const e = await res.json().catch(() => ({}));
+      return alerta(e.erro || 'Erro ao criar pedido', 'erro');
+    }
+    pedidoAtual = await res.json();
+    document.getElementById('form-card').style.display = 'none';
+    if (pedidoAtual.status === 'pago' || pedidoAtual.status === 'em_andamento' || pedidoAtual.status === 'concluido') {
+      executarConsultaEMostrar();
+    } else {
+      mostrarPagamento();
+    }
+  }
+
+  function mostrarPagamento() {
+    document.getElementById('pgto-card').style.display = '';
+    const link = document.getElementById('link-mp');
+    if (pedidoAtual.mp_init_point) {
+      link.href = pedidoAtual.mp_init_point;
+      link.style.display = '';
+    } else {
+      link.style.display = 'none';
+      document.getElementById('pgto-status').textContent = 'Mercado Pago não configurado — use "Marcar como pago".';
+    }
+    document.getElementById('btn-marcar-pago').style.display = isAdmin ? '' : 'none';
+  }
+
+  async function marcarPago() {
+    if (!pedidoAtual) return;
+    const r = await api(`/api/pedidos/${pedidoAtual.id}/pago`, { method: 'PATCH', body: JSON.stringify({ mp_payment_id: 'manual' }) });
+    if (!r || !r.ok) return alerta('Não foi possível marcar como pago.', 'erro');
+    await executarConsultaEMostrar();
+  }
+
+  async function checarStatus() {
+    if (!pedidoAtual) return;
+    const r = await api(`/api/pedidos/${pedidoAtual.id}`);
+    if (!r || !r.ok) return;
+    const p = await r.json();
+    pedidoAtual = p;
+    if (p.status === 'pago' || p.status === 'em_andamento' || p.status === 'concluido') {
+      await executarConsultaEMostrar();
+    } else {
+      document.getElementById('pgto-status').textContent = 'Pagamento ainda não confirmado.';
+    }
+  }
+
+  async function executarConsultaEMostrar() {
+    document.getElementById('pgto-card').style.display = 'none';
+    document.getElementById('processing-card').style.display = '';
+    const r = await api(`/api/pedidos/${pedidoAtual.id}/consultar`, { method: 'POST' });
+    if (!r || !r.ok) {
+      document.getElementById('processing-card').style.display = 'none';
+      const e = r ? await r.json().catch(() => ({})) : {};
+      return alerta(e.erro || e.mensagem || 'Erro ao executar consulta.', 'erro');
+    }
+    const out = await r.json();
+    const dados = out.resultados || {};
+    document.getElementById('processing-card').style.display = 'none';
+    renderizarResultado(dados);
+  }
+
+  function renderizarResultado(dados) {
+    document.getElementById('resultado-card').style.display = '';
+
+    const com = temRestricoes(dados);
+    const banner = document.getElementById('status-banner');
+    banner.className = 'status-banner ' + (com ? 'status-com' : 'status-sem');
+    banner.innerHTML = (com ? '⚠️ COM RESTRIÇÕES' : '✅ SEM RESTRIÇÕES') +
+      `<small>${com ? 'Foram encontrados protestos, negativações ou score crítico.' : 'Nenhum protesto, negativação ou indicador crítico encontrado.'}</small>`;
+
+    // Identificação
+    const cad = dados.receita_federal || {};
+    const nome = pedidoAtual.alvo_nome || cad.nome || cad.razao_social || '-';
+    const isPJ = limparDoc(pedidoAtual.alvo_documento).length === 14;
+    document.getElementById('r-identificacao').innerHTML = `
+      <div><strong>${isPJ ? 'Razão Social' : 'Nome'}:</strong> ${esc(nome)}</div>
+      <div><strong>${isPJ ? 'CNPJ' : 'CPF'}:</strong> <code>${esc(pedidoAtual.alvo_documento)}</code></div>
+      <div><strong>Situação RF:</strong> ${esc(cad.situacao_rf || cad.situacao || 'Não informada')}</div>
+    `;
+
+    // Score
+    const sc = dados.score_credito || {};
+    const sQuod = Number(sc.score || 0);
+    const cls = sQuod >= 700 ? 'score-good' : sQuod >= 400 ? 'score-mid' : 'score-bad';
+    document.getElementById('r-score').innerHTML = sQuod
+      ? `<div class="score-box">
+           <div class="score-num ${cls}">${sQuod}<small>/1000</small></div>
+           <div><div class="score-faixa ${cls}">${esc(sc.faixa || '-')}</div>
+             ${(sc.motivos || []).slice(0, 2).map(m => `<div style="font-size:11px;color:#6b7280">• ${esc(m)}</div>`).join('')}
+           </div>
+         </div>`
+      : '<div style="color:#6b7280;font-size:13px">Score não disponível para este documento.</div>';
+
+    // Protestos
+    const protestosFonte = dados.protestos || {};
+    const negativacoes = dados.negativacoes || {};
+    const protestos = [...(negativacoes.protestos || []), ...(protestosFonte.protestos || [])];
+    document.getElementById('r-protestos').innerHTML = protestos.length
+      ? protestos.slice(0, 10).map(p => {
+          const cart = p.nome_cartorio || p.cartorio || 'Cartório';
+          const valor = Number(p.valor_total_protesto || p.valor || 0);
+          return `<div class="lista-item">
+            <div class="titulo">${esc(cart)} — R$ ${valor.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</div>
+            ${p.cidade ? `<div class="meta">${esc(p.cidade)}</div>` : ''}
+          </div>`;
+        }).join('')
+      : '<div class="nada-consta">NADA CONSTA — nenhum protesto encontrado.</div>';
+
+    // Negativações
+    const valorPend = Number(negativacoes.total_pendencias || 0);
+    const acoes = negativacoes.acoes_judiciais || [];
+    const cheques = negativacoes.cheques_sem_fundo || [];
+    const falencias = negativacoes.falencias || [];
+    const semNeg = !valorPend && !acoes.length && !cheques.length && !falencias.length;
+    let htmlNeg = '';
+    if (semNeg && negativacoes.status) {
+      htmlNeg = '<div class="nada-consta">NADA CONSTA — nenhuma negativação ativa.</div>';
+    } else if (!negativacoes.status) {
+      htmlNeg = '<div style="color:#6b7280;font-size:13px">Consulta indisponível.</div>';
+    } else {
+      if (valorPend > 0) htmlNeg += `<div class="lista-item"><div class="titulo">Total em pendências: R$ ${valorPend.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</div></div>`;
+      acoes.slice(0, 5).forEach(a => {
+        htmlNeg += `<div class="lista-item"><div class="titulo">${esc(a.tipo || 'Ação judicial')} — R$ ${Number(a.valor || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</div>${a.data ? `<div class="meta">${esc(a.data)}</div>` : ''}</div>`;
+      });
+      cheques.slice(0, 5).forEach(c => {
+        htmlNeg += `<div class="lista-item"><div class="titulo">Cheque sem fundo — Banco ${esc(c.banco || '-')} Ag. ${esc(c.agencia || '-')}</div>${c.data ? `<div class="meta">${esc(c.data)}</div>` : ''}</div>`;
+      });
+      falencias.slice(0, 3).forEach(f => {
+        htmlNeg += `<div class="lista-item"><div class="titulo">${esc(f.tipo || 'Falência')}</div>${f.data ? `<div class="meta">${esc(f.data)}</div>` : ''}</div>`;
+      });
+    }
+    document.getElementById('r-negativacoes').innerHTML = htmlNeg;
+  }
+
+  function temRestricoes(dados) {
+    const neg = dados.negativacoes || {};
+    const sc = dados.score_credito || {};
+    const valorPend = Number(neg.total_pendencias || 0);
+    const totalProt = ((neg.protestos || []).length) + ((dados.protestos?.protestos || []).length);
+    const sQuod = Number(sc.score || 0);
+    if (valorPend > 0) return true;
+    if ((neg.status || '').toLowerCase().includes('pendenc')) return true;
+    if (totalProt > 0) return true;
+    if (sQuod > 0 && sQuod < 300) return true;
+    return false;
+  }
+
+  async function gerarPDF() {
+    if (!pedidoAtual) return;
+    const btn = document.getElementById('btn-gerar-pdf');
+    btn.disabled = true; btn.textContent = 'Gerando…';
+    const r = await api(`/api/pedidos/${pedidoAtual.id}/concluir`, { method: 'POST', body: JSON.stringify({}) });
+    btn.disabled = false; btn.textContent = '📄 Gerar PDF';
+    if (!r || !r.ok) return alerta('Erro ao gerar PDF.', 'erro');
+    const out = await r.json();
+    const link = document.getElementById('btn-baixar-pdf');
+    link.href = out.url; link.style.display = '';
+    alerta('PDF gerado com sucesso.', 'ok');
+  }
+
+  function resetar() {
+    pedidoAtual = null;
+    document.getElementById('resultado-card').style.display = 'none';
+    document.getElementById('pgto-card').style.display = 'none';
+    document.getElementById('processing-card').style.display = 'none';
+    document.getElementById('form-card').style.display = '';
+    document.getElementById('alvo_nome').value = '';
+    document.getElementById('alvo_documento').value = '';
+    document.getElementById('cliente_nome').value = '';
+    document.getElementById('aceite_termos').checked = false;
+    document.getElementById('tipo-detectado').textContent = '';
+    document.getElementById('btn-baixar-pdf').style.display = 'none';
+  }
+
+  // Pre-fill cliente se existir
+  if (usuario.nome) document.getElementById('cliente_nome').value = usuario.nome;
+  carregarCustoAdmin();
+</script>
+
+</body>
+</html>

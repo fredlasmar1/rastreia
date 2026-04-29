@@ -27,6 +27,7 @@ const renderers = {
   investigacao_patrimonial: require('./investigacao_patrimonial').render,
   analise_devedor: require('./analise_devedor').render,
   consulta_veicular: require('./consulta_veicular').render,
+  consulta_restricoes: require('./consulta_restricoes').render,
 };
 
 function montarDados(dadosDB) {
@@ -55,7 +56,7 @@ function gerarDossie(pedido, dadosDB) {
 
       // Consulta veicular não calcula score geral — próprio renderer lida
       let score, checklist;
-      if (pedido.tipo === 'consulta_veicular') {
+      if (pedido.tipo === 'consulta_veicular' || pedido.tipo === 'consulta_restricoes') {
         score = { score: '-', classificacao: '-', alertas: [], contribuicoes: [] };
         checklist = [];
       } else {
