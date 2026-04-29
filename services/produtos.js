@@ -191,6 +191,26 @@ const PRODUTOS = {
     ],
   },
 
+  consulta_restricoes: {
+    nome: 'Consulta de Restrições',
+    preco: 19,
+    prazo_horas: 0.25,
+    icone: '🚦',
+    publico_alvo: [
+      'Quem precisa apenas conferir se um CPF/CNPJ está negativado',
+      'Triagem rápida antes de iniciar uma negociação',
+      'Cobrança que quer saber se vale enviar carta/SMS',
+      'Vendedor que quer pré-checar cliente antes de fechar',
+    ],
+    argumento: 'Versão light e barata: em poucos minutos verificamos se o CPF/CNPJ tem protestos, negativações e qual o score de crédito (QUOD). Sem processos, sem patrimônio — apenas restrições financeiras.',
+    dados_entregues: [
+      { secao: 'IDENTIFICAÇÃO', campos: ['Nome/Razão Social', 'CPF/CNPJ', 'Situação na Receita Federal'] },
+      { secao: 'RESTRIÇÕES', campos: ['Score QUOD (0-1000) com faixa', 'Protestos em cartório', 'Negativações (SCPC/Serasa via Direct Data)', 'Cheques sem fundo (quando disponível)'] },
+      { secao: 'PARECER', campos: ['Status: SEM RESTRIÇÕES / COM RESTRIÇÕES', 'Total de pendências em R$', 'Resumo dos cartórios e credores'] },
+    ],
+    fatores_score: [],
+  },
+
   consulta_veicular: {
     nome: 'Consulta Veicular',
     preco: 97,
