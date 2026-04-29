@@ -623,9 +623,50 @@ async function consultarScore(documento, tipo) {
 
 // ─────────────────────────────────────────────
 // 7. DETALHAMENTO NEGATIVO — Direct Data
-// Protestos, ações judiciais, falência, cheques
-// Endpoint: /api/DetalhamentoNegativo | R$ 2,38
+// Protestos, ações judiciais, falência, cheques (NÃO traz lista de credores)
+// Endpoint base: /api/DetalhamentoNegativo | R$ 2,38
+// Endpoint complementar: /api/BoaVistaAcertaCompletoPositivoPF (PF) ou
+//   /api/BoaVistaDefineLimitePositivoPJ (PJ) — traz a lista detalhada de
+//   credores/apontamentos (pendenciasFinanceiras.ocorrencias).
 // ─────────────────────────────────────────────
+
+async function consultarApontamentosBoaVista(doc) {
+  // Retorna o array de apontamentos (credor, valor, data, contrato...) via
+  // Boa Vista Acerta Completo (PF) / Define Limite Positivo (PJ).
+  // Em caso de falha, retorna [] e segue o fluxo principal.
+  try {
+    const isPF = doc.length <= 11;
+    const url = isPF
+      ? 'https://apiv3.directd.com.br/api/BoaVistaAcertaCompletoPositivoPF'
+      : 'https://apiv3.directd.com.br/api/BoaVistaDefineLimitePositivoPJ';
+    const params = isPF
+      ? { CPF: doc, Token: process.env.DIRECTD_TOKEN }
+      : { CNPJ: doc, Token: process.env.DIRECTD_TOKEN };
+    const res = await axios.get(url, { params, timeout: 30000 });
+    const retorno = res.data?.retorno || {};
+    const pend = isPF
+      ? (retorno.pendenciasFinanceiras || {})
+      : (retorno.restricoes?.pendenciasFinanceiras || {});
+    const ocorrencias = Array.isArray(pend.ocorrencias) ? pend.ocorrencias : [];
+    return ocorrencias.map(o => ({
+      credor: o.credor || o.informante || '',
+      contrato: o.contrato || '',
+      tipo_contrato: o.modalidade || o.origem || '',
+      valor: Number(String(o.valor || '0').replace(',', '.')) || 0,
+      data_inclusao: o.dataInclusao || '',
+      data_ocorrencia: o.dataVencimento || '',
+      cidade: '',
+      uf: '',
+      telefone: '',
+      situacao: o.subjudice && /sim|s$|true/i.test(o.subjudice) ? 'Sub judice' : ''
+    }));
+  } catch (e) {
+    const status = e.response?.status;
+    const msg = e.response?.data?.metaDados?.mensagem || e.message;
+    console.warn(`[BoaVistaApontamentos] Sem detalhamento (${status || 'erro'}): ${msg}`);
+    return [];
+  }
+}
 
 async function consultarNegativacoes(documento) {
   if (!process.env.DIRECTD_TOKEN) {
@@ -663,37 +704,27 @@ async function consultarNegativacoes(documento) {
       });
     });
 
-    // Lista detalhada de negativacoes (apontamentos SCPC/Serasa).
-    // Direct Data nomeia o array de várias formas conforme versão da API:
-    // pendencias | apontamentos | itens | listaPendencias.
-    const itensBruto = pf.pendencias
-      || pf.apontamentos
-      || pf.itens
-      || pf.listaPendencias
-      || pf.detalhamento
-      || [];
-    const itensNeg = (Array.isArray(itensBruto) ? itensBruto : []).map(it => ({
-      credor: it.nomeCredor || it.credor || it.informante || it.empresaCredora || it.razaoSocial || '',
-      contrato: it.contrato || it.numeroContrato || it.documento || it.numero || '',
-      tipo_contrato: it.tipoContrato || it.modalidade || it.tipo || it.especie || '',
-      valor: Number(it.valor || it.valorPendencia || it.valorTotal || 0),
-      data_inclusao: it.dataInclusao || it.dataOcorrencia || it.data || it.dataAbertura || '',
-      data_ocorrencia: it.dataOcorrencia || it.dataVencimento || '',
-      cidade: it.cidade || it.municipio || '',
-      uf: it.uf || it.estado || '',
-      telefone: it.telefone || it.telefoneCredor || '',
-      situacao: it.situacao || it.status || ''
-    }));
+    // Lista detalhada de credores: DetalhamentoNegativo NÃO retorna o array de
+    // credores (apenas total agregado). Buscamos via Boa Vista Acerta Completo
+    // (PF) / Define Limite Positivo (PJ), que expõe pendenciasFinanceiras.ocorrencias.
+    let itensNeg = [];
+    const totalPendencia = Number(pf.totalPendencia || 0);
+    const temProtesto = (pf.protestos || []).length > 0;
+    if (totalPendencia > 0 || temProtesto) {
+      itensNeg = await consultarApontamentosBoaVista(doc);
+    }
 
     return {
       status: pf.status || 'Nao consultado',
-      total_pendencias: pf.totalPendencia || 0,
+      total_pendencias: totalPendencia,
       protestos: todosCartorios,
       pendencias: itensNeg,
       acoes_judiciais: pf.acoesJudiciais || pf.acoes || [],
       cheques_sem_fundo: pf.chequesSemFundo || pf.cheques || [],
-      falencias: pf.falencias || [],
-      fonte: 'Direct Data (Detalhamento Negativo)',
+      falencias: pf.recuperacoesJudiciaisFalencia || pf.falencias || [],
+      fonte: itensNeg.length > 0
+        ? 'Direct Data (Detalhamento Negativo + Boa Vista Acerta Completo)'
+        : 'Direct Data (Detalhamento Negativo)',
       consultado_em: new Date().toISOString()
     };
   } catch (e) {
