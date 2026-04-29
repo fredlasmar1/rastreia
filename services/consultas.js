@@ -650,19 +650,46 @@ async function consultarNegativacoes(documento) {
           situacao: p.situacao || '',
           valor_total_protesto: p.valorTotal || 0,
           nome_cartorio: c.nome || '',
-          cidade: c.codigoCidade || '',
+          cidade: c.codigoCidade || c.cidade || '',
+          uf: c.uf || c.estado || '',
           telefone: c.telefone || '',
           titulos: (c.titulos || []).slice(0, 10).map(t => ({
-            valor: t.valor || 0, data: t.data || t.dataProtesto || '',
-            tipo: t.especie || t.tipo || ''
+            valor: t.valor || 0,
+            data: t.data || t.dataProtesto || '',
+            tipo: t.especie || t.tipo || '',
+            apresentante: t.apresentante || ''
           }))
         });
       });
     });
+
+    // Lista detalhada de negativacoes (apontamentos SCPC/Serasa).
+    // Direct Data nomeia o array de várias formas conforme versão da API:
+    // pendencias | apontamentos | itens | listaPendencias.
+    const itensBruto = pf.pendencias
+      || pf.apontamentos
+      || pf.itens
+      || pf.listaPendencias
+      || pf.detalhamento
+      || [];
+    const itensNeg = (Array.isArray(itensBruto) ? itensBruto : []).map(it => ({
+      credor: it.nomeCredor || it.credor || it.informante || it.empresaCredora || it.razaoSocial || '',
+      contrato: it.contrato || it.numeroContrato || it.documento || it.numero || '',
+      tipo_contrato: it.tipoContrato || it.modalidade || it.tipo || it.especie || '',
+      valor: Number(it.valor || it.valorPendencia || it.valorTotal || 0),
+      data_inclusao: it.dataInclusao || it.dataOcorrencia || it.data || it.dataAbertura || '',
+      data_ocorrencia: it.dataOcorrencia || it.dataVencimento || '',
+      cidade: it.cidade || it.municipio || '',
+      uf: it.uf || it.estado || '',
+      telefone: it.telefone || it.telefoneCredor || '',
+      situacao: it.situacao || it.status || ''
+    }));
+
     return {
       status: pf.status || 'Nao consultado',
       total_pendencias: pf.totalPendencia || 0,
       protestos: todosCartorios,
+      pendencias: itensNeg,
       acoes_judiciais: pf.acoesJudiciais || pf.acoes || [],
       cheques_sem_fundo: pf.chequesSemFundo || pf.cheques || [],
       falencias: pf.falencias || [],
@@ -700,8 +727,13 @@ async function consultarProtestos(documento) {
     return {
       total: r.quantidade || r.total || 0,
       protestos: (r.protestos || r.itens || []).map(p => ({
-        valor: p.valor || 0, data: p.data || p.dataProtesto || '',
-        cartorio: p.cartorio || p.nomeCartorio || '', cidade: p.cidade || ''
+        valor: Number(p.valor || p.valorTotal || 0),
+        data: p.data || p.dataProtesto || '',
+        cartorio: p.cartorio || p.nomeCartorio || p.nome || '',
+        cidade: p.cidade || p.municipio || '',
+        uf: p.uf || p.estado || '',
+        devedor: p.devedor || p.nomeDevedor || '',
+        documento: p.documento || p.numeroTitulo || ''
       })),
       fonte: 'Direct Data Protestos',
       consultado_em: new Date().toISOString()
