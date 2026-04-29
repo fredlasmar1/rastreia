@@ -18,6 +18,7 @@ const CUSTOS_APIS = {
   directdata_cnpj_plus: 0.36,         // CadastroPessoaJuridicaPlus
   directdata_score_quod: 0.72,        // Score de Crédito – QUOD (PF/PJ)
   directdata_negativacoes: 2.38,      // Detalhamento Negativo (PF/PJ)
+  directdata_apontamentos_bv: 3.50,   // Boa Vista Acerta Completo (PF) / Define Limite (PJ) — lista de credores
   directdata_protestos: 0.72,         // Protestos Nacional (Base)
   directdata_nivel_socio: 0.36,       // Nível Socioeconômico e Renda (PF)
   directdata_vinculos: 1.84,          // Vínculos Societários (PF e PJ)
@@ -42,6 +43,7 @@ const ROTULOS_APIS = {
   directdata_cnpj_plus: 'DirectData — Cadastro PJ Plus',
   directdata_score_quod: 'DirectData — Score QUOD',
   directdata_negativacoes: 'DirectData — Detalhamento Negativo',
+  directdata_apontamentos_bv: 'DirectData — Boa Vista Acerta/Define Limite (apontamentos)',
   directdata_protestos: 'DirectData — Protestos Nacional',
   directdata_nivel_socio: 'DirectData — Nível Socioeconômico',
   directdata_vinculos: 'DirectData — Vínculos Societários',
@@ -121,6 +123,7 @@ const APIS_POR_PRODUTO = {
     'directdata_cpf_plus',          // identificação básica + situação RF
     'directdata_score_quod',        // score QUOD com faixa
     'directdata_negativacoes',      // SCPC/Serasa via DirectData (Detalhamento Negativo)
+    'directdata_apontamentos_bv',   // lista detalhada de credores (Boa Vista Acerta/Define Limite)
     'directdata_protestos'          // protestos em cartório
   ]
 };

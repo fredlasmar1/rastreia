@@ -292,12 +292,12 @@ function blocoNegativacoes(doc, y, dados) {
     }
     y += 4;
   } else if (valorPend > 0) {
-    // Total > 0 mas a base não retornou itens individuais
-    y = verificarPagina(doc, y, 22);
-    doc.rect(MARGEM, y, LARGURA, 18).fill('#fef3c7');
+    // Total > 0 mas a base Boa Vista não retornou ocorrências individuais
+    y = verificarPagina(doc, y, 32);
+    doc.rect(MARGEM, y, LARGURA, 28).fill('#fef3c7');
     doc.fillColor('#92400e').fontSize(8).font('Helvetica')
-      .text('Lista detalhada de credores não retornada pela base — somente o total agregado está disponível.', MARGEM + 8, y + 5, { width: LARGURA - 16 });
-    y += 24;
+      .text('A base Direct Data confirmou pendências (total acima), mas não retornou os apontamentos individuais para este documento. Para detalhamento credor a credor pode ser necessária consulta complementar SCPC/Serasa direta.', MARGEM + 8, y + 4, { width: LARGURA - 16 });
+    y += 34;
   }
 
   if (acoes.length > 0) {
@@ -371,7 +371,7 @@ function render(doc, pedido, dados, score, checklist, produto) {
 
   // Fontes específicas: Direct Data apenas. blocoFinal já lista DD genérico.
   chrome.blocoFinal(doc, y, [
-    'Direct Data — Detalhamento Negativo (SCPC/Serasa) e Protestos Nacional'
+    'Direct Data — Detalhamento Negativo, Boa Vista Acerta/Define Limite e Protestos Nacional'
   ]);
 }
 
