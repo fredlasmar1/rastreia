@@ -225,9 +225,22 @@
     }
   }
 
-  function mostrarPagamento() {
+  async function mostrarPagamento() {
     document.getElementById('pgto-card').style.display = '';
     const link = document.getElementById('link-mp');
+
+    // Se o backend não devolveu init_point junto com o pedido, tenta criar via endpoint
+    // dedicado (POST /api/pedidos/:id/pagamento).
+    if (!pedidoAtual.mp_init_point) {
+      try {
+        const r = await api(`/api/pedidos/${pedidoAtual.id}/pagamento`, { method: 'POST', body: '{}' });
+        if (r && r.ok) {
+          const d = await r.json();
+          if (d.init_point) pedidoAtual.mp_init_point = d.init_point;
+        }
+      } catch (_) {}
+    }
+
     if (pedidoAtual.mp_init_point) {
       link.href = pedidoAtual.mp_init_point;
       link.style.display = '';

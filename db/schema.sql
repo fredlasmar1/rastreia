@@ -302,3 +302,23 @@ ALTER TABLE pedidos ADD COLUMN IF NOT EXISTS erro_processamento TEXT;
 --   'cpf_ilegivel'        — IA não conseguiu extrair CPF/CNPJ legível
 --   'aguardando_extracao' — pedido criado sem CPF, esperando extração da IA
 -- A coluna já é VARCHAR(20), nenhuma migration estrutural necessária.
+
+-- ==========================================================================
+-- Fase 8: Mercado Pago — log de eventos do webhook (idempotência + auditoria)
+-- ==========================================================================
+-- Cada chamada do webhook do MP é registrada aqui. Permite (1) responder com
+-- 200 rapidamente sem perder rastro e (2) detectar reentregas (mesmo payment_id
+-- chegando 2x não dispara o pipeline de novo).
+CREATE TABLE IF NOT EXISTS pagamentos_log (
+  id SERIAL PRIMARY KEY,
+  pedido_id UUID REFERENCES pedidos(id) ON DELETE SET NULL,
+  payment_id VARCHAR(100),
+  tipo VARCHAR(50),         -- 'payment' | 'merchant_order' | etc
+  status VARCHAR(50),       -- 'approved' | 'rejected' | 'pending' | ...
+  raw JSONB,                -- corpo cru recebido do MP
+  processado BOOLEAN DEFAULT false,
+  erro TEXT,
+  criado_em TIMESTAMP DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_pagamentos_log_pedido ON pagamentos_log(pedido_id);
+CREATE INDEX IF NOT EXISTS idx_pagamentos_log_payment ON pagamentos_log(payment_id);

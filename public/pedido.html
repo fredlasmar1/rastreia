@@ -121,7 +121,7 @@
 
       <!-- AÇÕES -->
       <div class="acoes-bar">
-        ${p.status === 'aguardando_pagamento' && p.mp_init_point ? `<a href="${esc(p.mp_init_point)}" target="_blank" class="btn btn-success">💳 Pagar Agora — R$ ${Number(p.valor).toLocaleString('pt-BR', {minimumFractionDigits:2})}</a>` : ''}
+        ${p.status === 'aguardando_pagamento' ? `<button class="btn btn-success" onclick="pagarAgora()">💳 Pagar Agora — R$ ${Number(p.valor).toLocaleString('pt-BR', {minimumFractionDigits:2})}</button>` : ''}
         ${p.status === 'aguardando_pagamento' ? `<button class="btn btn-outline" onclick="marcarPago()">✅ Confirmar Pagamento Manual</button>` : ''}
         ${p.status === 'pago' ? `<button class="btn btn-primary" onclick="iniciar()">▶ Iniciar Análise</button>` : ''}
         ${p.status === 'em_andamento' ? `
@@ -414,6 +414,60 @@
     await api(`/api/pedidos/${id}/pago`, { method: 'PATCH', body: JSON.stringify({ mp_payment_id: 'manual' }) });
     mostrarAlerta('Pagamento confirmado!', 'success');
     setTimeout(carregar, 1000);
+  }
+
+  // Cria/recupera a preference do MP e abre o checkout. Inicia o polling em paralelo
+  // pra detectar a confirmação automática quando o webhook do MP chegar.
+  async function pagarAgora() {
+    try {
+      const r = await fetch(`/api/pedidos/${id}/pagamento`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }
+      });
+      const data = await r.json().catch(() => ({}));
+      if (!r.ok || !data.init_point) {
+        mostrarAlerta(data.mensagem || data.erro || 'Não foi possível iniciar o pagamento.', 'error');
+        return;
+      }
+      iniciarPollingPagamento();
+      window.location.href = data.init_point;
+    } catch (e) {
+      mostrarAlerta('Erro de conexão ao iniciar pagamento.', 'error');
+    }
+  }
+
+  // Polling pós-redirect: consulta o status a cada 3s por até 2 min para pegar
+  // a confirmação automática do webhook (PDF é gerado em background).
+  let pollingTimer = null;
+  let pollingTries = 0;
+  function iniciarPollingPagamento() {
+    if (pollingTimer) return;
+    pollingTries = 0;
+    pollingTimer = setInterval(async () => {
+      pollingTries++;
+      if (pollingTries > 40) { clearInterval(pollingTimer); pollingTimer = null; return; }
+      try {
+        const r = await fetch(`/api/pedidos/${id}/pagamento/status`, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        if (!r.ok) return;
+        const s = await r.json();
+        if (s.status && s.status !== 'aguardando_pagamento') {
+          clearInterval(pollingTimer); pollingTimer = null;
+          mostrarAlerta('Pagamento confirmado! Atualizando...', 'success');
+          setTimeout(carregar, 800);
+        }
+      } catch (_) { /* tenta de novo */ }
+    }, 3000);
+  }
+
+  // Auto-polling se voltamos do MP com pedido ainda pendente
+  if (typeof window !== 'undefined') {
+    setTimeout(() => {
+      if (pedidoAtual && pedidoAtual.status === 'aguardando_pagamento') {
+        iniciarPollingPagamento();
+      }
+    }, 1500);
   }
 
   async function iniciar() {
