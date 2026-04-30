@@ -1679,7 +1679,7 @@ async function executarConsultasParaAlvo(alvo, { precisaVinculos, precisaVeiculo
   // Custo estimado por sócio: ~R$ 5,00 — dentro da margem do produto (R$ 997).
   let socios_enriquecidos = null;
   if (tipo === 'due_diligence' && tipoAlvo === 'PJ' && Array.isArray(cadastral?.socios) && cadastral.socios.length) {
-    socios_enriquecidos = await enriquecerSocios(cadastral.socios);
+    socios_enriquecidos = await enriquecerSocios(cadastral.socios, documento);
   }
 
   return {
@@ -1695,15 +1695,65 @@ async function executarConsultasParaAlvo(alvo, { precisaVinculos, precisaVeiculo
   };
 }
 
+// Direct Data — Receita Federal Pessoa Jurídica com QSA habilitado.
+// Diferente da CNPJá (que mascara o CPF do sócio para `***405697**`), a Direct
+// Data devolve o CPF completo no campo `documentoSocio` quando QSA=Habilitar.
+// Usamos somente para resolver CPFs reais antes de enriquecer cada sócio.
+async function consultarQSADirectd(cnpj) {
+  if (!process.env.DIRECTD_TOKEN) return null;
+  try {
+    const doc = limparDoc(cnpj);
+    const res = await axios.get('https://apiv3.directd.com.br/api/ReceitaFederalPessoaJuridica', {
+      params: { Cnpj: doc, Qsa: 'Habilitar', Token: process.env.DIRECTD_TOKEN },
+      timeout: 30000
+    });
+    let r = res.data?.retorno || res.data || {};
+    if (Array.isArray(r)) r = r[0] || {};
+    const lista = r.socios || r.qsa || r.quadroSocietario || [];
+    if (!Array.isArray(lista) || !lista.length) return null;
+    return lista.map(it => ({
+      nome: it.nomeNomeEmpresarial || it.nome || it.nomeSocio || '',
+      cpf: limparDoc(String(it.documentoSocio || it.documento || it.cpf || '')),
+      qualificacao: it.qualificacao || it.qualificacaoSocio || '',
+      desde: it.dataEntrada || it.desde || ''
+    })).filter(x => x.cpf && x.cpf.length === 11);
+  } catch (e) {
+    const status = e.response?.status;
+    const msg = e.response?.data?.metaDados?.mensagem || e.response?.data?.mensagem || e.message;
+    logarFalhaAPI('Direct Data PJ (QSA)', status, msg);
+    return null;
+  }
+}
+
 // Enriquece cada sócio com cadastral + score + processos + listas negras (CGU).
 // Limita a 8 sócios para conter custo / latência. Cada sócio é processado em
 // paralelo com Promise.allSettled para não bloquear o todo se um falhar.
-async function enriquecerSocios(socios) {
+//
+// `cnpj` é usado para tentar resolver CPFs completos via Direct Data quando a
+// base cadastral primária (CNPJá) devolver CPFs mascarados (`***xxxxxx**`).
+async function enriquecerSocios(socios, cnpj) {
   const lista = (socios || []).slice(0, 8);
   if (!lista.length) return [];
 
+  // Tenta enriquecer CPFs mascarados via Direct Data PJ (QSA).
+  const algumMascarado = lista.some(s => {
+    const c = limparDoc(s.cpf || '');
+    return c.length !== 11;
+  });
+  let qsaFull = null;
+  if (algumMascarado && cnpj) {
+    qsaFull = await consultarQSADirectd(cnpj);
+  }
+
   const tarefas = lista.map(async (s) => {
-    const cpf = limparDoc(s.cpf || '');
+    let cpf = limparDoc(s.cpf || '');
+    // Se mascarado e QSA da Direct Data devolveu CPF completo para esse sócio
+    // (match por nome em case-insensitive), promove ao CPF real.
+    if (cpf.length !== 11 && Array.isArray(qsaFull)) {
+      const nomeNorm = String(s.nome || '').trim().toLowerCase();
+      const match = qsaFull.find(q => q.nome.trim().toLowerCase() === nomeNorm);
+      if (match?.cpf) cpf = match.cpf;
+    }
     const out = {
       nome: s.nome || '',
       qualificacao: s.qualificacao || '',

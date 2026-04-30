@@ -47,7 +47,7 @@ function secaoAnaliseSocios(doc, y, dados) {
 
   socios.forEach((s, i) => {
     const alertas = Array.isArray(s.alertas) ? s.alertas : [];
-    const altura = enriquecidos ? 56 : 42;
+    const altura = enriquecidos ? 62 : 42;
     y = verificarPagina(doc, y, altura + 4);
     const corFundo = alertas.length ? '#fef2f2' : (i % 2 === 0 ? '#f9fafb' : '#ffffff');
     doc.rect(MARGEM, y, LARGURA, altura).fill(corFundo).stroke(COR.borda);
@@ -56,18 +56,24 @@ function secaoAnaliseSocios(doc, y, dados) {
     // Linha 1: nome
     doc.fillColor(COR.azul).fontSize(8.5).font('Helvetica-Bold').text(s.nome || '-', MARGEM + 8, y + 4, { width: LARGURA - 16 });
 
-    // Linha 2: qualificação / CPF mascarado / desde
+    // Linha 2: qualificação / CPF mascarado / desde / situação RF
     const cpfTxt = s.cpf_mascarado || (s.cpf ? `CPF ${s.cpf}` : null);
     const linha2Parts = [s.qualificacao, cpfTxt, s.desde ? `Desde: ${s.desde}` : null];
-    if (s.idade) linha2Parts.push(`${s.idade} anos`);
     if (s.situacao_rf) linha2Parts.push(`RF: ${s.situacao_rf}`);
     doc.fillColor('#111827').fontSize(7).font('Helvetica').text(linha2Parts.filter(Boolean).join('  |  '), MARGEM + 8, y + 16, { width: LARGURA - 16 });
 
     if (enriquecidos) {
-      // Linha 3: score / processos / faixa renda
+      // Linha 3: idade | Score QUOD | Processos | (Renda)
       const linha3Parts = [];
-      if (s.score_quod != null) linha3Parts.push(`Score QUOD: ${s.score_quod}${s.faixa_score ? ' (' + s.faixa_score + ')' : ''}`);
-      if (s.qtd_processos != null) linha3Parts.push(`${s.qtd_processos} processo(s)`);
+      if (s.idade) linha3Parts.push(`Idade: ${s.idade} anos`);
+      if (s.score_quod != null) {
+        linha3Parts.push(`Score QUOD: ${s.score_quod}/1000${s.faixa_score ? ' (' + s.faixa_score + ')' : ''}`);
+      }
+      if (s.qtd_processos != null) {
+        linha3Parts.push(`Processos: ${s.qtd_processos}`);
+      } else if (s.processos_falhou || (!s.tem_cpf)) {
+        linha3Parts.push('Processos: consulta indisponível');
+      }
       if (s.faixa_renda) linha3Parts.push(`Renda: ${s.faixa_renda}`);
       if (linha3Parts.length) {
         doc.fillColor('#111827').fontSize(7).font('Helvetica').text(linha3Parts.join('  |  '), MARGEM + 8, y + 28, { width: LARGURA - 16 });
@@ -76,11 +82,11 @@ function secaoAnaliseSocios(doc, y, dados) {
       // Linha 4: alertas / falhas
       const sinaisFinais = [...alertas];
       if (s.cadastral_falhou) sinaisFinais.push(`cadastral indisponível: ${s.cadastral_falhou}`);
-      if (s.processos_falhou) sinaisFinais.push(`processos indisponíveis: ${s.processos_falhou}`);
+      if (s.processos_falhou && s.qtd_processos == null) sinaisFinais.push('processos indisponíveis');
       if (s.score_falhou && s.score_quod == null) sinaisFinais.push('score indisponível');
       const txtSinal = sinaisFinais.length ? sinaisFinais.join(' | ') : 'Sem alertas relevantes nas bases consultadas.';
       doc.fillColor(sinaisFinais.length ? COR.vermelho : COR.verde).fontSize(6.5).font('Helvetica-Oblique')
-        .text(txtSinal, MARGEM + 8, y + 41, { width: LARGURA - 16 });
+        .text(txtSinal, MARGEM + 8, y + 46, { width: LARGURA - 16 });
     } else {
       const sinais = [];
       if (s.outras_empresas) sinais.push(`${s.outras_empresas} empresa(s) vinculada(s)`);
