@@ -542,8 +542,35 @@ async function consultarTransparencia(documento, nome) {
       axios.get('https://api.portaldatransparencia.gov.br/api-de-dados/ceis', { params: { cnpjCpf: doc, pagina: 1 }, headers, timeout: 10000 }),
       axios.get('https://api.portaldatransparencia.gov.br/api-de-dados/cnep', { params: { cnpjCpf: doc, pagina: 1 }, headers, timeout: 10000 })
     ]);
-    const ceis_data = ceis.status === 'fulfilled' ? ceis.value.data || [] : [];
-    const cnep_data = cnep.status === 'fulfilled' ? cnep.value.data || [] : [];
+    const ceis_raw = ceis.status === 'fulfilled' ? ceis.value.data || [] : [];
+    const cnep_raw = cnep.status === 'fulfilled' ? cnep.value.data || [] : [];
+
+    // Defesa em profundidade: a API às vezes ignora o filtro cnpjCpf e devolve
+    // sanções de outras pessoas/empresas. Validamos cada registro comparando
+    // só os dígitos do documento sancionado com o documento consultado.
+    const docDigitos = doc;
+    const matchDoc = (registro) => {
+      const candidatos = [
+        registro?.pessoa?.cnpjFormatado,
+        registro?.pessoa?.cpfFormatado,
+        registro?.pessoa?.numeroInscricaoSocial,
+        registro?.pessoa?.codigoFormatado,
+        registro?.cnpjSancionado,
+        registro?.cpfSancionado,
+        registro?.codigoSancionado,
+        registro?.cnpjCpfSancionado,
+      ];
+      for (const c of candidatos) {
+        if (!c) continue;
+        const dig = String(c).replace(/\D/g, '');
+        if (dig && dig === docDigitos) return true;
+      }
+      return false;
+    };
+
+    const ceis_data = ceis_raw.filter(matchDoc);
+    const cnep_data = cnep_raw.filter(matchDoc);
+
     return {
       em_lista_negra: ceis_data.length > 0 || cnep_data.length > 0,
       ceis: ceis_data.slice(0, 5).map(r => ({

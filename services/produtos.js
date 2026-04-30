@@ -192,7 +192,7 @@ const PRODUTOS = {
   },
 
   consulta_restricoes: {
-    nome: 'Consulta de Restrições',
+    nome: 'Consulta de Restrições no CPF',
     preco: 19,
     prazo_horas: 0.25,
     icone: '🚦',
