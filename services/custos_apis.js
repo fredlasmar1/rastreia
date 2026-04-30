@@ -34,7 +34,16 @@ const CUSTOS_APIS = {
   portal_transparencia: 0.00,         // CEIS/CNEP
   datajud_cnj: 0.00,
   cnpjws_publico: 0.00,
-  cnpja_assinatura: 0.00              // mensalidade fixa, não por chamada
+  cnpja_assinatura: 0.00,             // mensalidade fixa, não por chamada
+
+  // Credify — Consulta Veicular (catálogo 23/04/2026)
+  credify_veicular_bnacional_online: 1.17,   // VeicularBNacionalOnLine
+  credify_gravame: 2.09,                     // Gravame
+  credify_renainf: 0.64,                     // Renainf
+  credify_renajud: 1.60,                     // RENAJUD
+  credify_historico_proprietarios: 8.00,     // HistoricoProprietarios
+  credify_indicio_sinistro: 1.92,            // IndicioSinistroVeicular
+  credify_veiculo_total: 31.27               // VeiculoTotal (pacote)
 };
 
 // Rótulos amigáveis exibidos no detalhamento
@@ -53,7 +62,14 @@ const ROTULOS_APIS = {
   portal_transparencia: 'Portal da Transparência (CEIS/CNEP)',
   datajud_cnj: 'Datajud CNJ',
   cnpjws_publico: 'CNPJ.ws (público)',
-  cnpja_assinatura: 'CNPJá (assinatura mensal)'
+  cnpja_assinatura: 'CNPJá (assinatura mensal)',
+  credify_veicular_bnacional_online: 'Credify — Veicular Base Nacional (online)',
+  credify_gravame: 'Credify — Gravame',
+  credify_renainf: 'Credify — Renainf (multas)',
+  credify_renajud: 'Credify — RENAJUD',
+  credify_historico_proprietarios: 'Credify — Histórico de Proprietários',
+  credify_indicio_sinistro: 'Credify — Indício de Sinistro',
+  credify_veiculo_total: 'Credify — VeiculoTotal (pacote completo)'
 };
 
 // Mapa produto → APIs consumidas (levantamento técnico do sistema)
@@ -125,6 +141,23 @@ const APIS_POR_PRODUTO = {
     'directdata_negativacoes',      // SCPC/Serasa via DirectData (Detalhamento Negativo)
     'directdata_apontamentos_bv',   // lista detalhada de credores (Boa Vista Acerta/Define Limite)
     'directdata_protestos'          // protestos em cartório
+  ],
+  // Consulta Veicular — apenas Credify (regra inviolável)
+  consulta_veicular_simples: [
+    'credify_veicular_bnacional_online',
+    'credify_gravame',
+    'credify_renainf'
+  ],
+  consulta_veicular_mediana: [
+    'credify_veicular_bnacional_online',
+    'credify_gravame',
+    'credify_renainf',
+    'credify_renajud',
+    'credify_historico_proprietarios',
+    'credify_indicio_sinistro'
+  ],
+  consulta_veicular_completa: [
+    'credify_veiculo_total'
   ]
 };
 
