@@ -40,12 +40,15 @@
   </div>
 
   <!-- Filtros -->
-  <div style="display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap">
+  <div style="display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap;align-items:center">
     <button class="btn btn-sm btn-primary" onclick="filtrar('')">Todos</button>
     <button class="btn btn-sm btn-outline" onclick="filtrar('aguardando_pagamento')">Aguardando Pgto</button>
     <button class="btn btn-sm btn-outline" onclick="filtrar('pago')">Pagos</button>
     <button class="btn btn-sm btn-outline" onclick="filtrar('em_andamento')">Em Andamento</button>
     <button class="btn btn-sm btn-outline" onclick="filtrar('concluido')">Concluídos</button>
+    <label id="toggle-deletados-wrap" style="display:none;margin-left:auto;font-size:13px;color:#475569;cursor:pointer">
+      <input type="checkbox" id="toggle-deletados" onchange="carregarPedidos()" style="vertical-align:middle"> Mostrar deletados
+    </label>
   </div>
 
   <!-- Tabela -->
@@ -71,13 +74,16 @@
   if (!token) window.location.href = '/';
   const usuario = JSON.parse(localStorage.getItem('rastreia_usuario') || '{}');
   document.getElementById('nav-user').textContent = usuario.nome || '';
-  if (usuario.perfil === 'admin') {
+  const isAdmin = usuario.perfil === 'admin';
+  if (isAdmin) {
     const navU = document.getElementById('nav-usuarios');
     const navC = document.getElementById('nav-custos');
     const navCredify = document.getElementById('nav-credify');
     if (navU) navU.style.display = '';
     if (navC) navC.style.display = '';
     if (navCredify) navCredify.style.display = '';
+    const togWrap = document.getElementById('toggle-deletados-wrap');
+    if (togWrap) togWrap.style.display = '';
   }
 
   function esc(str) { const d = document.createElement('div'); d.textContent = str; return d.innerHTML; }
@@ -125,8 +131,13 @@
   }
 
   async function carregarPedidos() {
-    const url = `/api/pedidos${filtroAtual ? '?status=' + filtroAtual : ''}`;
-    const data = await api(url);
+    const params = new URLSearchParams();
+    if (filtroAtual) params.set('status', filtroAtual);
+    const tog = document.getElementById('toggle-deletados');
+    const incluirDel = isAdmin && tog && tog.checked;
+    if (incluirDel) params.set('incluirDeletados', '1');
+    const qs = params.toString();
+    const data = await api('/api/pedidos' + (qs ? '?' + qs : ''));
     if (!data) return;
     const el = document.getElementById('tabela-content');
     if (!data.pedidos.length) {
@@ -141,8 +152,8 @@
         </tr></thead>
         <tbody>
           ${data.pedidos.map(p => `
-            <tr>
-              <td><strong>#${esc(String(p.numero))}</strong></td>
+            <tr data-id="${esc(p.id)}" ${p.deletado_em ? 'style="opacity:.55"' : ''}>
+              <td><strong>#${esc(String(p.numero))}</strong>${p.deletado_em ? ' <span class="badge badge-cancelado" title="Deletado em ' + esc(new Date(p.deletado_em).toLocaleString('pt-BR')) + '">deletado</span>' : ''}</td>
               <td>${TIPOS[p.tipo] || esc(p.tipo)}</td>
               <td>${esc(p.alvo_nome)}</td>
               <td><code>${esc(p.alvo_documento)}</code></td>
@@ -150,11 +161,35 @@
               <td><strong>R$ ${Number(p.valor).toLocaleString('pt-BR')}</strong></td>
               <td><span class="badge ${BADGES[p.status] || ''}">${STATUS_LABEL[p.status] || esc(p.status)}</span></td>
               <td>${new Date(p.criado_em).toLocaleDateString('pt-BR')}</td>
-              <td><a href="/pedido.html?id=${encodeURIComponent(p.id)}" class="btn btn-sm btn-outline">Abrir</a></td>
+              <td>
+                <a href="/pedido.html?id=${encodeURIComponent(p.id)}" class="btn btn-sm btn-outline">Abrir</a>
+                ${isAdmin && !p.deletado_em ? `<button class="btn btn-sm btn-outline" title="Excluir pedido" onclick="excluirPedido('${esc(p.id)}', '${esc(String(p.numero))}')" style="margin-left:4px;color:#b91c1c;border-color:#fecaca">🗑</button>` : ''}
+              </td>
             </tr>
           `).join('')}
         </tbody>
       </table>`;
+  }
+
+  async function excluirPedido(id, numero) {
+    if (!confirm(`Excluir pedido #${numero}?\n\nO pedido fica preservado no banco para auditoria, mas some das listagens.`)) return;
+    try {
+      const res = await fetch('/api/pedidos/' + encodeURIComponent(id), {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (res.status === 401) { logout(); return; }
+      if (!res.ok) {
+        const j = await res.json().catch(() => ({}));
+        alert('Falha ao excluir: ' + (j.erro || res.status));
+        return;
+      }
+      const tr = document.querySelector(`tr[data-id="${id}"]`);
+      if (tr) tr.remove();
+      carregarStats();
+    } catch (e) {
+      alert('Falha ao excluir: ' + e.message);
+    }
   }
 
   function filtrar(status) {

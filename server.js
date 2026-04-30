@@ -350,7 +350,7 @@ app.get('/relatorios/:filename', async (req, res) => {
     // Extrair ID do pedido pelo relatorio_url salvo no banco
     const relUrl = `/relatorios/${req.params.filename}`;
     const pedidoResult = await pool.query(
-      "SELECT * FROM pedidos WHERE relatorio_url = $1",
+      "SELECT * FROM pedidos WHERE relatorio_url = $1 AND deletado_em IS NULL",
       [relUrl]
     );
     if (pedidoResult.rows.length === 0) return res.status(404).send('Pedido nao encontrado. Gere o relatorio novamente.');

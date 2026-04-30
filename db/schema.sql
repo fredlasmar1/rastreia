@@ -298,6 +298,14 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_pedido_alvos_pedido_doc ON pedido_alvos(pe
 -- Mensagem de erro / bloqueio do processamento (ex: cpf_ilegivel)
 ALTER TABLE pedidos ADD COLUMN IF NOT EXISTS erro_processamento TEXT;
 
+-- ==========================================================================
+-- Fase 8: Soft delete de pedidos (admin only) — ver db/migrations/001
+-- Pedidos com deletado_em IS NOT NULL ficam ocultos das listagens padrão,
+-- mas permanecem no banco para auditoria.
+-- ==========================================================================
+ALTER TABLE pedidos ADD COLUMN IF NOT EXISTS deletado_em TIMESTAMP;
+CREATE INDEX IF NOT EXISTS idx_pedidos_deletado_em ON pedidos(deletado_em);
+
 -- Novos valores aceitos em analise_ia_status:
 --   'cpf_ilegivel'        — IA não conseguiu extrair CPF/CNPJ legível
 --   'aguardando_extracao' — pedido criado sem CPF, esperando extração da IA
