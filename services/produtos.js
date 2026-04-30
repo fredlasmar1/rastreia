@@ -559,24 +559,55 @@ function calcularScore(tipo, dados) {
 // ─────────────────────────────────────────────────────────
 
 function gerarChecklist(tipo, dadosAutomaticos) {
+  // Extrai UF / município do alvo a partir das consultas cadastrais para
+  // tornar os itens "CND Estadual" e "CND Municipal" dinâmicos. Cai em
+  // GO/Anápolis (sede da Recobro) somente como ultimo fallback explícito.
+  const cad = (dadosAutomaticos && (dadosAutomaticos.receita_federal || dadosAutomaticos.cadastral)) || {};
+  const uf = (cad.uf || '').toUpperCase().trim();
+  const municipio = (cad.municipio || '').trim();
+
+  const ufLabel = uf || 'UF do alvo';
+  const muniLabel = municipio || 'município do alvo';
+
+  // URLs SEFAZ por UF (consulta de débitos estaduais).
+  const SEFAZ_URL = {
+    AC: 'https://sefaz.ac.gov.br', AL: 'https://www.sefaz.al.gov.br', AM: 'https://online.sefaz.am.gov.br',
+    AP: 'https://www.sefaz.ap.gov.br', BA: 'https://www.sefaz.ba.gov.br', CE: 'https://www.sefaz.ce.gov.br',
+    DF: 'https://www.fazenda.df.gov.br', ES: 'https://internet.sefaz.es.gov.br', GO: 'https://www.sefaz.go.gov.br',
+    MA: 'https://portal.sefaz.ma.gov.br', MG: 'https://www.fazenda.mg.gov.br', MS: 'https://www.sefaz.ms.gov.br',
+    MT: 'https://www.sefaz.mt.gov.br', PA: 'https://www.sefa.pa.gov.br', PB: 'https://www.sefaz.pb.gov.br',
+    PE: 'https://www.sefaz.pe.gov.br', PI: 'https://www.sefaz.pi.gov.br', PR: 'https://www.fazenda.pr.gov.br',
+    RJ: 'https://www.fazenda.rj.gov.br', RN: 'https://www.set.rn.gov.br', RO: 'https://www.sefin.ro.gov.br',
+    RR: 'https://www.sefaz.rr.gov.br', RS: 'https://www.sefaz.rs.gov.br', SC: 'https://www.sef.sc.gov.br',
+    SE: 'https://www.sefaz.se.gov.br', SP: 'https://www.fazenda.sp.gov.br', TO: 'https://www.sefaz.to.gov.br'
+  };
+
+  const sefazUrl = SEFAZ_URL[uf] || 'https://www.gov.br';
+  const cartorioMunicipio = municipio ? `Cartório de Protesto de ${municipio}` : 'Cartório de Protesto local';
+  const sefazLabel = uf ? `SEFAZ-${uf}` : 'SEFAZ do estado do alvo';
+  const cndEstadualLabel = uf ? `Emitir CND Estadual SEFAZ-${uf}` : 'Emitir CND Estadual da SEFAZ do estado do alvo';
+  const cndMuniLabel = municipio
+    ? `Emitir CND Municipal Prefeitura de ${municipio}`
+    : 'Emitir CND Municipal junto à prefeitura do município do alvo';
+
   const checklists = {
     dossie_pf: [
       { item: 'Consultar Serasa manualmente', link: 'https://www.serasaexperian.com.br', obrigatorio: false },
-      { item: 'Verificar protestos no Cartório de Protesto de Anápolis', link: 'https://www.protestodigital.com.br', obrigatorio: false },
+      { item: `Verificar protestos no ${cartorioMunicipio}`, link: 'https://www.protestodigital.com.br', obrigatorio: false },
       { item: 'Confirmar endereço atual via Escavador/Datajud (verificação automática)', link: 'https://painel.escavador.com', obrigatorio: true },
       { item: 'Verificar se CPF consta no Cadastro de Inadimplentes do Município', link: '', obrigatorio: false },
     ],
     dossie_pj: [
       { item: 'Verificar Certidão Negativa Federal (PGFN)', link: 'https://solucoes.receita.fazenda.gov.br/servicos/certidaointernet/pj/emitir', obrigatorio: true },
-      { item: 'Verificar SEFAZ-GO (situação estadual Goiás)', link: 'https://www.sefaz.go.gov.br', obrigatorio: true },
-      { item: 'Verificar protestos no Cartório', link: 'https://www.protestodigital.com.br', obrigatorio: false },
+      { item: `Verificar ${sefazLabel} (situação estadual)`, link: sefazUrl, obrigatorio: true },
+      { item: `Verificar protestos no ${cartorioMunicipio}`, link: 'https://www.protestodigital.com.br', obrigatorio: false },
       { item: 'Revisar detalhes dos processos no painel Escavador', link: 'https://painel.escavador.com', obrigatorio: true },
       { item: 'Verificar Serasa PJ manualmente', link: 'https://www.serasaexperian.com.br', obrigatorio: false },
     ],
     due_diligence: [
       { item: 'Emitir CND Federal', link: 'https://solucoes.receita.fazenda.gov.br/servicos/certidaointernet/pj/emitir', obrigatorio: true },
-      { item: 'Emitir CND Estadual SEFAZ-GO', link: 'https://www.sefaz.go.gov.br', obrigatorio: true },
-      { item: 'Emitir CND Municipal Prefeitura de Anápolis', link: 'https://www.anapolis.go.gov.br', obrigatorio: true },
+      { item: cndEstadualLabel, link: sefazUrl, obrigatorio: true },
+      { item: cndMuniLabel, link: '', obrigatorio: true },
       { item: 'Emitir CND Trabalhista (TST)', link: 'https://www.tst.jus.br/certidao', obrigatorio: true },
       { item: 'Verificar FGTS (Caixa Econômica)', link: 'https://www.caixa.gov.br', obrigatorio: true },
       { item: 'Pesquisar marcas e patentes (INPI)', link: 'https://busca.inpi.gov.br', obrigatorio: false },
@@ -586,12 +617,12 @@ function gerarChecklist(tipo, dadosAutomaticos) {
     analise_devedor: [
       { item: 'Verificar Serasa Score do devedor', link: 'https://www.serasaexperian.com.br', obrigatorio: false },
       { item: 'Confirmar endereço para citação via Receita Federal / Escavador', link: 'https://painel.escavador.com', obrigatorio: true },
-      { item: 'Verificar protestos no Cartório de Anápolis', link: 'https://www.protestodigital.com.br', obrigatorio: false },
-      { item: 'Confirmar veículos no DETRAN-GO', link: 'https://www.detran.go.gov.br', obrigatorio: false },
+      { item: `Verificar protestos no ${cartorioMunicipio}`, link: 'https://www.protestodigital.com.br', obrigatorio: false },
+      { item: uf ? `Confirmar veículos no DETRAN-${uf}` : 'Confirmar veículos no DETRAN do estado do alvo', link: '', obrigatorio: false },
     ],
     investigacao_patrimonial: [
-      { item: 'Consultar Cartório de Registro de Imóveis de Anápolis (matrículas)', link: 'https://www.registrodeimoveis.org.br', obrigatorio: true },
-      { item: 'Consultar DETRAN-GO (veículos)', link: 'https://www.detran.go.gov.br', obrigatorio: true },
+      { item: municipio ? `Consultar Cartório de Registro de Imóveis de ${municipio} (matrículas)` : 'Consultar Cartório de Registro de Imóveis do município do alvo (matrículas)', link: 'https://www.registrodeimoveis.org.br', obrigatorio: true },
+      { item: uf ? `Consultar DETRAN-${uf} (veículos)` : 'Consultar DETRAN do estado do alvo (veículos)', link: '', obrigatorio: true },
       { item: 'Verificar RENAJUD (restrições judiciais em veículos)', link: 'https://www.cnj.jus.br/sistemas/renajud/', obrigatorio: false },
       { item: 'Verificar BACENJUD/SISBAJUD (bloqueio de contas)', link: 'https://www.cnj.jus.br/sistemas/sisbajud/', obrigatorio: false },
       { item: 'Pesquisar todas as empresas vinculadas no Escavador', link: 'https://www.escavador.com', obrigatorio: true },

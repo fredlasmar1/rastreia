@@ -71,10 +71,13 @@ async function consultarCNPJ(cnpj) {
       simples_nacional: d.taxRegime?.simples ? 'Optante' : 'Não optante',
       regime_tributario: d.taxRegime?.text || 'Não informado',
       endereco: address.street ? `${address.street}, ${address.number || 'S/N'} ${address.complement || ''} - ${address.district || ''}, ${address.city || ''} / ${address.state || ''} - CEP: ${address.zip || ''}` : 'Não informado',
+      municipio: address.city || '',
+      uf: address.state || '',
       email: (d.emails || [])[0]?.address || '',
       telefone: (d.phones || [])[0] ? `(${d.phones[0].area}) ${d.phones[0].number}` : '',
       socios: (company.members || []).map(s => ({
         nome: s.person?.name || s.name || '',
+        cpf: s.person?.taxId || s.taxId || s.cpf || '',
         qualificacao: s.role?.text || '',
         desde: s.since || ''
       })),
@@ -104,9 +107,11 @@ async function consultarCNPJ(cnpj) {
             atividade_principal: (d.cnae || [])[0]?.descricao || '',
             simples_nacional: (d.simplesNacional || [])[0]?.optante === 'Sim' ? 'Optante' : 'Nao optante',
             endereco: addr.logradouro ? `${addr.tipo || ''} ${addr.logradouro}, ${addr.numero || 'S/N'} - ${addr.bairro || ''}, ${addr.cidade || ''} / ${addr.uf || ''}` : 'Nao informado',
+            municipio: addr.cidade || '',
+            uf: addr.uf || '',
             email: d.email || '',
             telefone: (d.telefones || [])[0] ? `(${d.telefones[0].ddd}) ${d.telefones[0].numero}` : '',
-            socios: (d.socios || []).map(s => ({ nome: s.nome || '', qualificacao: s.qualificacao_socio?.descricao || '', desde: s.data_entrada || '' })),
+            socios: (d.socios || []).map(s => ({ nome: s.nome || '', cpf: s.cpf || s.documento || '', qualificacao: s.qualificacao_socio?.descricao || '', desde: s.data_entrada || '' })),
             fonte: 'Receita Federal via CPF.CNPJ', consultado_em: new Date().toISOString()
           };
         }
@@ -135,9 +140,11 @@ async function consultarCNPJFallback(doc) {
       capital_social: d.capital_social || 0,
       atividade_principal: est.atividade_principal?.descricao || '',
       endereco: est.logradouro ? `${est.logradouro}, ${est.numero || 'S/N'} - ${est.municipio?.nome || ''} / ${est.estado?.sigla || ''}` : 'Não informado',
+      municipio: est.municipio?.nome || '',
+      uf: est.estado?.sigla || '',
       email: est.email || '',
       telefone: est.ddd1 ? `(${est.ddd1}) ${est.telefone1}` : '',
-      socios: (d.socios || []).map(s => ({ nome: s.nome || '', qualificacao: s.qualificacao_socio?.descricao || '', desde: s.data_entrada || '' })),
+      socios: (d.socios || []).map(s => ({ nome: s.nome || '', cpf: s.cpf || s.documento || '', qualificacao: s.qualificacao_socio?.descricao || '', desde: s.data_entrada || '' })),
       fonte: 'Receita Federal via CNPJ.ws (fallback)',
       consultado_em: new Date().toISOString()
     };
@@ -330,7 +337,7 @@ async function consultarCPF(cpf) {
 // Datajud: api-publica.datajud.cnj.jus.br | gratuito
 // ─────────────────────────────────────────────
 
-async function consultarProcessos(documento, tipo, nome) {
+async function consultarProcessos(documento, tipo, nome, uf) {
   const doc = limparDoc(documento);
   let escavadorResult = null;
   if (process.env.ESCAVADOR_API_KEY) {
@@ -338,16 +345,48 @@ async function consultarProcessos(documento, tipo, nome) {
     if (!escavadorResult.erro) return escavadorResult;
   }
   // Escavador falhou ou nao configurado -> tenta Datajud, mas preserva diagnostico do Escavador
-  const datajud = await consultarDatajud(doc, tipo, nome);
+  const datajud = await consultarDatajud(doc, tipo, nome, uf);
   if (escavadorResult?.erro) {
     datajud.escavador_falhou = true;
     datajud.escavador_detalhes = escavadorResult.detalhes;
     datajud.escavador_status_http = escavadorResult.status_http;
     if (datajud.total === 0) {
-      datajud.nota = `Escavador indisponivel (${escavadorResult.status_http || 'erro'}): ${escavadorResult.detalhes}. Datajud consultado como fallback (cobertura limitada a TJGO/TRF1/STJ/TST) — nenhum processo encontrado.`;
+      datajud.nota = `Escavador indisponivel (${escavadorResult.status_http || 'erro'}): ${escavadorResult.detalhes}. Datajud consultado como fallback (${datajud.tribunais_consultados || ''}) — nenhum processo encontrado nas bases oficiais.`;
     }
   }
   return datajud;
+}
+
+// Mapa UF -> TRT (Justiça do Trabalho regional). 24 TRTs no total.
+const TRT_POR_UF = {
+  AC: 14, AL: 19, AM: 11, AP: 8, BA: 5, CE: 7, DF: 10, ES: 17, GO: 18,
+  MA: 16, MG: 3, MS: 24, MT: 23, PA: 8, PB: 13, PE: 6, PI: 22, PR: 9,
+  RJ: 1, RN: 21, RO: 14, RR: 11, RS: 4, SC: 12, SE: 20, SP: 2, TO: 10
+};
+
+// Mapa UF -> TRF (Justiça Federal). 6 regiões.
+const TRF_POR_UF = {
+  AC: 1, AM: 1, AP: 1, BA: 1, DF: 1, GO: 1, MA: 1, MG: 6, MT: 1, PA: 1, PI: 1,
+  RO: 1, RR: 1, TO: 1,
+  RJ: 2, ES: 2,
+  SP: 3, MS: 3,
+  AL: 5, CE: 5, PB: 5, PE: 5, RN: 5, SE: 5,
+  PR: 4, RS: 4, SC: 4
+};
+
+function tribunaisPorUF(uf) {
+  const u = String(uf || '').toUpperCase().trim();
+  if (!u || !TRT_POR_UF[u]) {
+    // Default seguro: STJ + TST (cobertura nacional). Sem TJ específico.
+    return ['stj', 'tst'];
+  }
+  return [
+    `tj${u.toLowerCase()}`,           // Tribunal de Justiça do estado
+    `trt${TRT_POR_UF[u]}`,            // TRT regional
+    `trf${TRF_POR_UF[u] || 1}`,       // TRF da região
+    'stj',                            // Superior Tribunal de Justiça
+    'tst'                             // Tribunal Superior do Trabalho
+  ];
 }
 
 async function consultarEscavador(doc, tipo, nome) {
@@ -449,7 +488,7 @@ async function consultarEscavador(doc, tipo, nome) {
   }
 }
 
-async function consultarDatajud(doc, tipo, nome) {
+async function consultarDatajud(doc, tipo, nome, uf) {
   const API_KEY = process.env.DATAJUD_API_KEY;
   if (!API_KEY) {
     return { total: 0, processos: [], fonte: 'Datajud CNJ', nota: 'Configure DATAJUD_API_KEY para consultar processos via Datajud.', consultado_em: new Date().toISOString() };
@@ -470,8 +509,8 @@ async function consultarDatajud(doc, tipo, nome) {
     sort: [{ dataAjuizamento: { order: 'desc' } }]
   };
 
-  // Prioriza TJGO (Goiás) + TRF1 (região de Anápolis) + STJ
-  const tribunais = ['tjgo', 'trf1', 'stj', 'tst'];
+  // Tribunais selecionados dinamicamente pela UF do alvo (TJ + TRT + TRF da regiao + STJ + TST).
+  const tribunais = tribunaisPorUF(uf);
 
   const respostas = await Promise.allSettled(
     tribunais.map(t =>
@@ -514,11 +553,13 @@ async function consultarDatajud(doc, tipo, nome) {
     }
   });
 
+  const tribunaisLabel = tribunais.map(t => t.toUpperCase()).join(' + ');
   return {
     total: processos.length,
     processos: processos.slice(0, 30),
-    nota: processos.length === 0 ? 'Escavador e Datajud consultados — nenhum processo encontrado nas bases oficiais.' : null,
-    fonte: 'Datajud CNJ (gratuito — TJGO + TRF1 + STJ + TST)',
+    tribunais_consultados: tribunaisLabel,
+    nota: processos.length === 0 ? `Datajud consultou ${tribunaisLabel} — nenhum processo encontrado nas bases oficiais.` : null,
+    fonte: `Datajud CNJ (gratuito — ${tribunaisLabel})`,
     consultado_em: new Date().toISOString()
   };
 }
@@ -1610,9 +1651,14 @@ async function executarConsultasParaAlvo(alvo, { precisaVinculos, precisaVeiculo
   const { documento, tipo: tipoAlvo, nome } = alvo;
   if (!documento) return {};
 
+  // Cadastral primeiro — precisamos da UF para escolher tribunais Datajud corretamente
+  // e para enriquecer sócios (due_diligence). Em troca de paralelismo, ganhamos
+  // dados consistentes por região e mini-dossiê de cada sócio.
+  const cadastral = tipoAlvo === 'PJ' ? await consultarCNPJ(documento) : await consultarCPF(documento);
+  const ufAlvo = cadastral?.uf || '';
+
   const promises = [
-    tipoAlvo === 'PJ' ? consultarCNPJ(documento) : consultarCPF(documento),
-    consultarProcessos(documento, tipoAlvo, nome),
+    consultarProcessos(documento, tipoAlvo, nome, ufAlvo),
     tipoAlvo === 'PJ' ? consultarTransparencia(documento, nome) : Promise.resolve(null),
     consultarScore(documento),
     consultarNegativacoes(documento),
@@ -1623,10 +1669,18 @@ async function executarConsultasParaAlvo(alvo, { precisaVinculos, precisaVeiculo
   if (precisaVeiculos) promises.push(consultarVeiculos(documento));
 
   const resultados = await Promise.all(promises);
-  const [cadastral, processos, transparencia, score_credito, negativacoes, perfil_economico] = resultados;
-  let i = 6;
+  const [processos, transparencia, score_credito, negativacoes, perfil_economico] = resultados;
+  let i = 5;
   const vinculos = precisaVinculos ? resultados[i++] : null;
   const veiculos = precisaVeiculos ? resultados[i++] : null;
+
+  // Mini-dossiê de cada sócio para Due Diligence Empresarial.
+  // Usamos os mesmos endpoints já configurados (Direct Data + Score + Escavador via consultarProcessos + CGU).
+  // Custo estimado por sócio: ~R$ 5,00 — dentro da margem do produto (R$ 997).
+  let socios_enriquecidos = null;
+  if (tipo === 'due_diligence' && tipoAlvo === 'PJ' && Array.isArray(cadastral?.socios) && cadastral.socios.length) {
+    socios_enriquecidos = await enriquecerSocios(cadastral.socios);
+  }
 
   return {
     receita_federal: cadastral,
@@ -1636,8 +1690,83 @@ async function executarConsultasParaAlvo(alvo, { precisaVinculos, precisaVeiculo
     ...(negativacoes?.status ? { negativacoes } : {}),
     ...(perfil_economico ? { perfil_economico } : {}),
     ...(vinculos?.total ? { vinculos } : {}),
-    ...(veiculos ? { veiculos } : {})
+    ...(veiculos ? { veiculos } : {}),
+    ...(socios_enriquecidos ? { socios_enriquecidos } : {})
   };
+}
+
+// Enriquece cada sócio com cadastral + score + processos + listas negras (CGU).
+// Limita a 8 sócios para conter custo / latência. Cada sócio é processado em
+// paralelo com Promise.allSettled para não bloquear o todo se um falhar.
+async function enriquecerSocios(socios) {
+  const lista = (socios || []).slice(0, 8);
+  if (!lista.length) return [];
+
+  const tarefas = lista.map(async (s) => {
+    const cpf = limparDoc(s.cpf || '');
+    const out = {
+      nome: s.nome || '',
+      qualificacao: s.qualificacao || '',
+      desde: s.desde || '',
+      cpf_mascarado: cpf && cpf.length === 11
+        ? `***.${cpf.slice(3, 6)}.***-${cpf.slice(9, 11)}`
+        : (s.cpf || ''),
+      tem_cpf: !!(cpf && cpf.length === 11)
+    };
+    if (!out.tem_cpf) {
+      out.aviso = 'CPF do sócio não retornado pela base cadastral — análise individual indisponível.';
+      return out;
+    }
+    const [cadPF, score, processos, transparencia] = await Promise.allSettled([
+      consultarCPF(cpf),
+      consultarScore(cpf),
+      consultarProcessos(cpf, 'PF', s.nome || ''),
+      consultarTransparencia(cpf, s.nome || '')
+    ]);
+
+    const c = cadPF.status === 'fulfilled' ? cadPF.value : null;
+    if (c && !c.aviso) {
+      out.idade = c.idade || null;
+      out.situacao_rf = c.situacao_rf || '';
+      out.obito = !!c.obito;
+      out.faixa_renda = c.renda_estimada
+        ? require('./pdf/helpers').faixaRendaQualitativa(c.renda_numerica || c.renda_estimada, { improvavel: !!c.renda_inconsistente })
+        : '';
+    } else if (c?.aviso) {
+      out.cadastral_falhou = c.aviso;
+    }
+
+    const sc = score.status === 'fulfilled' ? score.value : null;
+    if (sc?.score) {
+      out.score_quod = sc.score;
+      out.faixa_score = sc.faixa || '';
+    } else if (sc?.detalhes) {
+      out.score_falhou = sc.detalhes;
+    }
+
+    const p = processos.status === 'fulfilled' ? processos.value : null;
+    if (p) {
+      out.qtd_processos = p.total || 0;
+      if (p.escavador_falhou) out.processos_falhou = p.escavador_detalhes || 'Escavador indisponível';
+    }
+
+    const t = transparencia.status === 'fulfilled' ? transparencia.value : null;
+    if (t?.em_lista_negra) out.lista_negra = true;
+
+    // Sinais agregados — usados pelo PDF para destacar sócio "vermelho"
+    const sinais = [];
+    if (out.obito) sinais.push('óbito registrado');
+    if (out.lista_negra) sinais.push('lista negra federal');
+    if (out.qtd_processos >= 5) sinais.push(`${out.qtd_processos} processo(s)`);
+    else if (out.qtd_processos > 0) sinais.push(`${out.qtd_processos} processo(s)`);
+    if (out.score_quod && out.score_quod < 400) sinais.push(`score baixo (${out.score_quod})`);
+    if (sinais.length) out.alertas = sinais;
+
+    return out;
+  });
+
+  const settled = await Promise.allSettled(tarefas);
+  return settled.map(s => s.status === 'fulfilled' ? s.value : { erro: s.reason?.message || 'falha' });
 }
 
 module.exports = {
