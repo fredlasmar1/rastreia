@@ -20,7 +20,8 @@ function limparEnv(nome) {
 }
 // Limpar todas as API keys + NODE_ENV (Railway às vezes injeta com '=' no valor)
 ['CNPJA_API_KEY', 'DIRECTD_TOKEN', 'ESCAVADOR_API_KEY', 'DATAJUD_API_KEY', 'DATAJUS_API_KEY',
- 'TRANSPARENCIA_TOKEN', 'MP_ACCESS_TOKEN', 'MERCADOPAGO_ACCESS_TOKEN', 'CPFCNPJ_API_KEY',
+ 'TRANSPARENCIA_TOKEN', 'MP_ACCESS_TOKEN', 'MERCADOPAGO_ACCESS_TOKEN',
+ 'MP_WEBHOOK_SECRET', 'MERCADOPAGO_WEBHOOK_SECRET', 'CPFCNPJ_API_KEY',
  'CNPJWS_API_KEY', 'INFOSIMPLES_TOKEN', 'INFOSIMPLES_CALLBACK_SECRET', 'ONR_API_KEY',
  'SERASA_API_KEY', 'JWT_SECRET', 'NODE_ENV'
 ].forEach(limparEnv);
@@ -292,42 +293,19 @@ app.post('/api/admin/status-apis/limpar', _autMon, _admMon, (req, res) => {
 
 // Rotas API
 app.use('/api/auth', require('./routes/auth'));
+const pagamentosRouter = require('./routes/pagamentos');
+// Endpoints de pagamento: POST /api/pedidos/:id/pagamento, GET /api/pedidos/:id/pagamento/status.
+// Montados em /api para conviver com /api/pedidos sem conflito (rotas mais específicas).
+app.use('/api', pagamentosRouter);
 app.use('/api/pedidos', require('./routes/pedidos'));
 app.use('/api/assinaturas', require('./routes/assinaturas'));
 app.use('/api/clientes', require('./routes/clientes'));
 app.use('/api/admin/custos', require('./routes/custos'));
 
-// Webhook Mercado Pago
-app.post('/webhook/mp', express.json(), async (req, res) => {
-  try {
-    const body = req.body;
-    if (body.type === 'payment' && body.data?.id) {
-      const { consultarPagamento } = require('./services/mercadopago');
-      const { notificarOperadorNovoPedido } = require('./services/whatsapp');
-      const { pool } = require('./db');
-
-      const pagamento = await consultarPagamento(body.data.id);
-      if (pagamento && pagamento.status === 'approved') {
-        const pedidoId = pagamento.external_reference;
-        const update = await pool.query(
-          `UPDATE pedidos SET status = 'pago', pago_em = NOW(), mp_payment_id = $1, atualizado_em = NOW()
-           WHERE id = $2 AND status = 'aguardando_pagamento'
-           RETURNING *`,
-          [String(body.data.id), pedidoId]
-        );
-        if (update.rows[0]) {
-          await pool.query('INSERT INTO logs (pedido_id, acao) VALUES ($1, $2)',
-            [pedidoId, 'Pagamento confirmado via webhook MP']);
-          await notificarOperadorNovoPedido(update.rows[0]);
-        }
-      }
-    }
-    res.sendStatus(200); // sempre 200 para o MP não retentar
-  } catch (e) {
-    console.error('Webhook MP erro:', e.message);
-    res.sendStatus(200);
-  }
-});
+// Webhook Mercado Pago — público, sem autenticação (MP não envia JWT).
+// Caminho novo + caminho legado (compat com integrações antigas no painel MP).
+app.post('/api/mercadopago/webhook', express.json(), pagamentosRouter.webhookMP);
+app.post('/webhook/mp', express.json(), pagamentosRouter.webhookMP);
 
 // Servir PDF — regenera se arquivo não existir (Railway ephemeral storage)
 // BUG #2: tenta primeiro RELATORIOS_DIR (Railway Volume) e cai no caminho antigo

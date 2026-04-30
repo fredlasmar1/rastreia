@@ -617,8 +617,27 @@
           headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
           body: JSON.stringify({ mp_payment_id: 'manual' })
         });
+        window.location.href = `/pedido.html?id=${data.id}`;
+        return;
       }
 
+      // Pedido com cobrança: cria/recupera a preference do MP e redireciona para o checkout.
+      try {
+        const payRes = await fetch(`/api/pedidos/${data.id}/pagamento`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }
+        });
+        const payData = await payRes.json().catch(() => ({}));
+        if (payRes.ok && payData.init_point) {
+          window.location.href = payData.init_point;
+          return;
+        }
+        // Falha em criar preference (ex: MP não configurado): cai pro acompanhamento normal.
+        console.warn('Falha ao criar pagamento MP:', payData);
+        alerta(payData.mensagem || payData.erro || 'Não foi possível abrir o checkout do Mercado Pago. Você pode pagar pela página do pedido.', 'error');
+      } catch (ePay) {
+        console.warn('Erro ao criar pagamento:', ePay);
+      }
       window.location.href = `/pedido.html?id=${data.id}`;
     } catch (e) {
       alerta('Erro de conexão', 'error');

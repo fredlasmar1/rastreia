@@ -9,7 +9,7 @@ const { pool } = require('../db');
 const { executarConsultaCompleta } = require('../services/consultas');
 const { gerarDossie } = require('../services/pdf');
 const { notificarClienteConcluido, notificarOperadorNovoPedido } = require('../services/whatsapp');
-const { criarPreferencia } = require('../services/mercadopago');
+const { criarPreferenceParaPedido, configurado: mpConfigurado } = require('../services/mercadopago');
 const { PRODUTOS } = require('../services/produtos');
 const credifyCatalogo = require('../services/credify/catalogo');
 const analiseIA = require('../services/analise_documentos_ia');
@@ -326,17 +326,24 @@ router.post('/', autenticar, async (req, res) => {
       }
     }
 
-    // Gerar link Mercado Pago
-    if (process.env.MP_ACCESS_TOKEN) {
-      const nomeProduto = PRODUTOS[tipo]?.nome || tipo;
-      const mp = await criarPreferencia(pedido, nomeProduto);
-      if (mp.init_point) {
-        await pool.query(
-          'UPDATE pedidos SET mp_preference_id = $1, mp_init_point = $2 WHERE id = $3',
-          [mp.preference_id, mp.init_point, pedido.id]
-        );
-        pedido.mp_preference_id = mp.preference_id;
-        pedido.mp_init_point = mp.init_point;
+    // Gerar link Mercado Pago (best-effort — frontend pode chamar
+    // POST /api/pedidos/:id/pagamento depois para recriar/recuperar).
+    if (mpConfigurado()) {
+      try {
+        const nomeProduto = PRODUTOS[tipo]?.nome || tipo;
+        const mp = await criarPreferenceParaPedido(pedido, { nomeProduto });
+        if (mp.ok) {
+          await pool.query(
+            'UPDATE pedidos SET mp_preference_id = $1, mp_init_point = $2 WHERE id = $3',
+            [mp.preference_id, mp.init_point, pedido.id]
+          );
+          pedido.mp_preference_id = mp.preference_id;
+          pedido.mp_init_point = mp.init_point;
+        } else {
+          console.warn('[pedidos] criar preference falhou (não bloqueia):', mp.erro);
+        }
+      } catch (eMp) {
+        console.warn('[pedidos] erro MP (não bloqueia criação do pedido):', eMp.message);
       }
     }
 
