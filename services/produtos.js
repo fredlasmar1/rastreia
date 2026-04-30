@@ -211,6 +211,68 @@ const PRODUTOS = {
     fatores_score: [],
   },
 
+  consulta_veicular_simples: {
+    nome: 'Consulta Veicular Simples',
+    preco: 12,
+    prazo_horas: 0.25,
+    icone: '🚗',
+    sem_alvo_documento: true,
+    publico_alvo: [
+      'Comprador fazendo triagem rápida antes de visitar o veículo',
+      'Quem quer checagem básica de proprietário, financiamento e multas',
+    ],
+    argumento: 'Em poucos minutos, basta a placa: dados do veículo, gravame (alienação fiduciária) e multas RENAINF. Pacote enxuto e barato para triagem.',
+    dados_entregues: [
+      { secao: 'IDENTIFICAÇÃO DO VEÍCULO', campos: ['Placa', 'Marca/modelo', 'Ano fabricação/modelo', 'Cor', 'Combustível', 'Chassi', 'Renavam', 'Município/UF'] },
+      { secao: 'GRAVAME / FINANCIAMENTO', campos: ['Tipo de restrição financeira', 'Banco/financeira', 'Data do contrato'] },
+      { secao: 'MULTAS RENAINF', campos: ['Quantidade de multas federais', 'Valor total em aberto'] },
+    ],
+    fatores_score: [],
+  },
+
+  consulta_veicular_mediana: {
+    nome: 'Consulta Veicular Mediana',
+    preco: 39,
+    prazo_horas: 0.25,
+    icone: '🚗',
+    sem_alvo_documento: true,
+    publico_alvo: [
+      'Lojista, despachante ou consultor de compra',
+      'Comprador sério antes de fechar negócio',
+    ],
+    argumento: 'Pacote intermediário: tudo do Simples + bloqueio judicial RENAJUD, histórico de proprietários e indícios de sinistro. Cobertura ampla por preço acessível.',
+    dados_entregues: [
+      { secao: 'IDENTIFICAÇÃO DO VEÍCULO', campos: ['Placa', 'Marca/modelo', 'Ano fabricação/modelo', 'Cor', 'Combustível', 'Chassi', 'Renavam', 'Município/UF'] },
+      { secao: 'GRAVAME / FINANCIAMENTO', campos: ['Tipo de restrição', 'Banco/financeira', 'Data do contrato'] },
+      { secao: 'MULTAS RENAINF', campos: ['Quantidade e valor total das multas'] },
+      { secao: 'BLOQUEIO JUDICIAL (RENAJUD)', campos: ['Restrições judiciais ativas', 'Tribunal e processo'] },
+      { secao: 'HISTÓRICO DE PROPRIETÁRIOS', campos: ['Quantidade total de donos', 'Datas das transferências', 'UF de cada proprietário'] },
+      { secao: 'INDÍCIO DE SINISTRO', campos: ['Indicadores de batida/perda total', 'Histórico de avarias declaradas'] },
+    ],
+    fatores_score: [],
+  },
+
+  consulta_veicular_completa: {
+    nome: 'Consulta Veicular Completa',
+    preco: 79,
+    prazo_horas: 0.25,
+    icone: '🚗',
+    sem_alvo_documento: true,
+    publico_alvo: [
+      'Compra de alto valor (carros premium, motos importadas, frota)',
+      'Due diligence pré-leilão ou consignação',
+      'Quem não pode errar na decisão de compra',
+    ],
+    argumento: 'Pacote VeículoTotal da Credify: TODAS as consultas disponíveis em uma só chamada — identificação, gravame, multas, bloqueio judicial, histórico de proprietários, sinistro, leilão, roubo/furto, recall, FIPE e mais.',
+    dados_entregues: [
+      { secao: 'IDENTIFICAÇÃO COMPLETA', campos: ['Todos os dados do Mediano', 'Decodificação completa do chassi'] },
+      { secao: 'RESTRIÇÕES E GRAVAMES', campos: ['Gravame', 'RENAJUD', 'RENAINF', 'Demais restrições administrativas'] },
+      { secao: 'HISTÓRICO COMPLETO', campos: ['Histórico de proprietários', 'Indícios de sinistro', 'Histórico de roubo/furto', 'Bases de leilão (sinistro grave/salvado)', 'Recalls pendentes'] },
+      { secao: 'AVALIAÇÃO FIPE', campos: ['Valor FIPE atualizado', 'Código FIPE', 'Mês de referência'] },
+    ],
+    fatores_score: [],
+  },
+
   consulta_veicular: {
     nome: 'Consulta Veicular',
     preco: 97,

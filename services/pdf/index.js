@@ -27,8 +27,17 @@ const renderers = {
   investigacao_patrimonial: require('./investigacao_patrimonial').render,
   analise_devedor: require('./analise_devedor').render,
   consulta_veicular: require('./consulta_veicular').render,
+  consulta_veicular_simples: require('./consulta_veicular_pacotes').render,
+  consulta_veicular_mediana: require('./consulta_veicular_pacotes').render,
+  consulta_veicular_completa: require('./consulta_veicular_pacotes').render,
   consulta_restricoes: require('./consulta_restricoes').render,
 };
+
+const TIPOS_VEICULAR_PACOTES = new Set([
+  'consulta_veicular_simples',
+  'consulta_veicular_mediana',
+  'consulta_veicular_completa'
+]);
 
 function montarDados(dadosDB) {
   const dados = {};
@@ -56,7 +65,7 @@ function gerarDossie(pedido, dadosDB) {
 
       // Consulta veicular não calcula score geral — próprio renderer lida
       let score, checklist;
-      if (pedido.tipo === 'consulta_veicular' || pedido.tipo === 'consulta_restricoes') {
+      if (pedido.tipo === 'consulta_veicular' || pedido.tipo === 'consulta_restricoes' || TIPOS_VEICULAR_PACOTES.has(pedido.tipo)) {
         score = { score: '-', classificacao: '-', alertas: [], contribuicoes: [] };
         checklist = [];
       } else {
@@ -72,7 +81,7 @@ function gerarDossie(pedido, dadosDB) {
       stream.on('finish', () => {
         // Consulta veicular mantém contrato antigo { path, url } pra compat;
         // o resto mantém { filepath, filename, url, score }.
-        if (pedido.tipo === 'consulta_veicular') {
+        if (pedido.tipo === 'consulta_veicular' || TIPOS_VEICULAR_PACOTES.has(pedido.tipo)) {
           resolve({ path: filepath, filepath, filename, url: `/relatorios/${filename}` });
         } else {
           resolve({

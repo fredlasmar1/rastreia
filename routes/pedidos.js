@@ -56,6 +56,9 @@ const PRECOS = {
   analise_devedor: 250,
   investigacao_patrimonial: 497,
   consulta_veicular: 97,
+  consulta_veicular_simples: 12,
+  consulta_veicular_mediana: 39,
+  consulta_veicular_completa: 79,
   consulta_restricoes: 19
 };
 
@@ -67,8 +70,18 @@ const PRAZOS = {
   analise_devedor: 2,
   investigacao_patrimonial: 4,
   consulta_veicular: 0.5,
+  consulta_veicular_simples: 0.25,
+  consulta_veicular_mediana: 0.25,
+  consulta_veicular_completa: 0.25,
   consulta_restricoes: 0.25
 };
+
+const TIPOS_VEICULARES = new Set([
+  'consulta_veicular',
+  'consulta_veicular_simples',
+  'consulta_veicular_mediana',
+  'consulta_veicular_completa'
+]);
 
 const PLACA_REGEX = /^[A-Z]{3}[0-9][A-Z0-9][0-9]{2}$/;
 
@@ -170,7 +183,8 @@ router.post('/', autenticar, async (req, res) => {
       tier_veicular, addons_veicular, valor_customizado
     } = req.body;
 
-    const isVeicular = tipo === 'consulta_veicular';
+    const isVeicular = TIPOS_VEICULARES.has(tipo);
+    const isVeicularLegado = tipo === 'consulta_veicular';
 
     if (!tipo || !cliente_nome) {
       return res.status(400).json({ erro: 'Campos obrigatórios: tipo, cliente_nome' });
@@ -223,7 +237,7 @@ router.post('/', autenticar, async (req, res) => {
     // Se for veicular com tier especificado, recalcular preço a partir do catálogo
     let tierSlug = null;
     let addonsList = [];
-    if (isVeicular && tier_veicular) {
+    if (isVeicularLegado && tier_veicular) {
       const tier = credifyCatalogo.obterTier(tier_veicular);
       if (!tier) return res.status(400).json({ erro: 'Tier inválido (use: basico, completo ou premium)' });
       tierSlug = tier.slug;

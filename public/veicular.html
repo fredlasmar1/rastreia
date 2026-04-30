@@ -1,0 +1,514 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Rastreia - Consulta Veicular (Credify)</title>
+  <link rel="stylesheet" href="/css/style.css">
+  <style>
+    .pacotes { display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:14px; margin:18px 0 24px; }
+    .pacote { background:#fff; border:2px solid #e5e7eb; border-radius:12px; padding:18px; cursor:pointer; transition:all 0.15s; position:relative; }
+    .pacote:hover { border-color:#1a3a8a; transform:translateY(-2px); box-shadow:0 6px 18px rgba(0,0,0,0.06); }
+    .pacote.selecionado { border-color:#1a3a8a; background:#eef2ff; }
+    .pacote .nome { font-size:15px; font-weight:800; color:#1a3a8a; margin-bottom:4px; }
+    .pacote .preco { font-size:26px; font-weight:800; color:#111827; }
+    .pacote .preco small { font-size:13px; font-weight:500; color:#6b7280; }
+    .pacote ul { font-size:11.5px; color:#374151; margin:10px 0 0; padding-left:16px; }
+    .pacote ul li { margin-bottom:3px; }
+    .pacote .badge { position:absolute; top:-10px; right:14px; background:#1a3a8a; color:#fff; font-size:10px; font-weight:700; padding:3px 8px; border-radius:10px; }
+    .placa-input { font-family:'Courier New',monospace; text-transform:uppercase; font-size:18px; font-weight:700; letter-spacing:3px; text-align:center; }
+    .res-card { background:#fff; border:1px solid #e5e7eb; border-radius:10px; padding:18px; margin-bottom:14px; }
+    .res-card h3 { margin:0 0 10px; font-size:14px; color:#374151; text-transform:uppercase; letter-spacing:0.4px; }
+    .lista-item { padding:10px 12px; border-left:3px solid #dc2626; background:#fafafa; margin-bottom:8px; border-radius:4px; font-size:13px; }
+    .ok-banner { background:#dcfce7; color:#14532d; padding:12px; border-radius:6px; font-weight:600; }
+    .alerta-banner { background:#fee2e2; color:#991b1b; padding:12px; border-radius:6px; font-weight:600; }
+    .info-row { display:flex; justify-content:space-between; padding:6px 0; border-bottom:1px solid #f3f4f6; font-size:13px; }
+    .info-row:last-child { border-bottom:0; }
+    .info-row span:first-child { color:#6b7280; font-weight:600; }
+    .custo-admin { background:#fef9c3; border:1px solid #facc15; padding:10px 12px; border-radius:6px; font-size:12px; color:#713f12; margin-bottom:12px; }
+  </style>
+</head>
+<body>
+<nav class="nav">
+  <a href="/dashboard.html" class="nav-logo"><img src="/img/logo-recobro.jpg" alt="Recobro"><div><div class="nav-brand">RASTREIA</div></div></a>
+  <div class="nav-links">
+    <a href="/dashboard.html">Dashboard</a>
+    <a href="/novo-pedido.html">+ Novo Pedido</a>
+    <a href="/veicular.html" class="ativo">🚗 Consulta Veicular</a>
+    <a href="/restricoes.html">🚦 Restrições</a>
+    <a href="/clientes.html">Clientes</a>
+    <a href="#" onclick="logout()">Sair</a>
+  </div>
+  <div class="nav-user" id="nav-user"></div>
+</nav>
+
+<div class="container" style="max-width:880px">
+  <h1 class="page-title">🚗 Consulta Veicular (Credify)</h1>
+  <p style="color:#6b7280;font-size:13px;margin-bottom:18px">
+    Consulta veicular completa pela <strong>Credify</strong> — basta a placa.
+    Escolha o pacote conforme sua necessidade.
+  </p>
+
+  <div id="alerta"></div>
+
+  <!-- FORM -->
+  <div class="card" id="form-card">
+    <div id="custo-admin" class="custo-admin" style="display:none"></div>
+
+    <h3 style="margin:0 0 8px;font-size:13px;color:#6b7280">1. Escolha o pacote</h3>
+    <div class="pacotes" id="pacotes-grid">
+      <div class="pacote" data-tipo="consulta_veicular_simples" data-preco="12" onclick="selecionarPacote(this)">
+        <div class="nome">Simples</div>
+        <div class="preco">R$ 12<small>,00</small></div>
+        <ul>
+          <li>Dados do veículo</li>
+          <li>Gravame (financiamento)</li>
+          <li>Multas RENAINF</li>
+        </ul>
+      </div>
+      <div class="pacote selecionado" data-tipo="consulta_veicular_mediana" data-preco="39" onclick="selecionarPacote(this)">
+        <div class="badge">Recomendado</div>
+        <div class="nome">Mediano</div>
+        <div class="preco">R$ 39<small>,00</small></div>
+        <ul>
+          <li>Tudo do Simples</li>
+          <li>RENAJUD (bloqueio judicial)</li>
+          <li>Histórico de proprietários</li>
+          <li>Indício de sinistro</li>
+        </ul>
+      </div>
+      <div class="pacote" data-tipo="consulta_veicular_completa" data-preco="79" onclick="selecionarPacote(this)">
+        <div class="nome">Completo</div>
+        <div class="preco">R$ 79<small>,00</small></div>
+        <ul>
+          <li>VeiculoTotal Credify</li>
+          <li>Leilão + roubo/furto</li>
+          <li>Recall + FIPE + chassi</li>
+          <li>Dossiê completo</li>
+        </ul>
+      </div>
+    </div>
+
+    <h3 style="margin:18px 0 8px;font-size:13px;color:#6b7280">2. Dados do pedido</h3>
+    <div class="form-grid">
+      <div class="form-group full">
+        <label>Placa do veículo *</label>
+        <input type="text" id="alvo_placa" class="placa-input" maxlength="7" placeholder="AAA1A23" oninput="onPlacaChange()">
+        <div id="placa-status" style="font-size:11px;color:#6b7280;margin-top:4px"></div>
+      </div>
+      <div class="form-group">
+        <label>Cliente (quem solicita) *</label>
+        <input type="text" id="cliente_nome" placeholder="Nome do solicitante">
+      </div>
+      <div class="form-group">
+        <label>Finalidade *</label>
+        <select id="finalidade">
+          <option value="prevencao_fraude">Prevenção de fraude</option>
+          <option value="verificacao_idoneidade">Verificação de idoneidade</option>
+          <option value="analise_credito">Análise de crédito</option>
+          <option value="instrucao_processo">Instrução de processo</option>
+        </select>
+      </div>
+      <div class="form-group full">
+        <label style="display:flex;gap:8px;align-items:flex-start;font-weight:400;font-size:13px;color:#374151">
+          <input type="checkbox" id="aceite_termos" style="margin-top:3px">
+          <span>Declaro que tenho base legal para esta consulta e aceito os <a href="/termos.html" target="_blank">Termos</a> e a <a href="/privacidade.html" target="_blank">Política de Privacidade</a> (LGPD).</span>
+        </label>
+      </div>
+    </div>
+
+    <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:14px">
+      <button class="btn btn-primary" id="btn-criar" onclick="criarPedido()">Consultar — <span id="btn-preco">R$ 39,00</span></button>
+    </div>
+  </div>
+
+  <!-- PAGAMENTO -->
+  <div class="card" id="pgto-card" style="display:none">
+    <h3 style="margin-top:0">Pagamento</h3>
+    <p style="font-size:13px;color:#374151">Pedido criado. Conclua o pagamento para liberar o resultado.</p>
+    <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:10px">
+      <a id="link-mp" href="#" target="_blank" class="btn btn-primary">Pagar com Mercado Pago</a>
+      <button class="btn btn-outline" id="btn-marcar-pago" onclick="marcarPago()">Marcar como pago (admin)</button>
+      <button class="btn btn-outline" onclick="checarStatus()">Já paguei — atualizar</button>
+    </div>
+    <div id="pgto-status" style="margin-top:10px;font-size:12px;color:#6b7280"></div>
+  </div>
+
+  <!-- PROCESSANDO -->
+  <div class="card" id="processing-card" style="display:none">
+    <div class="loading"><div class="spinner"></div>Consultando bases Credify…</div>
+  </div>
+
+  <!-- RESULTADO -->
+  <div id="resultado-card" style="display:none">
+    <div id="r-banner"></div>
+
+    <div class="res-card">
+      <h3>Identificação do veículo</h3>
+      <div id="r-veiculo"></div>
+    </div>
+
+    <div class="res-card">
+      <h3>Gravame / Financiamento</h3>
+      <div id="r-gravame"></div>
+    </div>
+
+    <div class="res-card">
+      <h3>Multas RENAINF</h3>
+      <div id="r-renainf"></div>
+    </div>
+
+    <div class="res-card" id="card-renajud" style="display:none">
+      <h3>Bloqueio judicial (RENAJUD)</h3>
+      <div id="r-renajud"></div>
+    </div>
+
+    <div class="res-card" id="card-historico" style="display:none">
+      <h3>Histórico de proprietários</h3>
+      <div id="r-historico"></div>
+    </div>
+
+    <div class="res-card" id="card-sinistro" style="display:none">
+      <h3>Indício de sinistro</h3>
+      <div id="r-sinistro"></div>
+    </div>
+
+    <div class="res-card" id="card-completo" style="display:none">
+      <h3>Demais informações (Completo)</h3>
+      <div id="r-completo"></div>
+    </div>
+
+    <div style="display:flex;gap:10px;flex-wrap:wrap">
+      <button class="btn btn-primary" id="btn-gerar-pdf" onclick="gerarPDF()">📄 Gerar PDF</button>
+      <a id="btn-baixar-pdf" href="#" target="_blank" class="btn btn-outline" style="display:none">⬇ Baixar PDF</a>
+      <button class="btn btn-outline" onclick="resetar()">+ Nova consulta</button>
+    </div>
+  </div>
+</div>
+
+<script>
+  const token = localStorage.getItem('rastreia_token');
+  if (!token) window.location.href = '/';
+  const usuario = JSON.parse(localStorage.getItem('rastreia_usuario') || '{}');
+  document.getElementById('nav-user').textContent = usuario.nome || '';
+  const isAdmin = usuario.perfil === 'admin' || usuario.perfil === 'operador';
+
+  let pedidoAtual = null;
+  let tipoSelecionado = 'consulta_veicular_mediana';
+  let precoSelecionado = 39;
+
+  const PLACA_REGEX = /^[A-Z]{3}[0-9][A-Z0-9][0-9]{2}$/;
+
+  function esc(str) { if (str == null) return ''; const d = document.createElement('div'); d.textContent = String(str); return d.innerHTML; }
+  function logout() { localStorage.clear(); window.location.href = '/'; }
+  function alerta(msg, tipo) {
+    const cor = tipo === 'erro' ? '#fee2e2' : '#dcfce7';
+    const txt = tipo === 'erro' ? '#991b1b' : '#14532d';
+    document.getElementById('alerta').innerHTML = `<div style="background:${cor};color:${txt};padding:10px 14px;border-radius:6px;margin-bottom:10px;font-size:13px">${esc(msg)}</div>`;
+    setTimeout(() => { document.getElementById('alerta').innerHTML = ''; }, 6000);
+  }
+  function fmtBRL(n) { return Number(n || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
+
+  function selecionarPacote(el) {
+    document.querySelectorAll('.pacote').forEach(p => p.classList.remove('selecionado'));
+    el.classList.add('selecionado');
+    tipoSelecionado = el.dataset.tipo;
+    precoSelecionado = Number(el.dataset.preco);
+    document.getElementById('btn-preco').textContent = `R$ ${precoSelecionado.toFixed(2).replace('.', ',')}`;
+    carregarCustoAdmin();
+  }
+
+  function normalizarPlaca(s) { return (s || '').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 7); }
+
+  function onPlacaChange() {
+    const inp = document.getElementById('alvo_placa');
+    const v = normalizarPlaca(inp.value);
+    inp.value = v;
+    const status = document.getElementById('placa-status');
+    if (!v) status.textContent = '';
+    else if (v.length < 7) status.textContent = `${v.length}/7 caracteres`;
+    else if (PLACA_REGEX.test(v)) status.textContent = '✓ Placa válida';
+    else status.textContent = 'Formato inválido (esperado AAA1234 antiga ou AAA1A23 Mercosul)';
+  }
+
+  async function api(url, opts = {}) {
+    const headers = { Authorization: `Bearer ${token}`, ...(opts.headers || {}) };
+    if (opts.body && !headers['Content-Type']) headers['Content-Type'] = 'application/json';
+    const res = await fetch(url, { ...opts, headers });
+    if (res.status === 401) { logout(); return null; }
+    return res;
+  }
+
+  async function carregarCustoAdmin() {
+    if (usuario.perfil !== 'admin') return;
+    try {
+      const r = await api(`/api/admin/custos/produtos/${tipoSelecionado}`);
+      if (!r || !r.ok) return;
+      const c = await r.json();
+      if (!c || !c.produtoKey) return;
+      const box = document.getElementById('custo-admin');
+      box.style.display = '';
+      box.innerHTML = `
+        <strong>💰 Interno (admin/operador):</strong>
+        Preço de venda <strong>R$ ${c.precoVenda.toFixed(2).replace('.', ',')}</strong> ·
+        Custo APIs (Credify) <strong>R$ ${c.custoBruto.toFixed(2).replace('.', ',')}</strong> ·
+        Margem <strong>${c.margemPct.toFixed(0)}%</strong> ·
+        Lucro <strong>R$ ${c.margem.toFixed(2).replace('.', ',')}</strong>
+      `;
+    } catch (_) { /* opcional */ }
+  }
+
+  async function criarPedido() {
+    const placa = normalizarPlaca(document.getElementById('alvo_placa').value);
+    const cliente = document.getElementById('cliente_nome').value.trim();
+    const finalidade = document.getElementById('finalidade').value;
+    const aceite = document.getElementById('aceite_termos').checked;
+
+    if (!PLACA_REGEX.test(placa)) return alerta('Placa inválida. Use AAA1234 (antiga) ou AAA1A23 (Mercosul).', 'erro');
+    if (!cliente) return alerta('Informe o nome do cliente solicitante.', 'erro');
+    if (!aceite) return alerta('Você precisa aceitar os termos (LGPD).', 'erro');
+
+    const body = {
+      tipo: tipoSelecionado,
+      cliente_nome: cliente,
+      cliente_email: usuario.email || cliente,
+      alvo_placa: placa,
+      alvo_nome: `Veículo ${placa}`,
+      finalidade,
+      aceite_termos: true
+    };
+    const res = await api('/api/pedidos', { method: 'POST', body: JSON.stringify(body) });
+    if (!res) return;
+    if (!res.ok) {
+      const e = await res.json().catch(() => ({}));
+      return alerta(e.erro || 'Erro ao criar pedido', 'erro');
+    }
+    pedidoAtual = await res.json();
+    document.getElementById('form-card').style.display = 'none';
+    if (pedidoAtual.status === 'pago' || pedidoAtual.status === 'em_andamento' || pedidoAtual.status === 'concluido') {
+      executarConsultaEMostrar();
+    } else {
+      mostrarPagamento();
+    }
+  }
+
+  async function mostrarPagamento() {
+    document.getElementById('pgto-card').style.display = '';
+    const link = document.getElementById('link-mp');
+
+    if (!pedidoAtual.mp_init_point) {
+      try {
+        const r = await api(`/api/pedidos/${pedidoAtual.id}/pagamento`, { method: 'POST', body: '{}' });
+        if (r && r.ok) {
+          const d = await r.json();
+          if (d.init_point) pedidoAtual.mp_init_point = d.init_point;
+        }
+      } catch (_) {}
+    }
+
+    if (pedidoAtual.mp_init_point) {
+      link.href = pedidoAtual.mp_init_point;
+      link.style.display = '';
+    } else {
+      link.style.display = 'none';
+      document.getElementById('pgto-status').textContent = 'Mercado Pago não configurado — use "Marcar como pago".';
+    }
+    document.getElementById('btn-marcar-pago').style.display = isAdmin ? '' : 'none';
+  }
+
+  async function marcarPago() {
+    if (!pedidoAtual) return;
+    const r = await api(`/api/pedidos/${pedidoAtual.id}/pago`, { method: 'PATCH', body: JSON.stringify({ mp_payment_id: 'manual' }) });
+    if (!r || !r.ok) return alerta('Não foi possível marcar como pago.', 'erro');
+    await executarConsultaEMostrar();
+  }
+
+  async function checarStatus() {
+    if (!pedidoAtual) return;
+    const r = await api(`/api/pedidos/${pedidoAtual.id}`);
+    if (!r || !r.ok) return;
+    const p = await r.json();
+    pedidoAtual = p;
+    if (p.status === 'pago' || p.status === 'em_andamento' || p.status === 'concluido') {
+      await executarConsultaEMostrar();
+    } else {
+      document.getElementById('pgto-status').textContent = 'Pagamento ainda não confirmado.';
+    }
+  }
+
+  async function executarConsultaEMostrar() {
+    document.getElementById('pgto-card').style.display = 'none';
+    document.getElementById('processing-card').style.display = '';
+    const r = await api(`/api/pedidos/${pedidoAtual.id}/consultar`, { method: 'POST' });
+    if (!r || !r.ok) {
+      document.getElementById('processing-card').style.display = 'none';
+      const e = r ? await r.json().catch(() => ({})) : {};
+      return alerta(e.erro || e.mensagem || 'Erro ao executar consulta.', 'erro');
+    }
+    const out = await r.json();
+    const dados = out.resultados || {};
+    document.getElementById('processing-card').style.display = 'none';
+    renderizarResultado(dados);
+  }
+
+  function infoRow(label, valor) {
+    if (valor == null || valor === '') return '';
+    return `<div class="info-row"><span>${esc(label)}</span><span>${esc(valor)}</span></div>`;
+  }
+
+  function renderizarResultado(dados) {
+    document.getElementById('resultado-card').style.display = '';
+
+    // O backend retorna em `resultados` exatamente o que o orquestrador devolveu:
+    //   Simples/Mediano: { placa, pacote, veicular, gravame, renainf, [renajud, historico, sinistro] }
+    //   Completo:        { placa, pacote, veiculo_total }
+    const cv = dados;
+    const tipo = pedidoAtual.tipo;
+
+    // Banner
+    const sinaisCriticos = [];
+    const g = cv.gravame || cv.veiculo_total?.gravame;
+    const r = cv.renajud || cv.veiculo_total?.renajud;
+    const s = cv.sinistro || cv.veiculo_total?.sinistro;
+    const rf = cv.veiculo_total?.roubo_furto;
+    if (g?.disponivel && g.tem_gravame !== false && (g.tipo || g.financeira)) sinaisCriticos.push('Gravame ativo');
+    if (r?.disponivel && (r.restricoes?.length || r.tem_restricao)) sinaisCriticos.push('Bloqueio RENAJUD');
+    if (s?.disponivel && s.tem_indicio) sinaisCriticos.push('Indício de sinistro');
+    if (rf?.tem_registro) sinaisCriticos.push('Roubo/furto');
+
+    document.getElementById('r-banner').innerHTML = sinaisCriticos.length
+      ? `<div class="alerta-banner">⚠️ Atenção: ${sinaisCriticos.join(', ')}</div>`
+      : '<div class="ok-banner">✅ Veículo sem alertas críticos nos itens consultados</div>';
+
+    // Identificação
+    const v = (tipo === 'consulta_veicular_completa' ? cv.veiculo_total?.identificacao : cv.veicular) || cv.veicular || {};
+    document.getElementById('r-veiculo').innerHTML = v.disponivel
+      ? infoRow('Placa', pedidoAtual.alvo_placa)
+        + infoRow('Marca/Modelo', v.marca_modelo || [v.marca, v.modelo].filter(Boolean).join(' '))
+        + infoRow('Ano fab./modelo', `${v.ano_fabricacao || '?'}/${v.ano_modelo || '?'}`)
+        + infoRow('Cor', v.cor)
+        + infoRow('Combustível', v.combustivel)
+        + infoRow('Chassi', v.chassi)
+        + infoRow('Renavam', v.renavam)
+        + infoRow('Município/UF', [v.municipio, v.uf].filter(Boolean).join('/'))
+        + infoRow('Proprietário', v.proprietario)
+      : `<div style="color:#6b7280;font-size:13px">Indisponível: ${esc(v.erro || 'sem retorno')}</div>`;
+
+    // Gravame
+    const gv = cv.gravame || cv.veiculo_total?.gravame;
+    if (gv) {
+      document.getElementById('r-gravame').innerHTML = !gv.disponivel
+        ? `<div style="color:#6b7280;font-size:13px">Indisponível: ${esc(gv.erro || 'sem retorno')}</div>`
+        : (gv.tem_gravame === false || gv.sem_restricao)
+          ? '<div class="ok-banner">✅ Sem gravame ativo</div>'
+          : infoRow('Tipo', gv.tipo) + infoRow('Financeira', gv.financeira || gv.banco) + infoRow('Data contrato', gv.data_contrato);
+    }
+
+    // RENAINF
+    const rn = cv.renainf || cv.veiculo_total?.renainf;
+    if (rn) {
+      const qtd = rn.quantidade ?? rn.total ?? (rn.multas?.length || 0);
+      document.getElementById('r-renainf').innerHTML = !rn.disponivel
+        ? `<div style="color:#6b7280;font-size:13px">Indisponível: ${esc(rn.erro || 'sem retorno')}</div>`
+        : qtd === 0
+          ? '<div class="ok-banner">✅ Sem multas RENAINF em aberto</div>'
+          : infoRow('Multas em aberto', qtd) + infoRow('Valor total', `R$ ${fmtBRL(rn.valor_total || 0)}`);
+    }
+
+    // RENAJUD (Mediano e Completo)
+    if (tipo !== 'consulta_veicular_simples') {
+      const rj = cv.renajud || cv.veiculo_total?.renajud;
+      if (rj) {
+        document.getElementById('card-renajud').style.display = '';
+        const lista = rj.restricoes || rj.lista || [];
+        document.getElementById('r-renajud').innerHTML = !rj.disponivel
+          ? `<div style="color:#6b7280;font-size:13px">Indisponível: ${esc(rj.erro || 'sem retorno')}</div>`
+          : (lista.length === 0 && !rj.tem_restricao)
+            ? '<div class="ok-banner">✅ Sem bloqueio judicial RENAJUD</div>'
+            : lista.slice(0, 5).map(rr => `<div class="lista-item"><strong>${esc(rr.tribunal || 'Tribunal')}</strong> — ${esc(rr.processo || '')} ${rr.tipo_restricao ? `(${esc(rr.tipo_restricao)})` : ''}</div>`).join('');
+      }
+
+      // Histórico
+      const h = cv.historico || cv.veiculo_total?.historico;
+      if (h) {
+        document.getElementById('card-historico').style.display = '';
+        const lista = h.proprietarios || [];
+        document.getElementById('r-historico').innerHTML = !h.disponivel
+          ? `<div style="color:#6b7280;font-size:13px">Indisponível: ${esc(h.erro || 'sem retorno')}</div>`
+          : infoRow('Total de donos', lista.length)
+            + lista.slice(0, 5).map((p, i) => `<div class="info-row"><span>Dono ${i + 1}</span><span>${esc([p.exercicio, p.uf_circulacao].filter(Boolean).join(' - '))}</span></div>`).join('');
+      }
+
+      // Sinistro
+      const sn = cv.sinistro || cv.veiculo_total?.sinistro;
+      if (sn) {
+        document.getElementById('card-sinistro').style.display = '';
+        document.getElementById('r-sinistro').innerHTML = !sn.disponivel
+          ? `<div style="color:#6b7280;font-size:13px">Indisponível: ${esc(sn.erro || 'sem retorno')}</div>`
+          : sn.tem_indicio
+            ? `<div class="alerta-banner">⚠️ Indício de sinistro encontrado${sn.descricao ? ': ' + esc(sn.descricao) : ''}</div>`
+            : '<div class="ok-banner">✅ Nenhum indício de sinistro</div>';
+      }
+    }
+
+    // Completo: leilão, roubo/furto, recall, FIPE
+    if (tipo === 'consulta_veicular_completa') {
+      const vt = cv.veiculo_total || {};
+      document.getElementById('card-completo').style.display = '';
+      let html = '';
+      if (vt.roubo_furto) {
+        html += vt.roubo_furto.tem_registro
+          ? '<div class="alerta-banner" style="margin-bottom:10px">⚠️ Veículo em registro de roubo/furto</div>'
+          : '<div class="ok-banner" style="margin-bottom:10px">✅ Sem registro de roubo/furto</div>';
+      }
+      if (vt.leilao) {
+        html += vt.leilao.tem_registro
+          ? `<div class="alerta-banner" style="margin-bottom:10px">⚠️ Veículo passou por leilão${vt.leilao.tipo ? ' (' + esc(vt.leilao.tipo) + ')' : ''}</div>`
+          : '<div class="ok-banner" style="margin-bottom:10px">✅ Não consta em leilão</div>';
+      }
+      if (vt.recall) {
+        html += vt.recall.tem_pendencia
+          ? `<div class="alerta-banner" style="margin-bottom:10px">⚠️ ${vt.recall.quantidade || 1} recall(s) pendente(s)</div>`
+          : '<div class="ok-banner" style="margin-bottom:10px">✅ Sem recall pendente</div>';
+      }
+      if (vt.fipe?.valor) {
+        html += `<div class="info-row"><span>Valor FIPE</span><span><strong>R$ ${fmtBRL(vt.fipe.valor)}</strong></span></div>`;
+        if (vt.fipe.codigo) html += infoRow('Código FIPE', vt.fipe.codigo);
+        if (vt.fipe.mes_referencia) html += infoRow('Mês referência', vt.fipe.mes_referencia);
+      }
+      document.getElementById('r-completo').innerHTML = html || '<div style="color:#6b7280;font-size:13px">Sem dados adicionais.</div>';
+    }
+  }
+
+  async function gerarPDF() {
+    if (!pedidoAtual) return;
+    const btn = document.getElementById('btn-gerar-pdf');
+    btn.disabled = true; btn.textContent = 'Gerando…';
+    const r = await api(`/api/pedidos/${pedidoAtual.id}/concluir`, { method: 'POST', body: JSON.stringify({}) });
+    btn.disabled = false; btn.textContent = '📄 Gerar PDF';
+    if (!r || !r.ok) return alerta('Erro ao gerar PDF.', 'erro');
+    const out = await r.json();
+    const link = document.getElementById('btn-baixar-pdf');
+    link.href = out.url; link.style.display = '';
+    alerta('PDF gerado com sucesso.', 'ok');
+  }
+
+  function resetar() {
+    pedidoAtual = null;
+    document.getElementById('resultado-card').style.display = 'none';
+    document.getElementById('pgto-card').style.display = 'none';
+    document.getElementById('processing-card').style.display = 'none';
+    document.getElementById('form-card').style.display = '';
+    document.getElementById('alvo_placa').value = '';
+    document.getElementById('aceite_termos').checked = false;
+    document.getElementById('placa-status').textContent = '';
+    document.getElementById('btn-baixar-pdf').style.display = 'none';
+    ['card-renajud', 'card-historico', 'card-sinistro', 'card-completo'].forEach(id => document.getElementById(id).style.display = 'none');
+  }
+
+  if (usuario.nome) document.getElementById('cliente_nome').value = usuario.nome;
+  carregarCustoAdmin();
+</script>
+
+</body>
+</html>

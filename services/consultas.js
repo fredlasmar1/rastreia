@@ -1445,6 +1445,42 @@ async function consultarHistoricoVeiculos(cpfCnpj) {
 async function executarConsultaCompleta(pedido) {
   const { alvo_documento, alvo_tipo, alvo_nome, tipo, alvo_placa } = pedido;
 
+  // ─── Pacotes Credify (Simples / Mediano / Completo) ─────────────
+  // Regra inviolável: estes 3 produtos usam EXCLUSIVAMENTE a Credify.
+  if (tipo === 'consulta_veicular_simples' || tipo === 'consulta_veicular_mediana' || tipo === 'consulta_veicular_completa') {
+    const credify = require('./credify/api');
+    const placa = credify.normalizarPlaca(alvo_placa || '');
+    if (!credify.placaValida(placa)) {
+      return { erro: 'Placa inválida (formato esperado AAA1A23 Mercosul ou AAA1234 antiga)' };
+    }
+
+    if (tipo === 'consulta_veicular_completa') {
+      // Pacote único Credify VeiculoTotal
+      const veiculo_total = await credify.consultarVeiculoTotal(placa);
+      return { placa, pacote: 'completa', veiculo_total };
+    }
+
+    if (tipo === 'consulta_veicular_simples') {
+      const [veicular, gravame, renainf] = await Promise.all([
+        credify.consultarVeicularBNacionalOnLine(placa),
+        credify.consultarGravame(placa),
+        credify.consultarRenainf(placa)
+      ]);
+      return { placa, pacote: 'simples', veicular, gravame, renainf };
+    }
+
+    // Mediano
+    const [veicular, gravame, renainf, renajud, historico, sinistro] = await Promise.all([
+      credify.consultarVeicularBNacionalOnLine(placa),
+      credify.consultarGravame(placa),
+      credify.consultarRenainf(placa),
+      credify.consultarRenajud(placa),
+      credify.consultarHistoricoProprietarios(placa),
+      credify.consultarIndicioSinistro(placa)
+    ]);
+    return { placa, pacote: 'mediana', veicular, gravame, renainf, renajud, historico, sinistro };
+  }
+
   // Produto standalone: Consulta Veicular
   // Chamadas em paralelo para enriquecer com historico de proprietarios.
   // Se o veiculo atual tiver CPF/CNPJ do proprietario, consulta tambem o
