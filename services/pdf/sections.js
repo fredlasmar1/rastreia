@@ -45,7 +45,10 @@ function secaoCadastralPJ(doc, y, dados) {
       y = verificarPagina(doc, y, 22);
       doc.rect(MARGEM, y, LARGURA, 20).fill(i % 2 === 0 ? '#f9fafb' : '#ffffff');
       doc.fillColor('#111827').fontSize(8).font('Helvetica-Bold').text(s.nome, MARGEM + 6, y + 3);
-      doc.font('Helvetica').fillColor(COR.cinza).text(`${s.qualificacao || ''}  |  Desde: ${s.desde || 'N/D'}`, MARGEM + 6, y + 12);
+      const cpfDigits = String(s.cpf || '').replace(/\D/g, '');
+      const cpfMasc = cpfDigits.length === 11 ? `***.${cpfDigits.slice(3,6)}.***-${cpfDigits.slice(9,11)}` : '';
+      const partes = [s.qualificacao, cpfMasc ? `CPF ${cpfMasc}` : null, `Desde: ${s.desde || 'N/D'}`].filter(Boolean).join('  |  ');
+      doc.font('Helvetica').fillColor(COR.cinza).text(partes, MARGEM + 6, y + 12);
       y += 22;
     });
   }
