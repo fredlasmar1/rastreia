@@ -4,7 +4,7 @@ const fs = require('fs');
 const path = require('path');
 const multer = require('multer');
 const router = express.Router();
-const { autenticar } = require('./auth');
+const { autenticar, admin } = require('./auth');
 const { pool } = require('../db');
 const { executarConsultaCompleta } = require('../services/consultas');
 const { gerarDossie } = require('../services/pdf');
@@ -84,7 +84,7 @@ router.get('/publico/:token', async (req, res) => {
   try {
     const result = await pool.query(
       `SELECT id, numero, tipo, status, prazo_entrega, criado_em, concluido_em, relatorio_url
-       FROM pedidos WHERE token_publico = $1`,
+       FROM pedidos WHERE token_publico = $1 AND deletado_em IS NULL`,
       [req.params.token]
     );
     if (result.rows.length === 0) return res.status(404).json({ erro: 'Pedido não encontrado' });
@@ -99,11 +99,11 @@ router.get('/dashboard/stats', autenticar, async (req, res) => {
   try {
     const hoje = new Date(); hoje.setHours(0, 0, 0, 0);
     const [total, hoje_count, em_andamento, concluidos, receita] = await Promise.all([
-      pool.query('SELECT COUNT(*) FROM pedidos'),
-      pool.query('SELECT COUNT(*) FROM pedidos WHERE criado_em >= $1', [hoje]),
-      pool.query("SELECT COUNT(*) FROM pedidos WHERE status IN ('pago', 'em_andamento')"),
-      pool.query("SELECT COUNT(*) FROM pedidos WHERE status = 'concluido'"),
-      pool.query("SELECT SUM(valor) FROM pedidos WHERE status != 'cancelado' AND pago_em >= $1", [new Date(hoje.getFullYear(), hoje.getMonth(), 1)])
+      pool.query('SELECT COUNT(*) FROM pedidos WHERE deletado_em IS NULL'),
+      pool.query('SELECT COUNT(*) FROM pedidos WHERE deletado_em IS NULL AND criado_em >= $1', [hoje]),
+      pool.query("SELECT COUNT(*) FROM pedidos WHERE deletado_em IS NULL AND status IN ('pago', 'em_andamento')"),
+      pool.query("SELECT COUNT(*) FROM pedidos WHERE deletado_em IS NULL AND status = 'concluido'"),
+      pool.query("SELECT SUM(valor) FROM pedidos WHERE deletado_em IS NULL AND status != 'cancelado' AND pago_em >= $1", [new Date(hoje.getFullYear(), hoje.getMonth(), 1)])
     ]);
     res.json({
       total: parseInt(total.rows[0].count),
@@ -120,22 +120,35 @@ router.get('/dashboard/stats', autenticar, async (req, res) => {
 // Listar pedidos
 router.get('/', autenticar, async (req, res) => {
   try {
-    const { status, page = 1, limit = 20 } = req.query;
+    const { status, page = 1, limit = 20, incluirDeletados } = req.query;
     const safeLimit = Math.min(Math.max(parseInt(limit) || 20, 1), MAX_LIMIT);
     const safePage = Math.max(parseInt(page) || 1, 1);
     const offset = (safePage - 1) * safeLimit;
 
-    let query = 'SELECT p.*, u.nome as operador_nome FROM pedidos p LEFT JOIN usuarios u ON p.operador_id = u.id';
+    // Soft delete: por padrão esconde deletados. Apenas admin pode pedir incluirDeletados=1.
+    const incluiDel = req.usuario.perfil === 'admin' && (incluirDeletados === '1' || incluirDeletados === 'true');
+
+    const whereParts = [];
     const params = [];
+    if (!incluiDel) whereParts.push('p.deletado_em IS NULL');
     if (status) {
       params.push(status);
-      query += ' WHERE p.status = $1';
+      whereParts.push(`p.status = $${params.length}`);
     }
+    const whereSql = whereParts.length ? ' WHERE ' + whereParts.join(' AND ') : '';
+
     params.push(safeLimit, offset);
-    query += ` ORDER BY p.criado_em DESC LIMIT $${params.length - 1} OFFSET $${params.length}`;
+    const query = `SELECT p.*, u.nome as operador_nome FROM pedidos p LEFT JOIN usuarios u ON p.operador_id = u.id${whereSql} ORDER BY p.criado_em DESC LIMIT $${params.length - 1} OFFSET $${params.length}`;
 
     const result = await pool.query(query, params);
-    const count = await pool.query('SELECT COUNT(*) FROM pedidos' + (status ? ' WHERE status = $1' : ''), status ? [status] : []);
+
+    const countWhere = [];
+    const countParams = [];
+    if (!incluiDel) countWhere.push('deletado_em IS NULL');
+    if (status) { countParams.push(status); countWhere.push(`status = $${countParams.length}`); }
+    const countSql = `SELECT COUNT(*) FROM pedidos${countWhere.length ? ' WHERE ' + countWhere.join(' AND ') : ''}`;
+    const count = await pool.query(countSql, countParams);
+
     res.json({ pedidos: result.rows, total: parseInt(count.rows[0].count), page: safePage });
   } catch (e) {
     res.status(500).json({ erro: 'Erro ao listar pedidos' });
@@ -720,6 +733,7 @@ router.post('/:id/concluir', autenticar, async (req, res) => {
         `SELECT numero, score_calculado, score_classificacao, criado_em, concluido_em
          FROM pedidos
          WHERE alvo_documento = $1 AND id != $2 AND score_calculado IS NOT NULL
+           AND deletado_em IS NULL
          ORDER BY criado_em DESC LIMIT 5`,
         [pedido.alvo_documento, pedido.id]
       );
@@ -808,6 +822,28 @@ router.post('/demo', autenticar, async (req, res) => {
     res.json(result.rows[0]);
   } catch (e) {
     res.status(500).json({ erro: 'Erro ao criar demonstração' });
+  }
+});
+
+// Soft delete (admin only). Marca deletado_em = NOW(); preserva o registro
+// para auditoria. NÃO faz DELETE físico. Listagens padrão escondem o pedido.
+router.delete('/:id', autenticar, admin, async (req, res) => {
+  try {
+    const r = await pool.query(
+      `UPDATE pedidos SET deletado_em = NOW(), atualizado_em = NOW()
+        WHERE id = $1 AND deletado_em IS NULL
+        RETURNING id, numero`,
+      [req.params.id]
+    );
+    if (r.rows.length === 0) {
+      return res.status(404).json({ erro: 'Pedido não encontrado ou já excluído' });
+    }
+    await pool.query('INSERT INTO logs (pedido_id, usuario_id, acao) VALUES ($1, $2, $3)',
+      [req.params.id, req.usuario.id, 'Pedido excluído (soft delete)']);
+    res.json({ ok: true, deletado: r.rows[0] });
+  } catch (e) {
+    console.error('[pedidos] soft delete:', e);
+    res.status(500).json({ erro: 'Erro ao excluir pedido' });
   }
 });
 
