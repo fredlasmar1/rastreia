@@ -1495,7 +1495,12 @@ async function consultarHistoricoVeiculos(cpfCnpj) {
 const INFOSIMPLES_BASE = 'https://api.infosimples.com/api/v2';
 
 // Wrapper genérico InfoSimples com timeout, captura de erro e log padronizado.
-// Retorna { ok, data, status, erro }
+// Retorna { ok, data, status, erro, sem_dados }
+//   code=200 → ok=true
+//   code=612 → ok=true, sem_dados=true (consulta processada mas origem sem dados —
+//             em geral significa "nada consta" / "regular"; deixa a função
+//             chamadora interpretar conforme o domínio)
+//   demais   → ok=false
 async function chamarInfoSimples(path, body, origem) {
   const INFO_TOKEN = process.env.INFOSIMPLES_TOKEN;
   if (!INFO_TOKEN) {
@@ -1505,13 +1510,16 @@ async function chamarInfoSimples(path, body, origem) {
     const url = `${INFOSIMPLES_BASE}${path}`;
     const res = await axios.post(url, { token: INFO_TOKEN, timeout: 600, ...body }, { timeout: 30000 });
     const code = res.data?.code;
-    if (code !== 200) {
-      const msg = res.data?.code_message || res.data?.message || `code=${code}`;
-      logarFalhaAPI(origem, code, msg);
-      return { ok: false, erro: msg, status: code, raw: res.data };
-    }
     const data = (res.data?.data || [])[0] || {};
-    return { ok: true, data, header: res.data?.header || {} };
+    if (code === 200) {
+      return { ok: true, data, header: res.data?.header || {} };
+    }
+    if (code === 612) {
+      return { ok: true, sem_dados: true, data, header: res.data?.header || {} };
+    }
+    const msg = res.data?.code_message || res.data?.message || `code=${code}`;
+    logarFalhaAPI(origem, code, msg);
+    return { ok: false, erro: msg, status: code, raw: res.data };
   } catch (e) {
     const status = e.response?.status;
     const msg = e.response?.data?.code_message || e.response?.data?.message || e.message;
@@ -1558,13 +1566,22 @@ function classificarSituacaoCND(texto) {
 async function consultarCNDFederal(cnpj) {
   const fonte = 'PGFN/RFB via InfoSimples';
   const doc = limparDoc(cnpj);
-  const r = await chamarInfoSimples('/consultas/receita-federal-pgfn', { cnpj: doc }, 'CND Federal');
+  const r = await chamarInfoSimples('/consultas/receita-federal/pgfn', { cnpj: doc }, 'CND Federal');
   if (!r.ok) {
     return {
       disponivel: false,
       fonte,
       erro: r.erro,
       link_manual: 'https://solucoes.receita.fazenda.gov.br/servicos/certidaointernet/pj/emitir'
+    };
+  }
+  if (r.sem_dados) {
+    return {
+      disponivel: true,
+      situacao: 'NADA_CONSTA',
+      descricao: 'Nenhum débito retornado pela PGFN',
+      fonte,
+      consultado_em: new Date().toISOString()
     };
   }
   const d = r.data;
@@ -1666,6 +1683,15 @@ async function consultarCNDTrabalhistaTST(cnpj) {
       link_manual: 'https://www.tst.jus.br/certidao'
     };
   }
+  if (r.sem_dados) {
+    return {
+      disponivel: true,
+      situacao: 'NEGATIVA',
+      descricao: 'Nenhum débito trabalhista retornado pelo TST',
+      fonte,
+      consultado_em: new Date().toISOString()
+    };
+  }
   const d = r.data;
   const tipo = d.tipo_certidao || d.situacao || d.resultado || '';
   return {
@@ -1684,13 +1710,22 @@ async function consultarCNDTrabalhistaTST(cnpj) {
 // A.5 — Certidão FGTS (Caixa)
 async function consultarCertidaoFGTS(cnpj) {
   const fonte = 'Caixa/FGTS via InfoSimples';
-  const r = await chamarInfoSimples('/consultas/caixa-regularidade', { cnpj: limparDoc(cnpj) }, 'FGTS');
+  const r = await chamarInfoSimples('/consultas/caixa/regularidade', { cnpj: limparDoc(cnpj) }, 'FGTS');
   if (!r.ok) {
     return {
       disponivel: false,
       fonte,
       erro: r.erro,
       link_manual: 'https://consulta-crf.caixa.gov.br'
+    };
+  }
+  if (r.sem_dados) {
+    return {
+      disponivel: true,
+      situacao: 'INDETERMINADA',
+      descricao: 'CRF não disponível no momento na Caixa',
+      fonte,
+      consultado_em: new Date().toISOString()
     };
   }
   const d = r.data;
@@ -1709,22 +1744,24 @@ async function consultarCertidaoFGTS(cnpj) {
 }
 
 // A.6 — Marcas INPI
-// O endpoint InfoSimples `inpi-marcas` não aceita CNPJ direto — exige
-// `pesquisa_textual` (ou `marca`). Buscamos pela razão social do alvo.
+// O endpoint InfoSimples `inpi/marcas` não aceita CNPJ direto — exige
+// `pesquisa_textual`. Buscamos pela razão social do alvo.
 async function consultarMarcasINPI(cnpj, razaoSocial) {
-  const fonte = 'INPI via InfoSimples';
+  const fonte = 'INPI Marcas via InfoSimples';
   const termo = String(razaoSocial || '').trim();
   if (!termo) {
     return {
       disponivel: false,
       fonte,
-      nota: 'Razão social não fornecida — não é possível buscar marcas no INPI',
-      link_manual: 'https://busca.inpi.gov.br/pePI/'
+      nota: 'Razão social não fornecida'
     };
   }
-  const r = await chamarInfoSimples('/consultas/inpi-marcas', { pesquisa_textual: termo }, 'INPI Marcas');
+  const r = await chamarInfoSimples('/consultas/inpi/marcas', { pesquisa_textual: termo }, 'INPI Marcas');
   if (!r.ok) {
     return { disponivel: false, fonte, erro: r.erro, link_manual: 'https://busca.inpi.gov.br/pePI/' };
+  }
+  if (r.sem_dados) {
+    return { disponivel: true, total: 0, marcas: [], fonte, consultado_em: new Date().toISOString() };
   }
   const d = r.data;
   const lista = d.marcas || d.processos || d.itens || [];
@@ -1738,6 +1775,88 @@ async function consultarMarcasINPI(cnpj, razaoSocial) {
     disponivel: true,
     total: marcas.length,
     marcas,
+    fonte,
+    consultado_em: new Date().toISOString()
+  };
+}
+
+// A.6.2 — CEIS (Cadastro de Empresas Inidôneas e Suspensas) — Portal Transparência
+async function consultarCEIS(cnpj) {
+  const fonte = 'CEIS Portal Transparência via InfoSimples';
+  const r = await chamarInfoSimples('/consultas/portal-transparencia/ceis', { cnpj: limparDoc(cnpj) }, 'CEIS');
+  if (!r.ok) {
+    return { disponivel: false, fonte, erro: r.erro, link_manual: 'https://portaldatransparencia.gov.br/sancoes/ceis' };
+  }
+  if (r.sem_dados) {
+    return { disponivel: true, em_lista: false, fonte, consultado_em: new Date().toISOString() };
+  }
+  const d = r.data;
+  const lista = d.sancoes || d.registros || d.itens || [];
+  const itens = Array.isArray(lista) ? lista : [];
+  return {
+    disponivel: true,
+    em_lista: itens.length > 0,
+    total: itens.length,
+    sancoes: itens.slice(0, 10).map(s => ({
+      orgao: s.orgao_sancionador || s.orgao || '',
+      sancao: s.tipo_sancao || s.sancao || '',
+      inicio: s.data_inicio_sancao || s.inicio || '',
+      fim: s.data_final_sancao || s.fim || ''
+    })),
+    fonte,
+    consultado_em: new Date().toISOString()
+  };
+}
+
+// A.6.3 — CEPIM (Cadastro de Entidades Privadas sem fins lucrativos Impedidas)
+async function consultarCEPIM(cnpj) {
+  const fonte = 'CEPIM Portal Transparência via InfoSimples';
+  const r = await chamarInfoSimples('/consultas/portal-transparencia/cepim', { cnpj: limparDoc(cnpj) }, 'CEPIM');
+  if (!r.ok) {
+    return { disponivel: false, fonte, erro: r.erro, link_manual: 'https://portaldatransparencia.gov.br/sancoes/cepim' };
+  }
+  if (r.sem_dados) {
+    return { disponivel: true, em_lista: false, fonte, consultado_em: new Date().toISOString() };
+  }
+  const d = r.data;
+  const lista = d.impedimentos || d.registros || d.itens || [];
+  const itens = Array.isArray(lista) ? lista : [];
+  return {
+    disponivel: true,
+    em_lista: itens.length > 0,
+    total: itens.length,
+    impedimentos: itens.slice(0, 10).map(i => ({
+      orgao: i.orgao || i.orgao_superior || '',
+      motivo: i.motivo || i.descricao || '',
+      desde: i.data_inicio || i.desde || ''
+    })),
+    fonte,
+    consultado_em: new Date().toISOString()
+  };
+}
+
+// A.6.1 — Patentes INPI
+async function consultarPatentesINPI(cnpj) {
+  const fonte = 'INPI Patentes via InfoSimples';
+  const r = await chamarInfoSimples('/consultas/inpi/patentes', { cnpj: limparDoc(cnpj) }, 'INPI Patentes');
+  if (!r.ok) {
+    return { disponivel: false, fonte, erro: r.erro, link_manual: 'https://busca.inpi.gov.br/pePI/' };
+  }
+  if (r.sem_dados) {
+    return { disponivel: true, total: 0, patentes: [], fonte, consultado_em: new Date().toISOString() };
+  }
+  const d = r.data;
+  const lista = d.patentes || d.processos || d.itens || [];
+  const patentes = (Array.isArray(lista) ? lista : []).map(p => ({
+    titulo: p.titulo || p.nome || '',
+    numero: p.numero || p.numero_pedido || '',
+    situacao: p.situacao || p.status || '',
+    deposito_em: p.data_deposito || p.deposito_em || ''
+  }));
+  return {
+    disponivel: true,
+    total: patentes.length,
+    patentes,
     fonte,
     consultado_em: new Date().toISOString()
   };
@@ -1785,44 +1904,15 @@ async function consultarPortalTransparencia(cnpj) {
   }
 }
 
-// A.8 — Imóveis e Veículos PJ (placeholder por UF)
+// A.8 — Imóveis e Veículos PJ
+// O endpoint genérico DETRAN/UF para CNPJ não é confiável via InfoSimples
+// (a maioria das UFs não aceita consulta veicular por CNPJ). Sempre indicar
+// uso da aba Veicular com placa específica via Credify.
 async function consultarImoveisVeiculosPJ(cnpj, uf) {
-  const ufNorm = String(uf || '').toUpperCase().trim();
-  const fonte = `DETRAN-${ufNorm} (PJ) via InfoSimples`;
-  const supportadas = ['SP', 'RJ', 'MG', 'GO', 'ES'];
-  if (!supportadas.includes(ufNorm)) {
-    return {
-      disponivel: false,
-      fonte,
-      nota: ufNorm
-        ? `Consulta de patrimônio veicular PJ não disponível para UF ${ufNorm} — verificar manualmente no DETRAN-${ufNorm}`
-        : 'UF não identificada — patrimônio veicular não consultado'
-    };
-  }
-  // TODO: alguns DETRAN só aceitam CPF; este endpoint é uma melhor-tentativa.
-  const slug = `detran/${ufNorm.toLowerCase()}/veiculos`;
-  const r = await chamarInfoSimples(`/consultas/${slug}`, { cnpj: limparDoc(cnpj) }, `Veiculos PJ ${ufNorm}`);
-  if (!r.ok) {
-    return {
-      disponivel: false,
-      fonte,
-      erro: r.erro,
-      nota: 'Algumas UFs não aceitam consulta veicular por CNPJ — confirmar manualmente no DETRAN'
-    };
-  }
-  const d = r.data;
-  const lista = d.veiculos || d.itens || [];
   return {
-    disponivel: true,
-    total: lista.length,
-    itens: lista.slice(0, 20).map(v => ({
-      placa: v.placa || '',
-      veiculo: [v.marca, v.modelo].filter(Boolean).join(' '),
-      ano: v.ano || '',
-      situacao: v.situacao || ''
-    })),
-    fonte,
-    consultado_em: new Date().toISOString()
+    disponivel: false,
+    fonte: 'DETRAN PJ',
+    nota: 'Consulta veicular por CNPJ não disponível para a maioria das UFs — utilize a aba Veicular com placa específica via Credify'
   };
 }
 
@@ -2026,7 +2116,9 @@ async function executarConsultasParaAlvo(alvo, { precisaVinculos, precisaVeiculo
   // patrimônio veicular PJ. Tudo em paralelo via Promise.allSettled — falha
   // individual NUNCA derruba o pipeline. Sócios enriquecidos rodam depois.
   let pgfn = null, debitos_estaduais = null, cnd_municipal = null;
-  let cndt = null, fgts = null, inpi = null, contratos_publicos = null, veiculos_pj = null;
+  let cndt = null, fgts = null, inpi = null, inpi_patentes = null;
+  let ceis = null, cepim = null;
+  let contratos_publicos = null, veiculos_pj = null;
   let socios_enriquecidos = null;
 
   if (tipo === 'due_diligence' && tipoAlvo === 'PJ') {
@@ -2040,6 +2132,9 @@ async function executarConsultasParaAlvo(alvo, { precisaVinculos, precisaVeiculo
       consultarCNDTrabalhistaTST(documento),
       consultarCertidaoFGTS(documento),
       consultarMarcasINPI(documento, cadastral?.razao_social || ''),
+      consultarPatentesINPI(documento),
+      consultarCEIS(documento),
+      consultarCEPIM(documento),
       consultarPortalTransparencia(documento),
       consultarImoveisVeiculosPJ(documento, ufCnpj)
     ];
@@ -2052,8 +2147,11 @@ async function executarConsultasParaAlvo(alvo, { precisaVinculos, precisaVeiculo
     cndt = safe(ddSettled[3]);
     fgts = safe(ddSettled[4]);
     inpi = safe(ddSettled[5]);
-    contratos_publicos = safe(ddSettled[6]);
-    veiculos_pj = safe(ddSettled[7]);
+    inpi_patentes = safe(ddSettled[6]);
+    ceis = safe(ddSettled[7]);
+    cepim = safe(ddSettled[8]);
+    contratos_publicos = safe(ddSettled[9]);
+    veiculos_pj = safe(ddSettled[10]);
 
     // Mini-dossiê dos sócios — rodar depois pois pode demorar e usa Direct Data.
     if (Array.isArray(cadastral?.socios) && cadastral.socios.length) {
@@ -2076,6 +2174,9 @@ async function executarConsultasParaAlvo(alvo, { precisaVinculos, precisaVeiculo
     ...(cndt ? { cndt } : {}),
     ...(fgts ? { fgts } : {}),
     ...(inpi ? { inpi } : {}),
+    ...(inpi_patentes ? { inpi_patentes } : {}),
+    ...(ceis ? { ceis } : {}),
+    ...(cepim ? { cepim } : {}),
     ...(contratos_publicos ? { contratos_publicos } : {}),
     ...(veiculos_pj ? { veiculos_pj } : {}),
     ...(socios_enriquecidos ? { socios_enriquecidos } : {})
