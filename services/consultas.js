@@ -1778,7 +1778,7 @@ async function consultarMarcasINPI(cnpj, razaoSocial) {
       nota: 'Razão social não fornecida'
     };
   }
-  const r = await chamarInfoSimples('/consultas/inpi/marcas', { pesquisa_textual: termo }, 'INPI Marcas');
+  const r = await chamarInfoSimples('/consultas/inpi/marcas', { pesquisa_textual: termo, tipo: 'titular' }, 'INPI Marcas');
   if (!r.ok) {
     return { disponivel: false, fonte, erro: r.erro, link_manual: 'https://busca.inpi.gov.br/pePI/' };
   }
