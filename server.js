@@ -302,6 +302,7 @@ app.use('/api/assinaturas', require('./routes/assinaturas'));
 app.use('/api/clientes', require('./routes/clientes'));
 app.use('/api/admin/custos', require('./routes/custos'));
 app.use('/api', require('./routes/planos_usuario'));
+app.use('/api/_debug', require('./routes/_debug'));
 
 // Webhook Mercado Pago — público, sem autenticação (MP não envia JWT).
 // Caminho novo + caminho legado (compat com integrações antigas no painel MP).
