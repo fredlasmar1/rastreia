@@ -330,3 +330,14 @@ CREATE TABLE IF NOT EXISTS pagamentos_log (
 );
 CREATE INDEX IF NOT EXISTS idx_pagamentos_log_pedido ON pagamentos_log(pedido_id);
 CREATE INDEX IF NOT EXISTS idx_pagamentos_log_payment ON pagamentos_log(payment_id);
+
+-- ==========================================================================
+-- Fase 9: Pagamento multi-método (ver db/migrations/002)
+-- forma_pagamento em pedidos: 'mercadopago' | 'dinheiro' | 'plano' | NULL
+-- Plano de cota mensal por usuário (operador): cobra 1 consulta da cota.
+-- ==========================================================================
+ALTER TABLE pedidos ADD COLUMN IF NOT EXISTS forma_pagamento VARCHAR(20);
+ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS plano_cota_mensal INTEGER DEFAULT 0;
+ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS plano_consultas_usadas INTEGER DEFAULT 0;
+ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS plano_ciclo_inicio DATE;
+CREATE INDEX IF NOT EXISTS idx_pedidos_forma_pagamento ON pedidos(forma_pagamento);
