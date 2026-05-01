@@ -57,6 +57,19 @@ async function criarPreferenceParaPedido(pedido, opts = {}) {
   const nomeProduto = opts.nomeProduto || pedido.tipo || 'Consulta Recobro';
   const numero = pedido.numero ? `#${pedido.numero}` : String(pedido.id).slice(0, 8);
 
+  // PIX expira em 24h por padrão (MP recomenda definir explicitamente para garantir
+  // que PIX apareça como opção). ISO-8601 com offset.
+  const expiraEm = new Date(Date.now() + 24 * 60 * 60 * 1000)
+    .toISOString()
+    .replace('Z', '-03:00');
+
+  // E-mail da conta MP dona — se o e-mail do cliente bater com este, o MP esconde
+  // PIX/saldo ("você não pode pagar a si mesmo"). Nesse caso não enviamos payer.email.
+  const ownerEmail = (process.env.MERCADOPAGO_OWNER_EMAIL || '').toLowerCase().trim();
+  const clienteEmail = pedido.cliente_email
+    ? String(pedido.cliente_email).toLowerCase().trim()
+    : '';
+
   const body = {
     items: [{
       id: String(pedido.id),
@@ -73,10 +86,18 @@ async function criarPreferenceParaPedido(pedido, opts = {}) {
     },
     auto_return: 'approved',
     notification_url: `${baseUrl()}/api/mercadopago/webhook`,
-    metadata: { pedido_id: String(pedido.id) }
+    metadata: { pedido_id: String(pedido.id) },
+    // payment_methods sem exclusões = TODOS os métodos disponíveis na conta
+    // (cartão, PIX, boleto). PIX só aparece se a conta MP tiver chave PIX cadastrada.
+    payment_methods: {
+      excluded_payment_methods: [],
+      excluded_payment_types: [],
+      installments: 12
+    },
+    date_of_expiration: expiraEm
   };
 
-  if (pedido.cliente_email) {
+  if (clienteEmail && clienteEmail !== ownerEmail) {
     body.payer = { email: String(pedido.cliente_email) };
   }
 
