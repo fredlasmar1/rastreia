@@ -1694,22 +1694,31 @@ async function consultarCNDTrabalhistaTST(cnpj) {
   if (r.sem_dados) {
     return {
       disponivel: true,
-      situacao: 'NEGATIVA',
-      descricao: 'Nenhum débito trabalhista retornado pelo TST',
+      situacao: 'INDETERMINADA',
+      descricao: 'TST não retornou certidão (tente novamente em alguns minutos)',
       fonte,
       consultado_em: new Date().toISOString()
     };
   }
   const d = r.data;
-  const tipo = d.tipo_certidao || d.situacao || d.resultado || '';
+  const txt = String(d.certidao || d.mensagem || '').toLowerCase();
+  let situacao = 'INDETERMINADO';
+  if (d.nada_consta === true || txt.includes('certidão negativa') || txt.includes('certidao negativa')) {
+    situacao = 'NEGATIVA';
+  } else if (d.consta_debitos === true || txt.includes('certidão positiva') || txt.includes('certidao positiva')) {
+    situacao = 'POSITIVA';
+  }
+  if (txt.includes('positiva com efeito') || txt.includes('efeitos de negativa')) {
+    situacao = 'POSITIVA_COM_EFEITOS_DE_NEGATIVA';
+  }
   return {
     disponivel: true,
-    situacao: classificarSituacaoCND(tipo) || tipo || 'INDETERMINADO',
-    descricao: tipo,
-    emitida_em: d.data_emissao || d.emissao || '',
-    valida_ate: d.data_validade || d.validade || '',
-    codigo: d.codigo_certidao || d.codigo || '',
-    link_pdf: d.link_pdf || d.url_pdf || d.site_receipt || '',
+    situacao,
+    descricao: d.certidao || d.mensagem || '',
+    emitida_em: d.emissao_data || d.consulta_datahora || '',
+    valida_ate: d.validade_data || d.validade || '',
+    codigo: d.certidao_codigo || d.consulta_comprovante || '',
+    link_pdf: d.site_receipt || '',
     fonte,
     consultado_em: new Date().toISOString()
   };
