@@ -1578,23 +1578,31 @@ async function consultarCNDFederal(cnpj) {
   if (r.sem_dados) {
     return {
       disponivel: true,
-      situacao: 'NADA_CONSTA',
-      descricao: 'Nenhum débito retornado pela PGFN',
+      situacao: 'INDETERMINADA',
+      descricao: 'PGFN não retornou certidão (tente novamente em alguns minutos)',
       fonte,
       consultado_em: new Date().toISOString()
     };
   }
   const d = r.data;
-  const tipo = d.tipo_certidao || d.situacao || d.status_certidao || '';
-  const situacao = classificarSituacaoCND(tipo) || classificarSituacaoCND(d.resultado || '');
+  let situacao = 'INDETERMINADO';
+  if (d.conseguiu_emitir_certidao_negativa === true || (d.debitos_pgfn === false && d.debitos_rfb === false)) {
+    situacao = 'NEGATIVA';
+  } else if (d.debitos_pgfn || d.debitos_rfb) {
+    situacao = 'POSITIVA';
+  }
+  const txt = String(d.certidao || d.mensagem || '').toLowerCase();
+  if (txt.includes('positiva com efeito') || txt.includes('efeitos de negativa')) {
+    situacao = 'POSITIVA_COM_EFEITOS_DE_NEGATIVA';
+  }
   return {
     disponivel: true,
-    situacao: situacao || tipo || 'INDETERMINADO',
-    descricao: tipo || d.resultado || '',
-    emitida_em: d.data_emissao || d.emissao || '',
-    valida_ate: d.data_validade || d.validade || '',
-    codigo: d.codigo_certidao || d.codigo || '',
-    link_pdf: d.link_pdf || d.url_pdf || d.site_receipt || '',
+    situacao,
+    descricao: d.certidao || d.mensagem || '',
+    emitida_em: d.emissao_data || d.consulta_datahora || '',
+    valida_ate: d.validade_data || d.validade || '',
+    codigo: d.certidao_codigo || d.consulta_comprovante || '',
+    link_pdf: d.site_receipt || '',
     fonte,
     consultado_em: new Date().toISOString()
   };
@@ -1686,22 +1694,31 @@ async function consultarCNDTrabalhistaTST(cnpj) {
   if (r.sem_dados) {
     return {
       disponivel: true,
-      situacao: 'NEGATIVA',
-      descricao: 'Nenhum débito trabalhista retornado pelo TST',
+      situacao: 'INDETERMINADA',
+      descricao: 'TST não retornou certidão (tente novamente em alguns minutos)',
       fonte,
       consultado_em: new Date().toISOString()
     };
   }
   const d = r.data;
-  const tipo = d.tipo_certidao || d.situacao || d.resultado || '';
+  const txt = String(d.certidao || d.mensagem || '').toLowerCase();
+  let situacao = 'INDETERMINADO';
+  if (d.nada_consta === true || txt.includes('certidão negativa') || txt.includes('certidao negativa')) {
+    situacao = 'NEGATIVA';
+  } else if (d.consta_debitos === true || txt.includes('certidão positiva') || txt.includes('certidao positiva')) {
+    situacao = 'POSITIVA';
+  }
+  if (txt.includes('positiva com efeito') || txt.includes('efeitos de negativa')) {
+    situacao = 'POSITIVA_COM_EFEITOS_DE_NEGATIVA';
+  }
   return {
     disponivel: true,
-    situacao: classificarSituacaoCND(tipo) || tipo || 'INDETERMINADO',
-    descricao: tipo,
-    emitida_em: d.data_emissao || d.emissao || '',
-    valida_ate: d.data_validade || d.validade || '',
-    codigo: d.codigo_certidao || d.codigo || '',
-    link_pdf: d.link_pdf || d.url_pdf || d.site_receipt || '',
+    situacao,
+    descricao: d.certidao || d.mensagem || '',
+    emitida_em: d.emissao_data || d.consulta_datahora || '',
+    valida_ate: d.validade_data || d.validade || '',
+    codigo: d.certidao_codigo || d.consulta_comprovante || '',
+    link_pdf: d.site_receipt || '',
     fonte,
     consultado_em: new Date().toISOString()
   };
@@ -1723,21 +1740,26 @@ async function consultarCertidaoFGTS(cnpj) {
     return {
       disponivel: true,
       situacao: 'INDETERMINADA',
-      descricao: 'CRF não disponível no momento na Caixa',
+      descricao: 'CRF não disponível na Caixa no momento (tente em alguns minutos)',
       fonte,
       consultado_em: new Date().toISOString()
     };
   }
   const d = r.data;
-  const tipo = d.situacao || d.resultado || d.tipo_certidao || '';
-  const regular = /regular|em\s+situa/i.test(tipo);
+  const txt = String(d.crf || d.situacao || d.mensagem || '').toLowerCase();
+  let situacao = 'INDETERMINADO';
+  if (txt.includes('regular') && !txt.includes('irregular') && !txt.includes('não regular') && !txt.includes('nao regular')) {
+    situacao = 'REGULAR';
+  } else if (txt.includes('irregular') || txt.includes('não regular') || txt.includes('nao regular')) {
+    situacao = 'IRREGULAR';
+  }
   return {
     disponivel: true,
-    situacao: regular ? 'REGULAR' : (tipo ? 'IRREGULAR' : 'INDETERMINADO'),
-    descricao: tipo,
-    emitida_em: d.data_emissao || d.emissao || '',
-    valida_ate: d.data_validade || d.validade || '',
-    link_pdf: d.link_pdf || d.url_pdf || d.site_receipt || '',
+    situacao,
+    descricao: d.crf || d.situacao || '',
+    emitida_em: d.validade_inicio_data || '',
+    valida_ate: d.validade_fim_data || '',
+    link_pdf: d.site_receipt || '',
     fonte,
     consultado_em: new Date().toISOString()
   };
@@ -1756,7 +1778,7 @@ async function consultarMarcasINPI(cnpj, razaoSocial) {
       nota: 'Razão social não fornecida'
     };
   }
-  const r = await chamarInfoSimples('/consultas/inpi/marcas', { pesquisa_textual: termo }, 'INPI Marcas');
+  const r = await chamarInfoSimples('/consultas/inpi/marcas', { pesquisa_textual: termo, tipo: 'titular' }, 'INPI Marcas');
   if (!r.ok) {
     return { disponivel: false, fonte, erro: r.erro, link_manual: 'https://busca.inpi.gov.br/pePI/' };
   }
