@@ -1578,23 +1578,31 @@ async function consultarCNDFederal(cnpj) {
   if (r.sem_dados) {
     return {
       disponivel: true,
-      situacao: 'NADA_CONSTA',
-      descricao: 'Nenhum débito retornado pela PGFN',
+      situacao: 'INDETERMINADA',
+      descricao: 'PGFN não retornou certidão (tente novamente em alguns minutos)',
       fonte,
       consultado_em: new Date().toISOString()
     };
   }
   const d = r.data;
-  const tipo = d.tipo_certidao || d.situacao || d.status_certidao || '';
-  const situacao = classificarSituacaoCND(tipo) || classificarSituacaoCND(d.resultado || '');
+  let situacao = 'INDETERMINADO';
+  if (d.conseguiu_emitir_certidao_negativa === true || (d.debitos_pgfn === false && d.debitos_rfb === false)) {
+    situacao = 'NEGATIVA';
+  } else if (d.debitos_pgfn || d.debitos_rfb) {
+    situacao = 'POSITIVA';
+  }
+  const txt = String(d.certidao || d.mensagem || '').toLowerCase();
+  if (txt.includes('positiva com efeito') || txt.includes('efeitos de negativa')) {
+    situacao = 'POSITIVA_COM_EFEITOS_DE_NEGATIVA';
+  }
   return {
     disponivel: true,
-    situacao: situacao || tipo || 'INDETERMINADO',
-    descricao: tipo || d.resultado || '',
-    emitida_em: d.data_emissao || d.emissao || '',
-    valida_ate: d.data_validade || d.validade || '',
-    codigo: d.codigo_certidao || d.codigo || '',
-    link_pdf: d.link_pdf || d.url_pdf || d.site_receipt || '',
+    situacao,
+    descricao: d.certidao || d.mensagem || '',
+    emitida_em: d.emissao_data || d.consulta_datahora || '',
+    valida_ate: d.validade_data || d.validade || '',
+    codigo: d.certidao_codigo || d.consulta_comprovante || '',
+    link_pdf: d.site_receipt || '',
     fonte,
     consultado_em: new Date().toISOString()
   };
