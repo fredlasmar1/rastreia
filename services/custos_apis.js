@@ -30,8 +30,18 @@ const CUSTOS_APIS = {
   // InfoSimples (DETRAN-GO veículo)
   infosimples_detran_veiculo: 0.26,   // 0,06 + base 0,20
 
+  // InfoSimples — Due Diligence Empresarial (estimativa ~R$ 0,80/consulta)
+  infosimples_cnd_federal: 0.80,
+  infosimples_cnd_estadual: 0.80,
+  infosimples_cnd_municipal: 0.80,
+  infosimples_cndt: 0.80,
+  infosimples_fgts: 0.80,
+  infosimples_inpi: 0.80,
+  infosimples_veiculos_pj: 0.80,
+
   // Gratuitos / mensalidade fixa
   portal_transparencia: 0.00,         // CEIS/CNEP
+  portal_transparencia_contratos: 0.00, // contratos públicos (gov.br)
   datajud_cnj: 0.00,
   cnpjws_publico: 0.00,
   cnpja_assinatura: 0.00,             // mensalidade fixa, não por chamada
@@ -59,7 +69,15 @@ const ROTULOS_APIS = {
   directdata_obito: 'DirectData — Óbito',
   escavador_processos: 'Escavador — Processos',
   infosimples_detran_veiculo: 'InfoSimples — DETRAN Veículo',
+  infosimples_cnd_federal: 'InfoSimples — CND Federal (PGFN/RFB)',
+  infosimples_cnd_estadual: 'InfoSimples — CND Estadual (SEFAZ)',
+  infosimples_cnd_municipal: 'InfoSimples — CND Municipal (Prefeitura)',
+  infosimples_cndt: 'InfoSimples — CND Trabalhista (TST/CNDT)',
+  infosimples_fgts: 'InfoSimples — Regularidade FGTS (Caixa)',
+  infosimples_inpi: 'InfoSimples — Marcas e Patentes (INPI)',
+  infosimples_veiculos_pj: 'InfoSimples — Veículos PJ (DETRAN)',
   portal_transparencia: 'Portal da Transparência (CEIS/CNEP)',
+  portal_transparencia_contratos: 'Portal da Transparência — Contratos públicos',
   datajud_cnj: 'Datajud CNJ',
   cnpjws_publico: 'CNPJ.ws (público)',
   cnpja_assinatura: 'CNPJá (assinatura mensal)',
@@ -95,20 +113,32 @@ const APIS_POR_PRODUTO = {
     'datajud_cnj'
   ],
   due_diligence: [
-    // dossie_pf
+    // PJ — alvo principal
+    'directdata_cnpj_plus',
+    'directdata_score_quod',
+    'directdata_negativacoes',
+    'directdata_apontamentos_bv',
+    'directdata_protestos',
+    'directdata_vinculos',
+    'escavador_processos',
+    'portal_transparencia',
+    'datajud_cnj',
+    // Sócios (cruzamento PF — assume 2 sócios médios)
     'directdata_cpf_plus',
     'directdata_score_quod',
     'directdata_negativacoes',
     'directdata_nivel_socio',
     'directdata_obito',
     'escavador_processos',
-    // dossie_pj
-    'directdata_cnpj_plus',
-    'directdata_protestos',
-    'directdata_vinculos',
-    // comuns
-    'portal_transparencia',
-    'datajud_cnj'
+    // Novas fontes InfoSimples para DD Empresarial
+    'infosimples_cnd_federal',
+    'infosimples_cnd_estadual',
+    'infosimples_cnd_municipal',
+    'infosimples_cndt',
+    'infosimples_fgts',
+    'infosimples_inpi',
+    'infosimples_veiculos_pj',
+    'portal_transparencia_contratos'
   ],
   analise_devedor: [
     'directdata_cpf_plus',
