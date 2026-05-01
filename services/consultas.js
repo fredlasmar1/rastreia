@@ -811,7 +811,13 @@ async function consultarNegativacoes(documento) {
       protestos: todosCartorios,
       pendencias: itensNeg,
       acoes_judiciais: pf.acoesJudiciais || pf.acoes || [],
-      cheques_sem_fundo: pf.chequesSemFundo || pf.cheques || [],
+      cheques_sem_fundo: (pf.chequesSemFundo || pf.cheques || pf.ccf || pf.chequesSemFundoCcf || []).map(c => ({
+        banco: c.banco || c.codigoBanco || c.nomeBanco || '',
+        agencia: c.agencia || c.codigoAgencia || '',
+        quantidade: Number(c.quantidade || c.qtd || 1),
+        data: c.data || c.dataOcorrencia || c.dataUltimo || c.ultimaOcorrencia || '',
+        motivo: c.motivo || c.motivoDevolucao || ''
+      })),
       falencias: normalizarFalencias(pf.recuperacoesJudiciaisFalencia || pf.falencias || []),
       fonte: itensNeg.length > 0
         ? 'Direct Data (Detalhamento Negativo + Boa Vista Acerta Completo)'
@@ -1480,6 +1486,354 @@ async function consultarHistoricoVeiculos(cpfCnpj) {
 }
 
 // =============================================
+// INFOSIMPLES — DUE DILIGENCE EMPRESARIAL
+// 8 novas integrações para o produto Due Diligence Empresarial.
+// Padrão de retorno: { disponivel, fonte, ...dados, consultado_em } em sucesso;
+// { disponivel: false, fonte, erro, link_manual? } em falha. Nunca lançam.
+// =============================================
+
+const INFOSIMPLES_BASE = 'https://api.infosimples.com/api/v2';
+
+// Wrapper genérico InfoSimples com timeout, captura de erro e log padronizado.
+// Retorna { ok, data, status, erro }
+async function chamarInfoSimples(path, body, origem) {
+  const INFO_TOKEN = process.env.INFOSIMPLES_TOKEN;
+  if (!INFO_TOKEN) {
+    return { ok: false, erro: 'INFOSIMPLES_TOKEN não configurado', sem_token: true };
+  }
+  try {
+    const url = `${INFOSIMPLES_BASE}${path}`;
+    const res = await axios.post(url, { token: INFO_TOKEN, timeout: 600, ...body }, { timeout: 30000 });
+    const code = res.data?.code;
+    if (code !== 200) {
+      const msg = res.data?.code_message || res.data?.message || `code=${code}`;
+      logarFalhaAPI(origem, code, msg);
+      return { ok: false, erro: msg, status: code, raw: res.data };
+    }
+    const data = (res.data?.data || [])[0] || {};
+    return { ok: true, data, header: res.data?.header || {} };
+  } catch (e) {
+    const status = e.response?.status;
+    const msg = e.response?.data?.code_message || e.response?.data?.message || e.message;
+    logarFalhaAPI(origem, status, msg);
+    return { ok: false, erro: msg, status };
+  }
+}
+
+// Mapa SEFAZ por UF — slugs aproximados do InfoSimples + fallback URL pública.
+const SEFAZ_INFOSIMPLES = {
+  SP: { slug: 'sefaz/sp/divida-ativa', url: 'https://www.dividaativa.pge.sp.gov.br' },
+  RJ: { slug: 'sefaz/rj/certidao-divida-ativa', url: 'https://www.fazenda.rj.gov.br' },
+  MG: { slug: 'sefaz/mg/certidao-debitos', url: 'https://www.fazenda.mg.gov.br' },
+  GO: { slug: 'sefaz/go/certidao-debitos', url: 'https://www.sefaz.go.gov.br' },
+  ES: { slug: 'sefaz/es/certidao-negativa', url: 'https://internet.sefaz.es.gov.br' },
+  BA: { slug: 'sefaz/ba/certidao-debitos', url: 'https://www.sefaz.ba.gov.br' },
+  RS: { slug: 'sefaz/rs/certidao-situacao-fiscal', url: 'https://www.sefaz.rs.gov.br' },
+  PR: { slug: 'sefaz/pr/certidao-debitos', url: 'https://www.fazenda.pr.gov.br' },
+  SC: { slug: 'sefaz/sc/certidao-debitos', url: 'https://www.sef.sc.gov.br' },
+  DF: { slug: 'sefaz/df/certidao-debitos', url: 'https://www.fazenda.df.gov.br' }
+};
+
+const SEFAZ_FALLBACK_URL = {
+  AC: 'https://sefaz.ac.gov.br', AL: 'https://www.sefaz.al.gov.br', AM: 'https://online.sefaz.am.gov.br',
+  AP: 'https://www.sefaz.ap.gov.br', BA: 'https://www.sefaz.ba.gov.br', CE: 'https://www.sefaz.ce.gov.br',
+  DF: 'https://www.fazenda.df.gov.br', ES: 'https://internet.sefaz.es.gov.br', GO: 'https://www.sefaz.go.gov.br',
+  MA: 'https://portal.sefaz.ma.gov.br', MG: 'https://www.fazenda.mg.gov.br', MS: 'https://www.sefaz.ms.gov.br',
+  MT: 'https://www.sefaz.mt.gov.br', PA: 'https://www.sefa.pa.gov.br', PB: 'https://www.sefaz.pb.gov.br',
+  PE: 'https://www.sefaz.pe.gov.br', PI: 'https://www.sefaz.pi.gov.br', PR: 'https://www.fazenda.pr.gov.br',
+  RJ: 'https://www.fazenda.rj.gov.br', RN: 'https://www.set.rn.gov.br', RO: 'https://www.sefin.ro.gov.br',
+  RR: 'https://www.sefaz.rr.gov.br', RS: 'https://www.sefaz.rs.gov.br', SC: 'https://www.sef.sc.gov.br',
+  SE: 'https://www.sefaz.se.gov.br', SP: 'https://www.fazenda.sp.gov.br', TO: 'https://www.sefaz.to.gov.br'
+};
+
+const PREFEITURA_INFOSIMPLES = {
+  'sao-paulo':   { slug: 'prefeitura/sao-paulo/cnd', url: 'https://www.prefeitura.sp.gov.br' },
+  'rio-de-janeiro': { slug: 'prefeitura/rio-de-janeiro/cnd', url: 'https://carioca.rio' },
+  'belo-horizonte': { slug: 'prefeitura/belo-horizonte/cnd', url: 'https://prefeitura.pbh.gov.br' },
+  'goiania':     { slug: 'prefeitura/goiania/cnd', url: 'https://www.goiania.go.gov.br' },
+  'anapolis':    { slug: 'prefeitura/anapolis/cnd', url: 'https://www.anapolis.go.gov.br' },
+  'vitoria':     { slug: 'prefeitura/vitoria/cnd', url: 'https://www.vitoria.es.gov.br' },
+  'vila-velha':  { slug: 'prefeitura/vila-velha/cnd', url: 'https://www.vilavelha.es.gov.br' },
+  'salvador':    { slug: 'prefeitura/salvador/cnd', url: 'https://www.salvador.ba.gov.br' },
+  'brasilia':    { slug: 'prefeitura/brasilia/cnd', url: 'https://www.df.gov.br' }
+};
+
+function slugMunicipio(nome) {
+  return String(nome || '').toLowerCase()
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+}
+
+function classificarSituacaoCND(texto) {
+  const t = String(texto || '').toLowerCase();
+  if (/positiva.*efeito.*negativ|com\s+efeitos?\s+de\s+negativ/.test(t)) return 'POSITIVA_COM_EFEITOS_DE_NEGATIVA';
+  if (/negativa|nada\s+consta|regular/.test(t)) return 'NEGATIVA';
+  if (/positiva|consta|irregular|deb[ie]to|pendenc/.test(t)) return 'POSITIVA';
+  return null;
+}
+
+// A.1 — CND Federal (Receita Federal + PGFN)
+async function consultarCNDFederal(cnpj) {
+  const fonte = 'PGFN/RFB via InfoSimples';
+  const doc = limparDoc(cnpj);
+  const r = await chamarInfoSimples('/consultas/receita-federal/cnd-pgfn', { cnpj: doc }, 'CND Federal');
+  if (!r.ok) {
+    return {
+      disponivel: false,
+      fonte,
+      erro: r.erro,
+      link_manual: 'https://solucoes.receita.fazenda.gov.br/servicos/certidaointernet/pj/emitir'
+    };
+  }
+  const d = r.data;
+  const tipo = d.tipo_certidao || d.situacao || d.status_certidao || '';
+  const situacao = classificarSituacaoCND(tipo) || classificarSituacaoCND(d.resultado || '');
+  return {
+    disponivel: true,
+    situacao: situacao || tipo || 'INDETERMINADO',
+    descricao: tipo || d.resultado || '',
+    emitida_em: d.data_emissao || d.emissao || '',
+    valida_ate: d.data_validade || d.validade || '',
+    codigo: d.codigo_certidao || d.codigo || '',
+    link_pdf: d.link_pdf || d.url_pdf || d.site_receipt || '',
+    fonte,
+    consultado_em: new Date().toISOString()
+  };
+}
+
+// A.2 — CND Estadual por UF
+async function consultarCNDEstadual(cnpj, uf) {
+  const ufNorm = String(uf || '').toUpperCase().trim();
+  const fonte = `SEFAZ-${ufNorm || 'UF'} via InfoSimples`;
+  const cfg = SEFAZ_INFOSIMPLES[ufNorm];
+  if (!cfg) {
+    return {
+      disponivel: false,
+      fonte,
+      nota: ufNorm
+        ? `CND estadual não automatizada para UF ${ufNorm} — consultar manual em ${SEFAZ_FALLBACK_URL[ufNorm] || 'site da SEFAZ'}`
+        : 'UF do alvo não identificada — CND estadual não automatizada',
+      link_manual: SEFAZ_FALLBACK_URL[ufNorm] || ''
+    };
+  }
+  const r = await chamarInfoSimples(`/consultas/${cfg.slug}`, { cnpj: limparDoc(cnpj) }, `CND Estadual ${ufNorm}`);
+  if (!r.ok) {
+    return { disponivel: false, fonte, erro: r.erro, link_manual: cfg.url };
+  }
+  const d = r.data;
+  const tipo = d.situacao_cadastral || d.tipo_certidao || d.resultado || d.situacao || '';
+  return {
+    disponivel: true,
+    uf: ufNorm,
+    situacao: classificarSituacaoCND(tipo) || tipo || 'INDETERMINADO',
+    descricao: tipo,
+    emitida_em: d.data_emissao || d.emissao || '',
+    valida_ate: d.data_validade || d.validade || '',
+    codigo: d.codigo_certidao || d.codigo || '',
+    link_pdf: d.link_pdf || d.url_pdf || d.site_receipt || '',
+    fonte,
+    consultado_em: new Date().toISOString()
+  };
+}
+
+// A.3 — CND Municipal
+async function consultarCNDMunicipal(cnpj, municipio, uf) {
+  const slug = slugMunicipio(municipio);
+  const fonte = `Prefeitura ${municipio || '-'} via InfoSimples`;
+  const cfg = PREFEITURA_INFOSIMPLES[slug];
+  if (!cfg) {
+    return {
+      disponivel: false,
+      fonte,
+      nota: municipio
+        ? `CND municipal não automatizada para ${municipio}/${uf || ''} — consultar manual no site da prefeitura`
+        : 'Município do alvo não identificado — CND municipal não automatizada',
+      link_manual: ''
+    };
+  }
+  const r = await chamarInfoSimples(`/consultas/${cfg.slug}`, { cnpj: limparDoc(cnpj) }, `CND Municipal ${municipio}`);
+  if (!r.ok) {
+    return { disponivel: false, fonte, erro: r.erro, link_manual: cfg.url };
+  }
+  const d = r.data;
+  const tipo = d.tipo_certidao || d.resultado || d.situacao || '';
+  return {
+    disponivel: true,
+    municipio,
+    uf,
+    situacao: classificarSituacaoCND(tipo) || tipo || 'INDETERMINADO',
+    descricao: tipo,
+    emitida_em: d.data_emissao || d.emissao || '',
+    valida_ate: d.data_validade || d.validade || '',
+    codigo: d.codigo_certidao || d.codigo || '',
+    link_pdf: d.link_pdf || d.url_pdf || d.site_receipt || '',
+    fonte,
+    consultado_em: new Date().toISOString()
+  };
+}
+
+// A.4 — CND Trabalhista (TST/CNDT)
+async function consultarCNDTrabalhistaTST(cnpj) {
+  const fonte = 'TST/CNDT via InfoSimples';
+  const r = await chamarInfoSimples('/consultas/tst/cndt', { cnpj: limparDoc(cnpj) }, 'CND Trabalhista TST');
+  if (!r.ok) {
+    return {
+      disponivel: false,
+      fonte,
+      erro: r.erro,
+      link_manual: 'https://www.tst.jus.br/certidao'
+    };
+  }
+  const d = r.data;
+  const tipo = d.tipo_certidao || d.situacao || d.resultado || '';
+  return {
+    disponivel: true,
+    situacao: classificarSituacaoCND(tipo) || tipo || 'INDETERMINADO',
+    descricao: tipo,
+    emitida_em: d.data_emissao || d.emissao || '',
+    valida_ate: d.data_validade || d.validade || '',
+    codigo: d.codigo_certidao || d.codigo || '',
+    link_pdf: d.link_pdf || d.url_pdf || d.site_receipt || '',
+    fonte,
+    consultado_em: new Date().toISOString()
+  };
+}
+
+// A.5 — Certidão FGTS (Caixa)
+async function consultarCertidaoFGTS(cnpj) {
+  const fonte = 'Caixa/FGTS via InfoSimples';
+  const r = await chamarInfoSimples('/consultas/caixa/regularidade-fgts', { cnpj: limparDoc(cnpj) }, 'FGTS');
+  if (!r.ok) {
+    return {
+      disponivel: false,
+      fonte,
+      erro: r.erro,
+      link_manual: 'https://consulta-crf.caixa.gov.br'
+    };
+  }
+  const d = r.data;
+  const tipo = d.situacao || d.resultado || d.tipo_certidao || '';
+  const regular = /regular|em\s+situa/i.test(tipo);
+  return {
+    disponivel: true,
+    situacao: regular ? 'REGULAR' : (tipo ? 'IRREGULAR' : 'INDETERMINADO'),
+    descricao: tipo,
+    emitida_em: d.data_emissao || d.emissao || '',
+    valida_ate: d.data_validade || d.validade || '',
+    link_pdf: d.link_pdf || d.url_pdf || d.site_receipt || '',
+    fonte,
+    consultado_em: new Date().toISOString()
+  };
+}
+
+// A.6 — Marcas INPI
+async function consultarMarcasINPI(cnpj) {
+  const fonte = 'INPI via InfoSimples';
+  const r = await chamarInfoSimples('/consultas/inpi/marcas', { cnpj: limparDoc(cnpj) }, 'INPI Marcas');
+  if (!r.ok) {
+    return { disponivel: false, fonte, erro: r.erro, link_manual: 'https://busca.inpi.gov.br/pePI/' };
+  }
+  const d = r.data;
+  const lista = d.marcas || d.processos || d.itens || [];
+  const marcas = (Array.isArray(lista) ? lista : []).map(m => ({
+    nome: m.marca || m.nome || m.titulo || '',
+    classe: m.classe || m.classes || '',
+    situacao: m.situacao || m.status || '',
+    registro_em: m.data_deposito || m.data_concessao || m.registro_em || ''
+  }));
+  return {
+    disponivel: true,
+    total: marcas.length,
+    marcas,
+    fonte,
+    consultado_em: new Date().toISOString()
+  };
+}
+
+// A.7 — Portal da Transparência (Contratos)
+async function consultarPortalTransparencia(cnpj) {
+  const fonte = 'Portal da Transparência (CGU)';
+  const doc = limparDoc(cnpj);
+  const headers = {};
+  if (process.env.PORTAL_TRANSPARENCIA_TOKEN) {
+    headers['chave-api-dados'] = process.env.PORTAL_TRANSPARENCIA_TOKEN;
+  }
+  try {
+    const url = `https://api.portaldatransparencia.gov.br/api-de-dados/contratos/cpf-cnpj?cpfCnpj=${doc}&pagina=1`;
+    const res = await axios.get(url, { headers, timeout: 30000 });
+    const arr = Array.isArray(res.data) ? res.data : [];
+    return {
+      disponivel: true,
+      total_contratos: arr.length,
+      contratos: arr.slice(0, 20).map(c => ({
+        numero: c.numero || c.numeroContrato || '',
+        orgao: c.unidadeGestora?.orgaoVinculado?.nome || c.orgao?.nome || c.orgao || '',
+        objeto: c.objeto || '',
+        valor_inicial: Number(c.valorInicialCompra || c.valor || 0),
+        data_assinatura: c.dataAssinatura || '',
+        vigencia_fim: c.dataFimVigencia || c.vigenciaFinal || ''
+      })),
+      fonte,
+      consultado_em: new Date().toISOString()
+    };
+  } catch (e) {
+    const status = e.response?.status;
+    const msg = e.response?.data?.message || e.message;
+    if (status === 401 || status === 403) {
+      return {
+        disponivel: false,
+        fonte,
+        erro: 'Token Portal da Transparência ausente ou inválido — solicitar em portaldatransparencia.gov.br/api-de-dados/cadastrar-email',
+        link_manual: 'https://portaldatransparencia.gov.br/api-de-dados/cadastrar-email'
+      };
+    }
+    logarFalhaAPI('Portal Transparência', status, msg);
+    return { disponivel: false, fonte, erro: msg, link_manual: 'https://portaldatransparencia.gov.br' };
+  }
+}
+
+// A.8 — Imóveis e Veículos PJ (placeholder por UF)
+async function consultarImoveisVeiculosPJ(cnpj, uf) {
+  const ufNorm = String(uf || '').toUpperCase().trim();
+  const fonte = `DETRAN-${ufNorm} (PJ) via InfoSimples`;
+  const supportadas = ['SP', 'RJ', 'MG', 'GO', 'ES'];
+  if (!supportadas.includes(ufNorm)) {
+    return {
+      disponivel: false,
+      fonte,
+      nota: ufNorm
+        ? `Consulta de patrimônio veicular PJ não disponível para UF ${ufNorm} — verificar manualmente no DETRAN-${ufNorm}`
+        : 'UF não identificada — patrimônio veicular não consultado'
+    };
+  }
+  // TODO: alguns DETRAN só aceitam CPF; este endpoint é uma melhor-tentativa.
+  const slug = `detran/${ufNorm.toLowerCase()}/veiculos`;
+  const r = await chamarInfoSimples(`/consultas/${slug}`, { cnpj: limparDoc(cnpj) }, `Veiculos PJ ${ufNorm}`);
+  if (!r.ok) {
+    return {
+      disponivel: false,
+      fonte,
+      erro: r.erro,
+      nota: 'Algumas UFs não aceitam consulta veicular por CNPJ — confirmar manualmente no DETRAN'
+    };
+  }
+  const d = r.data;
+  const lista = d.veiculos || d.itens || [];
+  return {
+    disponivel: true,
+    total: lista.length,
+    itens: lista.slice(0, 20).map(v => ({
+      placa: v.placa || '',
+      veiculo: [v.marca, v.modelo].filter(Boolean).join(' '),
+      ano: v.ano || '',
+      situacao: v.situacao || ''
+    })),
+    fonte,
+    consultado_em: new Date().toISOString()
+  };
+}
+
+// =============================================
 // ORQUESTRADOR — executa tudo em paralelo
 // =============================================
 
@@ -1674,12 +2028,44 @@ async function executarConsultasParaAlvo(alvo, { precisaVinculos, precisaVeiculo
   const vinculos = precisaVinculos ? resultados[i++] : null;
   const veiculos = precisaVeiculos ? resultados[i++] : null;
 
-  // Mini-dossiê de cada sócio para Due Diligence Empresarial.
-  // Usamos os mesmos endpoints já configurados (Direct Data + Score + Escavador via consultarProcessos + CGU).
-  // Custo estimado por sócio: ~R$ 5,00 — dentro da margem do produto (R$ 997).
+  // ─── DUE DILIGENCE EMPRESARIAL — fontes adicionais ─────────────────
+  // CND Federal/Estadual/Municipal/TST/FGTS, INPI, Portal Transparência e
+  // patrimônio veicular PJ. Tudo em paralelo via Promise.allSettled — falha
+  // individual NUNCA derruba o pipeline. Sócios enriquecidos rodam depois.
+  let pgfn = null, debitos_estaduais = null, cnd_municipal = null;
+  let cndt = null, fgts = null, inpi = null, contratos_publicos = null, veiculos_pj = null;
   let socios_enriquecidos = null;
-  if (tipo === 'due_diligence' && tipoAlvo === 'PJ' && Array.isArray(cadastral?.socios) && cadastral.socios.length) {
-    socios_enriquecidos = await enriquecerSocios(cadastral.socios, documento);
+
+  if (tipo === 'due_diligence' && tipoAlvo === 'PJ') {
+    const ufCnpj = (cadastral?.uf || '').toUpperCase().trim();
+    const muniCnpj = cadastral?.municipio || '';
+
+    const ddPromises = [
+      consultarCNDFederal(documento),
+      consultarCNDEstadual(documento, ufCnpj),
+      consultarCNDMunicipal(documento, muniCnpj, ufCnpj),
+      consultarCNDTrabalhistaTST(documento),
+      consultarCertidaoFGTS(documento),
+      consultarMarcasINPI(documento),
+      consultarPortalTransparencia(documento),
+      consultarImoveisVeiculosPJ(documento, ufCnpj)
+    ];
+
+    const ddSettled = await Promise.allSettled(ddPromises);
+    const safe = (s) => s.status === 'fulfilled' ? s.value : { disponivel: false, erro: s.reason?.message || 'falha' };
+    pgfn = safe(ddSettled[0]);
+    debitos_estaduais = safe(ddSettled[1]);
+    cnd_municipal = safe(ddSettled[2]);
+    cndt = safe(ddSettled[3]);
+    fgts = safe(ddSettled[4]);
+    inpi = safe(ddSettled[5]);
+    contratos_publicos = safe(ddSettled[6]);
+    veiculos_pj = safe(ddSettled[7]);
+
+    // Mini-dossiê dos sócios — rodar depois pois pode demorar e usa Direct Data.
+    if (Array.isArray(cadastral?.socios) && cadastral.socios.length) {
+      socios_enriquecidos = await enriquecerSocios(cadastral.socios, documento);
+    }
   }
 
   return {
@@ -1691,6 +2077,14 @@ async function executarConsultasParaAlvo(alvo, { precisaVinculos, precisaVeiculo
     ...(perfil_economico ? { perfil_economico } : {}),
     ...(vinculos?.total ? { vinculos } : {}),
     ...(veiculos ? { veiculos } : {}),
+    ...(pgfn ? { pgfn } : {}),
+    ...(debitos_estaduais ? { debitos_estaduais } : {}),
+    ...(cnd_municipal ? { cnd_municipal } : {}),
+    ...(cndt ? { cndt } : {}),
+    ...(fgts ? { fgts } : {}),
+    ...(inpi ? { inpi } : {}),
+    ...(contratos_publicos ? { contratos_publicos } : {}),
+    ...(veiculos_pj ? { veiculos_pj } : {}),
     ...(socios_enriquecidos ? { socios_enriquecidos } : {})
   };
 }
