@@ -103,42 +103,70 @@ function secaoAnaliseSocios(doc, y, dados) {
 }
 
 // ─── Situação fiscal detalhada (Due Dil) ───────────────────────────
-// Os endpoints PGFN/FGTS/SEFAZ por UF não estão integrados no momento; o texto
-// abaixo é neutro e direciona à verificação manual em vez de citar fornecedor
-// específico. Quando essas APIs forem ligadas, basta popular `dados.pgfn`/`fgts`/etc.
+// Consome os retornos das APIs InfoSimples (CND Federal, Estadual, Municipal,
+// CNDT, FGTS) configuradas no orquestrador. Para cada certidão, monta uma linha
+// com a situação (NEGATIVA/POSITIVA/POSITIVA C/ EFEITOS) + emissão/validade,
+// ou — se a API não estiver disponível para aquela UF/cidade — exibe o link
+// manual em vez de "consulta manual recomendada" genérico.
+function fmtSituacao(certidao) {
+  if (!certidao || certidao.disponivel === false) {
+    if (certidao?.nota) return certidao.nota;
+    if (certidao?.erro) return `Indisponível (${certidao.erro})`;
+    return 'Não verificado automaticamente — consulta manual recomendada';
+  }
+  const labelMap = {
+    NEGATIVA: 'NEGATIVA (sem débitos)',
+    POSITIVA: 'POSITIVA (com débitos)',
+    POSITIVA_COM_EFEITOS_DE_NEGATIVA: 'POSITIVA com efeitos de negativa',
+    REGULAR: 'REGULAR',
+    IRREGULAR: 'IRREGULAR'
+  };
+  const sit = labelMap[certidao.situacao] || certidao.descricao || certidao.situacao || '-';
+  const partes = [sit];
+  if (certidao.emitida_em) partes.push(`Emit: ${certidao.emitida_em}`);
+  if (certidao.valida_ate) partes.push(`Val: ${certidao.valida_ate}`);
+  return partes.join(' | ');
+}
+
 function secaoSituacaoFiscalCompleta(doc, y, dados) {
   const cadastral = dados.receita_federal || {};
   const uf = (cadastral.uf || '').toUpperCase().trim();
   const municipio = cadastral.municipio || '';
-  const sefazLabel = uf ? `Débitos Estaduais (SEFAZ-${uf})` : 'Débitos Estaduais (SEFAZ)';
-  const muniLabel = municipio ? `Certidão Municipal (${municipio})` : 'Certidão Municipal';
-  const fallback = 'Não verificado automaticamente — consulta manual recomendada';
+  const sefazLabel = uf ? `CND Estadual (SEFAZ-${uf})` : 'CND Estadual';
+  const muniLabel = municipio ? `CND Municipal (${municipio})` : 'CND Municipal';
 
   y = secao(doc, 'SITUAÇÃO FISCAL E REGULARIDADE', y);
   y = linha(doc, 'Situação RF', cadastral.situacao || '-', y, 13);
-  y = linha(doc, 'CND Federal (PGFN)', dados.pgfn?.status || fallback, y, 13);
-  y = linha(doc, 'Regularidade FGTS', dados.fgts?.status || fallback, y, 13);
-  y = linha(doc, sefazLabel, dados.debitos_estaduais?.status || fallback, y, 13);
-  y = linha(doc, muniLabel, dados.cnd_municipal?.status || fallback, y, 13);
-  y = linha(doc, 'Débitos Simples', dados.debitos_simples?.status || fallback, y, 13);
+  y = linha(doc, 'CND Federal (PGFN/RFB)', fmtSituacao(dados.pgfn), y, 13);
+  y = linha(doc, 'CND Trabalhista (TST/CNDT)', fmtSituacao(dados.cndt), y, 13);
+  y = linha(doc, 'Regularidade FGTS (Caixa)', fmtSituacao(dados.fgts), y, 13);
+  y = linha(doc, sefazLabel, fmtSituacao(dados.debitos_estaduais), y, 13);
+  y = linha(doc, muniLabel, fmtSituacao(dados.cnd_municipal), y, 13);
   return y + 4;
 }
 
 // ─── Patrimônio da empresa ─────────────────────────────────────────
 function secaoPatrimonioEmpresa(doc, y, dados) {
   const imoveis = dados.imoveis_pj?.itens || [];
-  const veiculos = dados.veiculos_pj?.itens || [];
+  const veiculos = (dados.veiculos_pj?.itens) || [];
   const marcas = dados.inpi?.marcas || [];
-  const contratos = dados.contratos_publicos?.itens || [];
+  const contratos = dados.contratos_publicos?.contratos || dados.contratos_publicos?.itens || [];
+  const cadastral = dados.receita_federal || {};
+  const uf = (cadastral.uf || '').toUpperCase().trim();
 
   y = secao(doc, 'PATRIMÔNIO DA EMPRESA', y);
 
   const temAlgo = imoveis.length || veiculos.length || marcas.length || contratos.length;
   if (!temAlgo) {
-    return boxEmIntegracao(doc, y,
-      'PATRIMÔNIO DA EMPRESA — verificação manual',
-      'Consulta automática de imóveis e veículos por CNPJ não disponível nesta versão. Recomenda-se: imóveis via Cartório de Registro de Imóveis (matrícula); veículos via DETRAN do estado da empresa; marcas e patentes via INPI; contratos públicos via Portal da Transparência.'
-    );
+    const notas = [];
+    if (dados.veiculos_pj?.nota) notas.push(`Veículos PJ: ${dados.veiculos_pj.nota}`);
+    if (dados.inpi?.disponivel === false) notas.push(`INPI: ${dados.inpi.erro || 'sem retorno'}`);
+    if (dados.contratos_publicos?.disponivel === false) notas.push(`Portal Transparência: ${dados.contratos_publicos.erro || dados.contratos_publicos.nota || 'sem retorno'}`);
+    const corpo = (notas.length
+      ? notas.join(' / ') + '. '
+      : 'Consulta automática não retornou patrimônio. ')
+      + `Verificar manualmente: imóveis via Cartório de Registro de Imóveis (matrícula); veículos via DETRAN-${uf || 'UF'}; marcas via INPI; contratos públicos via Portal da Transparência.`;
+    return boxEmIntegracao(doc, y, 'PATRIMÔNIO DA EMPRESA — verificação manual complementar', corpo);
   }
 
   if (imoveis.length) {
@@ -172,11 +200,16 @@ function secaoPatrimonioEmpresa(doc, y, dados) {
   }
 
   if (contratos.length) {
-    doc.fillColor(COR.azul).fontSize(9).font('Helvetica-Bold').text('CONTRATOS PÚBLICOS', MARGEM, y); y += 12;
+    doc.fillColor(COR.azul).fontSize(9).font('Helvetica-Bold').text('CONTRATOS PÚBLICOS (Portal da Transparência)', MARGEM, y); y += 12;
+    const total = dados.contratos_publicos?.total_contratos != null ? dados.contratos_publicos.total_contratos : contratos.length;
+    doc.fillColor(COR.cinza).fontSize(7).font('Helvetica').text(`${total} contrato(s) com a administração pública.`, MARGEM, y);
+    y += 10;
     contratos.slice(0, 5).forEach(c => {
-      y = verificarPagina(doc, y, 10);
-      doc.fillColor('#111827').fontSize(7).font('Helvetica').text(`- ${c.orgao || ''} | ${c.valor ? formatarBRL(c.valor) : ''} | ${c.vigencia || ''}`, MARGEM + 6, y);
-      y += 9;
+      y = verificarPagina(doc, y, 12);
+      const valor = c.valor_inicial || c.valor;
+      const partes = [c.orgao || '', valor ? formatarBRL(valor) : '', c.vigencia_fim || c.vigencia || ''].filter(Boolean);
+      doc.fillColor('#111827').fontSize(7).font('Helvetica').text(`- ${partes.join(' | ')}`, MARGEM + 6, y, { width: LARGURA - 12 });
+      y += 11;
     });
     y += 4;
   }
@@ -227,7 +260,7 @@ function secaoParecerTecnico(doc, y, dados, score) {
 
   const s = typeof score.score === 'number' ? score.score : 0;
   let recomendacao, corR, clausulas;
-  if (s >= 70) {
+  if (s >= 85) {
     recomendacao = 'PROSSEGUIR — empresa apresenta perfil de baixo risco nas dimensões analisadas.';
     corR = COR.verde;
     clausulas = [
@@ -235,23 +268,42 @@ function secaoParecerTecnico(doc, y, dados, score) {
       'Obrigação de manter certidões negativas até o closing',
       'Representações e garantias sobre regularidade fiscal vigente'
     ];
-  } else if (s >= 45) {
-    recomendacao = 'PROSSEGUIR COM RESSALVAS — riscos identificados exigem mitigação contratual.';
+  } else if (s >= 70) {
+    recomendacao = 'PROSSEGUIR COM ATENÇÃO — riscos pontuais identificados, documentar ressalvas no contrato.';
     corR = COR.laranja;
     clausulas = [
+      'Declarações e garantias específicas sobre os pontos identificados no laudo',
+      'Obrigação de entrega de certidões atualizadas no fechamento',
+      'Cláusula de indenização para passivos ocultos descobertos pós-closing',
+      'Não-competição padrão dos sócios atuais'
+    ];
+  } else if (s >= 50) {
+    recomendacao = 'PROSSEGUIR COM RESSALVAS — riscos relevantes exigem mitigação contratual e garantias.';
+    corR = COR.laranja;
+    clausulas = [
+      'Avalista pessoal dos sócios e/ou garantia real (imóvel, frota)',
       'Escrow (retenção) para cobrir passivos trabalhistas/fiscais identificados',
       'Cláusula de indenização específica para processos em curso',
-      'Obrigação de entrega de certidões atualizadas + due diligence complementar',
       'Ajuste de preço baseado em laudo atuarial dos passivos',
-      'Não-competição e retenção dos sócios atuais por prazo mínimo'
+      'Obrigação de saneamento de débitos antes do closing',
+      'Não-competição e retenção dos sócios atuais por prazo mínimo de 24 meses'
     ];
-  } else {
-    recomendacao = 'NÃO PROSSEGUIR — risco elevado inviabiliza a operação nos termos propostos.';
+  } else if (s >= 30) {
+    recomendacao = 'NÃO PROSSEGUIR sem garantias robustas — perfil de alto risco inviabiliza a operação nos termos propostos.';
     corR = COR.vermelho;
     clausulas = [
-      'Operação não recomendada. Reavaliar após quitação dos passivos críticos.',
-      'Se for prosseguir: exigir saneamento integral antes do closing (condição precedente)',
-      'Estrutura de earn-out integral com liberação condicionada a saneamento'
+      'Operação não recomendada nos termos atuais.',
+      'Se for prosseguir: exigir avalista pessoal + garantia real + escrow integral',
+      'Saneamento de TODOS os passivos como condição precedente ao closing',
+      'Earn-out integral com liberação condicionada à inexistência de passivos pós-closing'
+    ];
+  } else {
+    recomendacao = 'NÃO PROSSEGUIR — RISCO CRÍTICO. Múltiplos sinais graves de inadimplência, fraude ou insolvência iminente.';
+    corR = COR.vermelho;
+    clausulas = [
+      'Operação não recomendada. Recusar negociação nos termos propostos.',
+      'Reavaliar somente após quitação integral dos passivos críticos e mudança societária',
+      'Se houver insistência comercial, exigir laudo atuarial independente e perícia patrimonial'
     ];
   }
 
@@ -299,7 +351,13 @@ function render(doc, pedido, dados, score, checklist, produto) {
   y = secaoParecerTecnico(doc, y, dados, score);
   y = secaoParecerAnalista(doc, y, pedido);
 
-  chrome.blocoFinal(doc, y);
+  chrome.blocoFinal(doc, y, [
+    'InfoSimples — CND Federal (PGFN/RFB), CND Estadual (SEFAZ), CND Municipal',
+    'InfoSimples — CND Trabalhista (TST/CNDT)',
+    'InfoSimples — Regularidade FGTS (Caixa)',
+    'InfoSimples — Marcas e Patentes (INPI)',
+    'API Portal da Transparência (CGU) — Contratos públicos'
+  ]);
 }
 
 module.exports = { render };

@@ -424,12 +424,27 @@ function secaoProtestos(doc, y, dados) {
   }
 
   if (negativacoes.cheques_sem_fundo?.length > 0) {
+    const cheques = negativacoes.cheques_sem_fundo;
+    const totalCheques = cheques.reduce((s, c) => s + (Number(c.quantidade) || 1), 0);
+    const semDetalhe = cheques.every(c => !c.banco && !c.agencia && !c.data);
     doc.fillColor(COR.vermelho).fontSize(7).font('Helvetica-Bold').text('CHEQUES SEM FUNDO:', MARGEM, y); y += 10;
-    negativacoes.cheques_sem_fundo.slice(0, 3).forEach(c => {
+    if (semDetalhe) {
       doc.fillColor('#111827').fontSize(6.5).font('Helvetica')
-        .text(`- Banco: ${c.banco || ''} | Ag: ${c.agencia || ''} | ${c.data || ''}`, MARGEM + 8, y);
-      y += 10;
-    });
+        .text(`${totalCheques} cheque(s) sem fundo detectado(s) — banco/agência não retornados pela fonte (Direct Data).`, MARGEM + 8, y, { width: LARGURA - 16 });
+      y += 12;
+    } else {
+      cheques.slice(0, 5).forEach(c => {
+        const partes = [];
+        if (c.banco) partes.push(`Banco: ${c.banco}`);
+        if (c.agencia) partes.push(`Ag: ${c.agencia}`);
+        if (c.quantidade && c.quantidade > 1) partes.push(`Qtd: ${c.quantidade}`);
+        if (c.data) partes.push(c.data);
+        if (c.motivo) partes.push(c.motivo);
+        const linhaTxt = partes.length ? `- ${partes.join(' | ')}` : '- Cheque sem fundo (sem detalhes)';
+        doc.fillColor('#111827').fontSize(6.5).font('Helvetica').text(linhaTxt, MARGEM + 8, y, { width: LARGURA - 16 });
+        y += 10;
+      });
+    }
     y += 4;
   }
   doc.fillColor(COR.cinza).fontSize(5.5).font('Helvetica').text(`Fonte: ${negativacoes.fonte || 'Direct Data'}`, MARGEM, y);

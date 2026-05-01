@@ -32,8 +32,10 @@ function formatarDoc(doc) {
 
 function corScore(classificacao) {
   const c = (classificacao || '').toUpperCase();
-  if (c.includes('BAIXO RISCO')) return COR.verde;
-  if (c.includes('BAIXO-MODERADO')) return COR.verde;
+  if (c.includes('CRÍTICO') || c.includes('CRITICO')) return COR.vermelho;
+  if (c.includes('ALTO RISCO')) return COR.vermelho;
+  if (c.includes('BAIXO-MODERADO')) return COR.laranja; // 70-84 fica em amarelo/laranja para não enganar
+  if (c.includes('BAIXO RISCO') || c.includes('RISCO BAIXO')) return COR.verde;
   if (c.includes('MODERADO')) return COR.laranja;
   if (c.includes('MÉDIO') || c === 'RISCO MEDIO') return COR.laranja;
   if (c.includes('INDISPON')) return COR.cinza;
