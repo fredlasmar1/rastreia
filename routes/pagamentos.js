@@ -22,6 +22,8 @@ const {
 } = require('../services/mercadopago');
 const { PRODUTOS } = require('../services/produtos');
 const { liberarPedidoPago } = require('../services/pipeline_pedido');
+const planosUsuario = require('../services/planos_usuario');
+const emailService = require('../services/email');
 
 // ─── POST /api/pedidos/:id/pagamento ────────────────────────────────
 // Cria (ou recria) a preference do MP para um pedido. Retorna init_point.
@@ -207,8 +209,120 @@ async function webhookMP(req, res) {
   }
 }
 
+// ─── POST /api/pedidos/:id/pagamento-alternativo ────────────────────
+// Cobra o pedido sem passar pelo Mercado Pago. Aceita 'dinheiro' ou 'plano'.
+// Qualquer usuário autenticado pode usar. Em 'plano', debita 1 da cota mensal
+// do operador logado; falha com 400 se não houver plano ou cota esgotada.
+async function pagamentoAlternativo(req, res) {
+  try {
+    const forma = (req.body?.forma || '').toLowerCase();
+    if (!['dinheiro', 'plano'].includes(forma)) {
+      return res.status(400).json({ erro: "Campo 'forma' deve ser 'dinheiro' ou 'plano'" });
+    }
+
+    const r = await pool.query('SELECT * FROM pedidos WHERE id = $1', [req.params.id]);
+    if (!r.rows.length) return res.status(404).json({ erro: 'Pedido não encontrado' });
+    const pedido = r.rows[0];
+
+    if (pedido.status === 'concluido') {
+      return res.status(400).json({ erro: 'Pedido já concluído' });
+    }
+    if (pedido.status !== 'aguardando_pagamento') {
+      return res.status(400).json({ erro: `Pedido não está aguardando pagamento (status atual: ${pedido.status})` });
+    }
+
+    let restantesPlano = null;
+    if (forma === 'plano') {
+      const verif = await planosUsuario.podeDebitarPlano(req.usuario.id);
+      if (!verif.ok) {
+        return res.status(400).json({
+          erro: verif.erro || 'Plano não disponível',
+          cota: verif.cota,
+          restantes: verif.restantes
+        });
+      }
+      const deb = await planosUsuario.debitarPlano(req.usuario.id);
+      if (!deb.ok) {
+        return res.status(400).json({ erro: deb.erro || 'Não foi possível debitar do plano' });
+      }
+      restantesPlano = deb.restantes;
+    }
+
+    const mpRef = forma === 'dinheiro' ? 'dinheiro' : 'plano';
+    await pool.query(
+      `UPDATE pedidos
+          SET status = 'pago', pago_em = NOW(), mp_payment_id = $1,
+              forma_pagamento = $2, atualizado_em = NOW()
+        WHERE id = $3`,
+      [mpRef, forma, pedido.id]
+    );
+    await pool.query(
+      'INSERT INTO logs (pedido_id, usuario_id, acao, detalhes) VALUES ($1, $2, $3, $4)',
+      [pedido.id, req.usuario.id, 'Pagamento confirmado', `forma=${forma}`]
+    );
+
+    // Pipeline pós-pagamento (consultas + PDF) em background — não bloqueia a resposta.
+    liberarPedidoPago(pedido.id).catch((e) => {
+      console.warn('[pagamentos] pipeline alternativo falhou:', e.message);
+    });
+
+    const resp = { ok: true, status: 'pago', forma };
+    if (restantesPlano !== null) resp.plano_restantes = restantesPlano;
+    res.json(resp);
+  } catch (e) {
+    console.error('[pagamentos] alternativo erro:', e);
+    res.status(500).json({ erro: 'Erro ao processar pagamento alternativo' });
+  }
+}
+
+// ─── POST /api/pedidos/:id/enviar-email-pagamento ───────────────────
+// Envia o link de pagamento (init_point do MP) por email para o cliente.
+async function enviarEmailPagamento(req, res) {
+  try {
+    const email = (req.body?.email || '').trim();
+    if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      return res.status(400).json({ erro: 'Email inválido' });
+    }
+    if (!emailService.configurado()) {
+      return res.status(503).json({
+        erro: 'SMTP não configurado',
+        mensagem: 'Defina SMTP_HOST, SMTP_USER e SMTP_PASS nas variáveis de ambiente.'
+      });
+    }
+
+    const r = await pool.query('SELECT * FROM pedidos WHERE id = $1', [req.params.id]);
+    if (!r.rows.length) return res.status(404).json({ erro: 'Pedido não encontrado' });
+    const pedido = r.rows[0];
+
+    if (!pedido.mp_init_point) {
+      return res.status(400).json({ erro: 'Pedido sem link de pagamento gerado. Crie a cobrança via MercadoPago primeiro.' });
+    }
+
+    const nomeProduto = PRODUTOS[pedido.tipo]?.nome || pedido.tipo;
+    await emailService.enviarLinkPagamento({
+      para: email,
+      nomeCliente: pedido.cliente_nome,
+      valor: pedido.valor,
+      link: pedido.mp_init_point,
+      numeroPedido: pedido.numero,
+      nomeProduto
+    });
+
+    await pool.query(
+      'INSERT INTO logs (pedido_id, usuario_id, acao, detalhes) VALUES ($1, $2, $3, $4)',
+      [pedido.id, req.usuario?.id || null, 'Link de pagamento enviado por email', `para=${email}`]
+    );
+    res.json({ ok: true });
+  } catch (e) {
+    console.error('[pagamentos] email erro:', e);
+    res.status(500).json({ erro: 'Erro ao enviar email', mensagem: e.message });
+  }
+}
+
 router.post('/pedidos/:id/pagamento', autenticar, criarPagamento);
 router.get('/pedidos/:id/pagamento/status', autenticar, statusPagamento);
+router.post('/pedidos/:id/pagamento-alternativo', autenticar, pagamentoAlternativo);
+router.post('/pedidos/:id/enviar-email-pagamento', autenticar, enviarEmailPagamento);
 
 module.exports = router;
 module.exports.webhookMP = webhookMP;
