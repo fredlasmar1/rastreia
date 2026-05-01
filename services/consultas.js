@@ -1780,6 +1780,61 @@ async function consultarMarcasINPI(cnpj, razaoSocial) {
   };
 }
 
+// A.6.2 — CEIS (Cadastro de Empresas Inidôneas e Suspensas) — Portal Transparência
+async function consultarCEIS(cnpj) {
+  const fonte = 'CEIS Portal Transparência via InfoSimples';
+  const r = await chamarInfoSimples('/consultas/portal-transparencia/ceis', { cnpj: limparDoc(cnpj) }, 'CEIS');
+  if (!r.ok) {
+    return { disponivel: false, fonte, erro: r.erro, link_manual: 'https://portaldatransparencia.gov.br/sancoes/ceis' };
+  }
+  if (r.sem_dados) {
+    return { disponivel: true, em_lista: false, fonte, consultado_em: new Date().toISOString() };
+  }
+  const d = r.data;
+  const lista = d.sancoes || d.registros || d.itens || [];
+  const itens = Array.isArray(lista) ? lista : [];
+  return {
+    disponivel: true,
+    em_lista: itens.length > 0,
+    total: itens.length,
+    sancoes: itens.slice(0, 10).map(s => ({
+      orgao: s.orgao_sancionador || s.orgao || '',
+      sancao: s.tipo_sancao || s.sancao || '',
+      inicio: s.data_inicio_sancao || s.inicio || '',
+      fim: s.data_final_sancao || s.fim || ''
+    })),
+    fonte,
+    consultado_em: new Date().toISOString()
+  };
+}
+
+// A.6.3 — CEPIM (Cadastro de Entidades Privadas sem fins lucrativos Impedidas)
+async function consultarCEPIM(cnpj) {
+  const fonte = 'CEPIM Portal Transparência via InfoSimples';
+  const r = await chamarInfoSimples('/consultas/portal-transparencia/cepim', { cnpj: limparDoc(cnpj) }, 'CEPIM');
+  if (!r.ok) {
+    return { disponivel: false, fonte, erro: r.erro, link_manual: 'https://portaldatransparencia.gov.br/sancoes/cepim' };
+  }
+  if (r.sem_dados) {
+    return { disponivel: true, em_lista: false, fonte, consultado_em: new Date().toISOString() };
+  }
+  const d = r.data;
+  const lista = d.impedimentos || d.registros || d.itens || [];
+  const itens = Array.isArray(lista) ? lista : [];
+  return {
+    disponivel: true,
+    em_lista: itens.length > 0,
+    total: itens.length,
+    impedimentos: itens.slice(0, 10).map(i => ({
+      orgao: i.orgao || i.orgao_superior || '',
+      motivo: i.motivo || i.descricao || '',
+      desde: i.data_inicio || i.desde || ''
+    })),
+    fonte,
+    consultado_em: new Date().toISOString()
+  };
+}
+
 // A.6.1 — Patentes INPI
 async function consultarPatentesINPI(cnpj) {
   const fonte = 'INPI Patentes via InfoSimples';
