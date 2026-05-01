@@ -1495,7 +1495,12 @@ async function consultarHistoricoVeiculos(cpfCnpj) {
 const INFOSIMPLES_BASE = 'https://api.infosimples.com/api/v2';
 
 // Wrapper genérico InfoSimples com timeout, captura de erro e log padronizado.
-// Retorna { ok, data, status, erro }
+// Retorna { ok, data, status, erro, sem_dados }
+//   code=200 → ok=true
+//   code=612 → ok=true, sem_dados=true (consulta processada mas origem sem dados —
+//             em geral significa "nada consta" / "regular"; deixa a função
+//             chamadora interpretar conforme o domínio)
+//   demais   → ok=false
 async function chamarInfoSimples(path, body, origem) {
   const INFO_TOKEN = process.env.INFOSIMPLES_TOKEN;
   if (!INFO_TOKEN) {
@@ -1505,13 +1510,16 @@ async function chamarInfoSimples(path, body, origem) {
     const url = `${INFOSIMPLES_BASE}${path}`;
     const res = await axios.post(url, { token: INFO_TOKEN, timeout: 600, ...body }, { timeout: 30000 });
     const code = res.data?.code;
-    if (code !== 200) {
-      const msg = res.data?.code_message || res.data?.message || `code=${code}`;
-      logarFalhaAPI(origem, code, msg);
-      return { ok: false, erro: msg, status: code, raw: res.data };
-    }
     const data = (res.data?.data || [])[0] || {};
-    return { ok: true, data, header: res.data?.header || {} };
+    if (code === 200) {
+      return { ok: true, data, header: res.data?.header || {} };
+    }
+    if (code === 612) {
+      return { ok: true, sem_dados: true, data, header: res.data?.header || {} };
+    }
+    const msg = res.data?.code_message || res.data?.message || `code=${code}`;
+    logarFalhaAPI(origem, code, msg);
+    return { ok: false, erro: msg, status: code, raw: res.data };
   } catch (e) {
     const status = e.response?.status;
     const msg = e.response?.data?.code_message || e.response?.data?.message || e.message;
