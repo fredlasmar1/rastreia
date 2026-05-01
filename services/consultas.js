@@ -1904,44 +1904,15 @@ async function consultarPortalTransparencia(cnpj) {
   }
 }
 
-// A.8 — Imóveis e Veículos PJ (placeholder por UF)
+// A.8 — Imóveis e Veículos PJ
+// O endpoint genérico DETRAN/UF para CNPJ não é confiável via InfoSimples
+// (a maioria das UFs não aceita consulta veicular por CNPJ). Sempre indicar
+// uso da aba Veicular com placa específica via Credify.
 async function consultarImoveisVeiculosPJ(cnpj, uf) {
-  const ufNorm = String(uf || '').toUpperCase().trim();
-  const fonte = `DETRAN-${ufNorm} (PJ) via InfoSimples`;
-  const supportadas = ['SP', 'RJ', 'MG', 'GO', 'ES'];
-  if (!supportadas.includes(ufNorm)) {
-    return {
-      disponivel: false,
-      fonte,
-      nota: ufNorm
-        ? `Consulta de patrimônio veicular PJ não disponível para UF ${ufNorm} — verificar manualmente no DETRAN-${ufNorm}`
-        : 'UF não identificada — patrimônio veicular não consultado'
-    };
-  }
-  // TODO: alguns DETRAN só aceitam CPF; este endpoint é uma melhor-tentativa.
-  const slug = `detran/${ufNorm.toLowerCase()}/veiculos`;
-  const r = await chamarInfoSimples(`/consultas/${slug}`, { cnpj: limparDoc(cnpj) }, `Veiculos PJ ${ufNorm}`);
-  if (!r.ok) {
-    return {
-      disponivel: false,
-      fonte,
-      erro: r.erro,
-      nota: 'Algumas UFs não aceitam consulta veicular por CNPJ — confirmar manualmente no DETRAN'
-    };
-  }
-  const d = r.data;
-  const lista = d.veiculos || d.itens || [];
   return {
-    disponivel: true,
-    total: lista.length,
-    itens: lista.slice(0, 20).map(v => ({
-      placa: v.placa || '',
-      veiculo: [v.marca, v.modelo].filter(Boolean).join(' '),
-      ano: v.ano || '',
-      situacao: v.situacao || ''
-    })),
-    fonte,
-    consultado_em: new Date().toISOString()
+    disponivel: false,
+    fonte: 'DETRAN PJ',
+    nota: 'Consulta veicular por CNPJ não disponível para a maioria das UFs — utilize a aba Veicular com placa específica via Credify'
   };
 }
 
@@ -2145,7 +2116,9 @@ async function executarConsultasParaAlvo(alvo, { precisaVinculos, precisaVeiculo
   // patrimônio veicular PJ. Tudo em paralelo via Promise.allSettled — falha
   // individual NUNCA derruba o pipeline. Sócios enriquecidos rodam depois.
   let pgfn = null, debitos_estaduais = null, cnd_municipal = null;
-  let cndt = null, fgts = null, inpi = null, contratos_publicos = null, veiculos_pj = null;
+  let cndt = null, fgts = null, inpi = null, inpi_patentes = null;
+  let ceis = null, cepim = null;
+  let contratos_publicos = null, veiculos_pj = null;
   let socios_enriquecidos = null;
 
   if (tipo === 'due_diligence' && tipoAlvo === 'PJ') {
@@ -2159,6 +2132,9 @@ async function executarConsultasParaAlvo(alvo, { precisaVinculos, precisaVeiculo
       consultarCNDTrabalhistaTST(documento),
       consultarCertidaoFGTS(documento),
       consultarMarcasINPI(documento, cadastral?.razao_social || ''),
+      consultarPatentesINPI(documento),
+      consultarCEIS(documento),
+      consultarCEPIM(documento),
       consultarPortalTransparencia(documento),
       consultarImoveisVeiculosPJ(documento, ufCnpj)
     ];
@@ -2171,8 +2147,11 @@ async function executarConsultasParaAlvo(alvo, { precisaVinculos, precisaVeiculo
     cndt = safe(ddSettled[3]);
     fgts = safe(ddSettled[4]);
     inpi = safe(ddSettled[5]);
-    contratos_publicos = safe(ddSettled[6]);
-    veiculos_pj = safe(ddSettled[7]);
+    inpi_patentes = safe(ddSettled[6]);
+    ceis = safe(ddSettled[7]);
+    cepim = safe(ddSettled[8]);
+    contratos_publicos = safe(ddSettled[9]);
+    veiculos_pj = safe(ddSettled[10]);
 
     // Mini-dossiê dos sócios — rodar depois pois pode demorar e usa Direct Data.
     if (Array.isArray(cadastral?.socios) && cadastral.socios.length) {
@@ -2195,6 +2174,9 @@ async function executarConsultasParaAlvo(alvo, { precisaVinculos, precisaVeiculo
     ...(cndt ? { cndt } : {}),
     ...(fgts ? { fgts } : {}),
     ...(inpi ? { inpi } : {}),
+    ...(inpi_patentes ? { inpi_patentes } : {}),
+    ...(ceis ? { ceis } : {}),
+    ...(cepim ? { cepim } : {}),
     ...(contratos_publicos ? { contratos_publicos } : {}),
     ...(veiculos_pj ? { veiculos_pj } : {}),
     ...(socios_enriquecidos ? { socios_enriquecidos } : {})
