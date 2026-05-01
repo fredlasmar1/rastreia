@@ -1566,13 +1566,22 @@ function classificarSituacaoCND(texto) {
 async function consultarCNDFederal(cnpj) {
   const fonte = 'PGFN/RFB via InfoSimples';
   const doc = limparDoc(cnpj);
-  const r = await chamarInfoSimples('/consultas/receita-federal-pgfn', { cnpj: doc }, 'CND Federal');
+  const r = await chamarInfoSimples('/consultas/receita-federal/pgfn', { cnpj: doc }, 'CND Federal');
   if (!r.ok) {
     return {
       disponivel: false,
       fonte,
       erro: r.erro,
       link_manual: 'https://solucoes.receita.fazenda.gov.br/servicos/certidaointernet/pj/emitir'
+    };
+  }
+  if (r.sem_dados) {
+    return {
+      disponivel: true,
+      situacao: 'NADA_CONSTA',
+      descricao: 'Nenhum débito retornado pela PGFN',
+      fonte,
+      consultado_em: new Date().toISOString()
     };
   }
   const d = r.data;
@@ -1674,6 +1683,15 @@ async function consultarCNDTrabalhistaTST(cnpj) {
       link_manual: 'https://www.tst.jus.br/certidao'
     };
   }
+  if (r.sem_dados) {
+    return {
+      disponivel: true,
+      situacao: 'NEGATIVA',
+      descricao: 'Nenhum débito trabalhista retornado pelo TST',
+      fonte,
+      consultado_em: new Date().toISOString()
+    };
+  }
   const d = r.data;
   const tipo = d.tipo_certidao || d.situacao || d.resultado || '';
   return {
@@ -1692,13 +1710,22 @@ async function consultarCNDTrabalhistaTST(cnpj) {
 // A.5 — Certidão FGTS (Caixa)
 async function consultarCertidaoFGTS(cnpj) {
   const fonte = 'Caixa/FGTS via InfoSimples';
-  const r = await chamarInfoSimples('/consultas/caixa-regularidade', { cnpj: limparDoc(cnpj) }, 'FGTS');
+  const r = await chamarInfoSimples('/consultas/caixa/regularidade', { cnpj: limparDoc(cnpj) }, 'FGTS');
   if (!r.ok) {
     return {
       disponivel: false,
       fonte,
       erro: r.erro,
       link_manual: 'https://consulta-crf.caixa.gov.br'
+    };
+  }
+  if (r.sem_dados) {
+    return {
+      disponivel: true,
+      situacao: 'INDETERMINADA',
+      descricao: 'CRF não disponível no momento na Caixa',
+      fonte,
+      consultado_em: new Date().toISOString()
     };
   }
   const d = r.data;
