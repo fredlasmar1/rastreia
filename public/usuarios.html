@@ -124,16 +124,17 @@
     <table class="tabela-usuarios" id="tabela">
       <thead>
         <tr>
-          <th style="width: 22%">Nome</th>
-          <th style="width: 24%">Email</th>
-          <th style="width: 11%">Perfil</th>
-          <th style="width: 10%">Status</th>
-          <th style="width: 12%">Criado em</th>
-          <th style="width: 21%">Ações</th>
+          <th style="width: 18%">Nome</th>
+          <th style="width: 22%">Email</th>
+          <th style="width: 9%">Perfil</th>
+          <th style="width: 8%">Status</th>
+          <th style="width: 11%">Plano</th>
+          <th style="width: 10%">Criado em</th>
+          <th style="width: 22%">Ações</th>
         </tr>
       </thead>
       <tbody id="tbody">
-        <tr><td colspan="6" style="text-align:center;padding:32px;color:#64748b">Carregando…</td></tr>
+        <tr><td colspan="7" style="text-align:center;padding:32px;color:#64748b">Carregando…</td></tr>
       </tbody>
     </table>
   </div>
@@ -187,6 +188,26 @@
     <div class="actions">
       <button class="btn-cancel" onclick="fecharModal('modal-minha-senha')">Cancelar</button>
       <button class="btn btn-primary" onclick="salvarMinhaSenha()">Trocar senha</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: Editar plano -->
+<div class="modal-backdrop" id="modal-plano">
+  <div class="modal">
+    <h3>Plano do usuário</h3>
+    <div class="sub" id="plano-sub"></div>
+    <div class="modal-erro" id="plano-erro"></div>
+    <div id="plano-status" style="background:#f3f4f6;border-radius:8px;padding:10px 12px;font-size:13px;margin-bottom:14px;color:#374151"></div>
+    <div class="field">
+      <label>Cota mensal de consultas</label>
+      <input type="number" id="plano-cota" min="0" step="1" placeholder="0 = sem plano">
+      <span style="font-size:11px;color:#6b7280;margin-top:2px">0 desativa o plano. Alterar a cota reinicia o ciclo (consultas usadas voltam a 0).</span>
+    </div>
+    <div class="actions">
+      <button class="btn-cancel" onclick="fecharModal('modal-plano')">Cancelar</button>
+      <button class="btn-sm" onclick="resetarContagem()" style="background:#fef3c7;border-color:#fcd34d;color:#78350f">Resetar contagem</button>
+      <button class="btn btn-primary" onclick="salvarPlano()">Salvar</button>
     </div>
   </div>
 </div>
@@ -261,13 +282,13 @@
       const data = await res.json();
       renderTabela(data.usuarios || []);
     } catch (e) {
-      document.getElementById('tbody').innerHTML = '<tr><td colspan="6" style="text-align:center;padding:32px;color:#b91c1c">Erro ao carregar usuários</td></tr>';
+      document.getElementById('tbody').innerHTML = '<tr><td colspan="7" style="text-align:center;padding:32px;color:#b91c1c">Erro ao carregar usuários</td></tr>';
     }
   }
 
   function renderTabela(usuarios) {
     if (!usuarios.length) {
-      document.getElementById('tbody').innerHTML = '<tr><td colspan="6" style="text-align:center;padding:32px;color:#64748b">Nenhum usuário cadastrado</td></tr>';
+      document.getElementById('tbody').innerHTML = '<tr><td colspan="7" style="text-align:center;padding:32px;color:#64748b">Nenhum usuário cadastrado</td></tr>';
       return;
     }
     document.getElementById('tbody').innerHTML = usuarios.map(u => {
@@ -286,17 +307,105 @@
           <td style="color:#475569">${esc(u.email)}</td>
           <td>${badgePerfil}</td>
           <td>${badgeStatus}</td>
+          <td id="plano-cell-${u.id}" style="color:#64748b">—</td>
           <td style="color:#64748b">${data}</td>
           <td>
             <div class="acoes">
               <button class="btn-sm" onclick='abrirEdicao(${dadosUsuario})'>Editar</button>
               <button class="btn-sm" onclick='abrirSenha(${dadosUsuario})'>Senha</button>
+              <button class="btn-sm" onclick='abrirPlano(${dadosUsuario})' style="background:#ede9fe;border-color:#c4b5fd;color:#5b21b6">Plano</button>
               ${ehEuMesmo ? '' : `<button class="btn-sm btn-danger-sm" onclick="alternarAtivo('${u.id}', ${!u.ativo})">${u.ativo ? 'Desativar' : 'Reativar'}</button>`}
               ${ehEuMesmo ? '' : `<button class="btn-sm btn-danger-sm" onclick='abrirExclusao(${dadosUsuario})'>Excluir</button>`}
             </div>
           </td>
         </tr>`;
     }).join('');
+    // Carrega planos em paralelo (não bloqueia a render)
+    usuarios.forEach(u => carregarPlanoCell(u.id));
+  }
+
+  async function carregarPlanoCell(uid) {
+    try {
+      const r = await fetch('/api/admin/usuarios/' + uid + '/plano', {
+        headers: { Authorization: 'Bearer ' + token }
+      });
+      if (!r.ok) return;
+      const d = await r.json();
+      const cell = document.getElementById('plano-cell-' + uid);
+      if (!cell) return;
+      const cota = Number(d.cota_mensal || 0);
+      if (!cota) {
+        cell.innerHTML = '<span style="color:#9ca3af">—</span>';
+      } else {
+        const usadas = Number(d.consultas_usadas || 0);
+        const restantes = Math.max(cota - usadas, 0);
+        const cor = restantes <= 0 ? '#b91c1c' : (restantes <= cota * 0.2 ? '#b45309' : '#15803d');
+        cell.innerHTML = `<div style="font-weight:600;color:${cor}">${restantes}/${cota}</div><div style="font-size:11px;color:#94a3b8">${usadas} usadas</div>`;
+      }
+    } catch (e) {}
+  }
+
+  // Plano: abrir modal
+  let idPlanoEdit = null;
+  async function abrirPlano(u) {
+    idPlanoEdit = u.id;
+    document.getElementById('plano-sub').textContent = `${u.nome} (${u.email})`;
+    document.getElementById('plano-cota').value = '';
+    document.getElementById('plano-status').textContent = 'Carregando...';
+    abrirModal('modal-plano');
+    try {
+      const r = await fetch('/api/admin/usuarios/' + u.id + '/plano', {
+        headers: { Authorization: 'Bearer ' + token }
+      });
+      const d = await r.json();
+      if (!r.ok) {
+        document.getElementById('plano-status').textContent = d.erro || 'Erro ao carregar';
+        return;
+      }
+      document.getElementById('plano-cota').value = Number(d.cota_mensal || 0);
+      const cicloTxt = d.ciclo_inicio ? new Date(d.ciclo_inicio).toLocaleDateString('pt-BR') : 'sem ciclo iniciado';
+      document.getElementById('plano-status').innerHTML = `
+        <strong>Cota atual:</strong> ${d.cota_mensal || 0} • <strong>Usadas:</strong> ${d.consultas_usadas || 0} • <strong>Restantes:</strong> ${d.restantes || 0}<br>
+        <span style="font-size:11px;color:#94a3b8">Ciclo iniciado em: ${cicloTxt}</span>`;
+    } catch (e) {
+      document.getElementById('plano-status').textContent = 'Erro de conexão';
+    }
+  }
+
+  async function salvarPlano() {
+    const cota = parseInt(document.getElementById('plano-cota').value, 10);
+    if (!Number.isFinite(cota) || cota < 0) return erroModal('plano-erro', 'Cota deve ser um inteiro >= 0');
+    try {
+      const r = await fetch('/api/admin/usuarios/' + idPlanoEdit + '/plano', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
+        body: JSON.stringify({ cota_mensal: cota })
+      });
+      const d = await r.json();
+      if (!r.ok) return erroModal('plano-erro', d.erro || 'Erro ao salvar');
+      fecharModal('modal-plano');
+      alerta('Plano atualizado', 'success');
+      carregarPlanoCell(idPlanoEdit);
+    } catch (e) {
+      erroModal('plano-erro', 'Erro de conexão');
+    }
+  }
+
+  async function resetarContagem() {
+    if (!confirm('Resetar a contagem de consultas usadas para zero?')) return;
+    try {
+      const r = await fetch('/api/admin/usuarios/' + idPlanoEdit + '/plano/resetar', {
+        method: 'POST',
+        headers: { Authorization: 'Bearer ' + token }
+      });
+      const d = await r.json();
+      if (!r.ok) return erroModal('plano-erro', d.erro || 'Erro ao resetar');
+      fecharModal('modal-plano');
+      alerta('Contagem resetada', 'success');
+      carregarPlanoCell(idPlanoEdit);
+    } catch (e) {
+      erroModal('plano-erro', 'Erro de conexão');
+    }
   }
 
   // Criar

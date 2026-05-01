@@ -121,8 +121,11 @@
 
       <!-- AÇÕES -->
       <div class="acoes-bar">
-        ${p.status === 'aguardando_pagamento' ? `<button class="btn btn-success" onclick="pagarAgora()">💳 Pagar Agora — R$ ${Number(p.valor).toLocaleString('pt-BR', {minimumFractionDigits:2})}</button>` : ''}
-        ${p.status === 'aguardando_pagamento' ? `<button class="btn btn-outline" onclick="marcarPago()">✅ Confirmar Pagamento Manual</button>` : ''}
+        ${p.status === 'aguardando_pagamento' ? `
+          <button class="btn btn-success btn-sm" onclick="pagarComForma('dinheiro')">💵 Pago em dinheiro</button>
+          <button class="btn btn-sm" onclick="pagarComForma('plano')" style="background:#7c3aed;color:#fff">📦 Cobrar do plano</button>
+          <button class="btn btn-outline btn-sm" onclick="marcarPago()">✅ Pgto manual (admin)</button>
+        ` : ''}
         ${p.status === 'pago' ? `<button class="btn btn-primary" onclick="iniciar()">▶ Iniciar Análise</button>` : ''}
         ${p.status === 'em_andamento' ? `
           <button class="btn btn-warning" onclick="executarConsultas()" id="btn-consultar">🔍 Executar Consultas Automáticas</button>
@@ -139,7 +142,33 @@
         <div class="info-row"><span class="info-label">Prazo</span><span class="info-valor" style="color:${prazoOk ? '#111' : '#dc2626'}">${prazoLabel}</span></div>
         <div class="info-row"><span class="info-label">Criado em</span><span class="info-valor">${new Date(p.criado_em).toLocaleString('pt-BR')}</span></div>
         ${p.operador_nome ? `<div class="info-row"><span class="info-label">Operador</span><span class="info-valor">${p.operador_nome}</span></div>` : ''}
+        ${p.forma_pagamento ? `<div class="info-row"><span class="info-label">Forma de pagamento</span><span class="info-valor">${formaPagamentoLabel(p.forma_pagamento)}</span></div>` : ''}
       </div>
+
+      ${p.status === 'aguardando_pagamento' && (p.forma_pagamento === 'mercadopago' || (!p.forma_pagamento && p.mp_init_point)) ? `
+        <div class="pedido-section" id="secao-link-mp" style="border:1px solid #dbeafe;background:#eff6ff">
+          <div class="section-title" style="color:#1e40af">💳 Link de pagamento (Mercado Pago)</div>
+          <div style="font-size:13px;color:#374151;margin-bottom:10px">
+            Envie este link ao cliente. Quando ele pagar, este pedido sai automaticamente de "aguardando pagamento".
+          </div>
+          <div id="mp-link-box" style="background:#fff;border:1px solid #bfdbfe;border-radius:6px;padding:9px 11px;font-family:monospace;font-size:12px;word-break:break-all;margin-bottom:10px">${p.mp_init_point ? esc(p.mp_init_point) : '<em style="color:#94a3b8">Link ainda não gerado — clique em "Gerar link" abaixo.</em>'}</div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px">
+            ${p.mp_init_point ? `
+              <button class="btn btn-sm" onclick="copiarLinkMP()" style="background:#1a3a5c;color:#fff">📋 Copiar</button>
+              <a class="btn btn-sm" id="btn-wa-link" target="_blank" style="background:#25d366;color:#fff;text-decoration:none">📱 WhatsApp</a>
+            ` : `
+              <button class="btn btn-sm btn-primary" onclick="gerarLinkMP()">Gerar link de pagamento</button>
+            `}
+          </div>
+          ${p.mp_init_point ? `
+            <div style="display:flex;gap:6px;align-items:center;margin-bottom:6px">
+              <input id="email-link-pedido" type="email" placeholder="email do cliente" value="${esc(p.cliente_email || '')}" style="flex:1;padding:7px 9px;border:1px solid #cbd5e1;border-radius:6px;font-size:13px">
+              <button class="btn btn-sm" onclick="enviarEmailLinkPedido()" style="background:#1a3a5c;color:#fff">Enviar por email</button>
+            </div>
+            <div id="email-link-pedido-msg" style="font-size:12px;color:#6b7280"></div>
+          ` : ''}
+        </div>
+      ` : ''}
 
       <!-- CUSTO BRUTO (INTERNO — admin/operador) -->
       ${(usuario.perfil === 'admin' || usuario.perfil === 'operador') ? `
@@ -245,6 +274,20 @@
         </div>
       </div>
     `;
+    // Pós-render: monta link wa.me se cliente tem WhatsApp e há link MP
+    setTimeout(() => {
+      const aWa = document.getElementById('btn-wa-link');
+      if (aWa && p.mp_init_point) {
+        const wa = (p.cliente_whatsapp || '').replace(/\D/g, '');
+        const txt = encodeURIComponent(`Olá! Segue o link de pagamento da sua consulta: ${p.mp_init_point}`);
+        if (wa && wa.length >= 10) {
+          const num = wa.startsWith('55') ? wa : '55' + wa;
+          aWa.href = `https://wa.me/${num}?text=${txt}`;
+        } else {
+          aWa.href = `https://wa.me/?text=${txt}`;
+        }
+      }
+    }, 0);
   }
 
   function renderAnaliseIA(p) {
@@ -418,7 +461,16 @@
 
   // Cria/recupera a preference do MP e abre o checkout. Inicia o polling em paralelo
   // pra detectar a confirmação automática quando o webhook do MP chegar.
-  async function pagarAgora() {
+  function formaPagamentoLabel(f) {
+    if (f === 'mercadopago') return '💳 Mercado Pago (link)';
+    if (f === 'dinheiro') return '💵 Dinheiro';
+    if (f === 'plano') return '📦 Plano (cota mensal)';
+    return f;
+  }
+
+  // Gera (ou recupera) o link MP para este pedido. Não redireciona — o link
+  // é mostrado na tela para o operador enviar ao cliente.
+  async function gerarLinkMP() {
     try {
       const r = await fetch(`/api/pedidos/${id}/pagamento`, {
         method: 'POST',
@@ -426,13 +478,82 @@
       });
       const data = await r.json().catch(() => ({}));
       if (!r.ok || !data.init_point) {
-        mostrarAlerta(data.mensagem || data.erro || 'Não foi possível iniciar o pagamento.', 'error');
+        mostrarAlerta(data.mensagem || data.erro || 'Não foi possível gerar o link.', 'error');
         return;
       }
       iniciarPollingPagamento();
-      window.location.href = data.init_point;
+      mostrarAlerta('Link gerado. Atualizando...', 'success');
+      setTimeout(carregar, 600);
     } catch (e) {
-      mostrarAlerta('Erro de conexão ao iniciar pagamento.', 'error');
+      mostrarAlerta('Erro de conexão ao gerar link.', 'error');
+    }
+  }
+
+  async function copiarLinkMP() {
+    if (!pedidoAtual || !pedidoAtual.mp_init_point) return;
+    try {
+      await navigator.clipboard.writeText(pedidoAtual.mp_init_point);
+      mostrarAlerta('Link copiado!', 'success');
+    } catch (e) {
+      const ta = document.createElement('textarea');
+      ta.value = pedidoAtual.mp_init_point;
+      document.body.appendChild(ta); ta.select(); document.execCommand('copy'); document.body.removeChild(ta);
+      mostrarAlerta('Link copiado!', 'success');
+    }
+  }
+
+  async function enviarEmailLinkPedido() {
+    const email = document.getElementById('email-link-pedido').value.trim();
+    const msg = document.getElementById('email-link-pedido-msg');
+    msg.textContent = '';
+    if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      msg.style.color = '#dc2626';
+      msg.textContent = 'Email inválido';
+      return;
+    }
+    msg.style.color = '#6b7280';
+    msg.textContent = 'Enviando...';
+    try {
+      const r = await fetch(`/api/pedidos/${id}/enviar-email-pagamento`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ email })
+      });
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok) {
+        msg.style.color = '#dc2626';
+        msg.textContent = d.erro || d.mensagem || 'Falha ao enviar';
+        return;
+      }
+      msg.style.color = '#16a34a';
+      msg.textContent = '✓ Enviado para ' + email;
+    } catch (e) {
+      msg.style.color = '#dc2626';
+      msg.textContent = 'Erro de conexão';
+    }
+  }
+
+  // Pagamento alternativo (dinheiro / plano)
+  async function pagarComForma(forma) {
+    const labels = { dinheiro: 'em dinheiro', plano: 'cobrando do plano' };
+    if (!confirm(`Confirmar pagamento ${labels[forma]}?`)) return;
+    try {
+      const r = await fetch(`/api/pedidos/${id}/pagamento-alternativo`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ forma })
+      });
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok) {
+        mostrarAlerta(d.erro || 'Falha ao registrar pagamento', 'error');
+        return;
+      }
+      let extra = '';
+      if (forma === 'plano' && d.plano_restantes != null) extra = ` (restam ${d.plano_restantes} no plano)`;
+      mostrarAlerta('Pagamento registrado' + extra + '. Atualizando...', 'success');
+      setTimeout(carregar, 800);
+    } catch (e) {
+      mostrarAlerta('Erro de conexão', 'error');
     }
   }
 
@@ -461,10 +582,10 @@
     }, 3000);
   }
 
-  // Auto-polling se voltamos do MP com pedido ainda pendente
+  // Auto-polling: se há link MP gerado e pedido ainda aguarda, espera o webhook.
   if (typeof window !== 'undefined') {
     setTimeout(() => {
-      if (pedidoAtual && pedidoAtual.status === 'aguardando_pagamento') {
+      if (pedidoAtual && pedidoAtual.status === 'aguardando_pagamento' && pedidoAtual.mp_init_point) {
         iniciarPollingPagamento();
       }
     }, 1500);

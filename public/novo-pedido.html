@@ -251,13 +251,57 @@
     <div class="info-row" id="r-custo-row" style="display:none"><span class="info-label">Custo bruto (interno)</span><span id="r-custo" class="info-valor"></span></div>
     <div class="info-row" id="r-margem-row" style="display:none"><span class="info-label">Margem</span><span id="r-margem" class="info-valor"></span></div>
     <div class="info-row"><span class="info-label">Prazo de Entrega</span><span id="r-prazo" class="info-valor"></span></div>
-    <div style="margin-top:20px;display:flex;gap:10px">
-      <button class="btn btn-primary" onclick="criarPedido(false)" style="flex:1;justify-content:center">
-        📋 Criar Pedido (Pgto Pendente)
+    <div class="section-title" style="margin-top:24px;font-size:14px">Como cobrar?</div>
+    <div style="margin-top:10px;display:grid;grid-template-columns:1fr 1fr;gap:10px">
+      <button id="btn-forma-mp" class="btn" onclick="criarPedido('mercadopago')"
+        style="background:#2563eb;color:#fff;justify-content:center;padding:14px;flex-direction:column;gap:4px">
+        <span style="font-size:18px">💳</span>
+        <span style="font-weight:700">Mercado Pago</span>
+        <span style="font-size:11px;opacity:.85">Gera link (Pix/cartão/boleto)</span>
       </button>
-      <button class="btn btn-success" onclick="criarPedido(true)" style="flex:1;justify-content:center">
-        ✅ Criar + Marcar como Pago
+      <button id="btn-forma-dinheiro" class="btn" onclick="criarPedido('dinheiro')"
+        style="background:#16a34a;color:#fff;justify-content:center;padding:14px;flex-direction:column;gap:4px">
+        <span style="font-size:18px">💵</span>
+        <span style="font-weight:700">Dinheiro</span>
+        <span style="font-size:11px;opacity:.85">Recebido em mãos</span>
       </button>
+      <button id="btn-forma-plano" class="btn" onclick="criarPedido('plano')"
+        style="background:#7c3aed;color:#fff;justify-content:center;padding:14px;flex-direction:column;gap:4px">
+        <span style="font-size:18px">📦</span>
+        <span style="font-weight:700">Plano</span>
+        <span id="plano-info" style="font-size:11px;opacity:.85">Verificando...</span>
+      </button>
+      <button id="btn-forma-pendente" class="btn" onclick="criarPedido('pendente')"
+        style="background:#6b7280;color:#fff;justify-content:center;padding:14px;flex-direction:column;gap:4px">
+        <span style="font-size:18px">📋</span>
+        <span style="font-weight:700">Apenas registrar</span>
+        <span style="font-size:11px;opacity:.85">Pgto pendente</span>
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: link MP -->
+<div id="modal-link" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:9999;align-items:center;justify-content:center;padding:16px">
+  <div style="background:#fff;border-radius:10px;max-width:520px;width:100%;padding:24px;box-shadow:0 20px 50px rgba(0,0,0,.3)">
+    <div style="font-size:18px;font-weight:800;margin-bottom:6px">Link de pagamento gerado</div>
+    <div style="font-size:13px;color:#6b7280;margin-bottom:14px">
+      Envie este link para o cliente. Ele paga via Pix, cartão ou boleto pelo Mercado Pago.
+    </div>
+    <div style="background:#f3f4f6;border:1px solid #e5e7eb;border-radius:6px;padding:10px;font-family:monospace;font-size:12px;word-break:break-all;margin-bottom:8px" id="modal-link-url"></div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:18px">
+      <button class="btn" onclick="copiarLinkMP()" style="background:#1a3a5c;color:#fff;flex:1;min-width:130px;justify-content:center">📋 Copiar link</button>
+      <a id="btn-whatsapp-link" class="btn" target="_blank" style="background:#25d366;color:#fff;flex:1;min-width:130px;justify-content:center;text-decoration:none">📱 WhatsApp</a>
+    </div>
+    <div style="font-size:13px;font-weight:700;margin-bottom:6px">Enviar por email</div>
+    <div style="display:flex;gap:6px;margin-bottom:14px">
+      <input id="email-cliente-link" type="email" placeholder="cliente@exemplo.com" style="flex:1;padding:9px 10px;border:1px solid #d1d5db;border-radius:6px;font-size:14px">
+      <button class="btn" onclick="enviarEmailLink()" style="background:#1a3a5c;color:#fff;justify-content:center">Enviar</button>
+    </div>
+    <div id="email-link-msg" style="font-size:12px;margin-bottom:10px"></div>
+    <div style="display:flex;gap:8px">
+      <button class="btn" onclick="fecharModalLink()" style="background:#e5e7eb;color:#111;flex:1;justify-content:center">Fechar</button>
+      <button class="btn" onclick="irParaPedido()" style="background:#16a34a;color:#fff;flex:1;justify-content:center">Ir para o pedido</button>
     </div>
   </div>
 </div>
@@ -267,6 +311,11 @@
   if (!token) window.location.href = '/';
   const usuario = JSON.parse(localStorage.getItem('rastreia_usuario') || '{}');
   document.getElementById('nav-user').textContent = usuario.nome || '';
+
+  // Carrega plano do operador (cota mensal restante)
+  document.addEventListener('DOMContentLoaded', () => {
+    if (typeof loadPlano === 'function') loadPlano();
+  });
 
   const PRODUTOS = {
     dossie_pf: { nome: 'Dossiê Pessoa Física', preco: 197, prazo: '2 horas', icone: '👤',
@@ -522,7 +571,41 @@
     document.getElementById('alvo_tipo').value = limpo.length > 11 ? 'PJ' : 'PF';
   }
 
-  async function criarPedido(marcadoPago) {
+  // Estado do plano do operador (carregado em loadPlano)
+  let planoMe = { cota_mensal: 0, restantes: 0 };
+  let pedidoCriadoId = null;
+  let linkMPGerado = null;
+
+  async function loadPlano() {
+    try {
+      const r = await fetch('/api/me/plano', { headers: { Authorization: `Bearer ${token}` } });
+      if (!r.ok) throw new Error('falha');
+      planoMe = await r.json();
+    } catch (e) {
+      planoMe = { cota_mensal: 0, restantes: 0 };
+    }
+    const info = document.getElementById('plano-info');
+    const btn = document.getElementById('btn-forma-plano');
+    if (!info || !btn) return;
+    if (!planoMe.cota_mensal || planoMe.cota_mensal <= 0) {
+      info.textContent = 'Sem plano ativo';
+      btn.disabled = true;
+      btn.style.opacity = '.55';
+      btn.style.cursor = 'not-allowed';
+      btn.title = 'Sem plano ativo. Procure um administrador.';
+    } else if (planoMe.restantes <= 0) {
+      info.textContent = `Cota esgotada (${planoMe.consultas_usadas}/${planoMe.cota_mensal})`;
+      btn.disabled = true;
+      btn.style.opacity = '.55';
+      btn.style.cursor = 'not-allowed';
+      btn.title = 'Cota mensal do plano esgotada.';
+    } else {
+      info.textContent = `${planoMe.restantes} de ${planoMe.cota_mensal} este mês`;
+      btn.disabled = false;
+    }
+  }
+
+  async function criarPedido(forma) {
     const tipo = document.getElementById('tipo').value;
     const isVeicular = tipo === 'consulta_veicular';
     const cliente_nome = document.getElementById('cliente_nome').value.trim();
@@ -612,17 +695,35 @@
         }
       }
 
-      if (marcadoPago) {
-        await fetch(`/api/pedidos/${data.id}/pago`, {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-          body: JSON.stringify({ mp_payment_id: 'manual' })
-        });
+      pedidoCriadoId = data.id;
+
+      if (forma === 'pendente') {
         window.location.href = `/pedido.html?id=${data.id}`;
         return;
       }
 
-      // Pedido com cobrança: cria/recupera a preference do MP e redireciona para o checkout.
+      if (forma === 'dinheiro' || forma === 'plano') {
+        try {
+          const r2 = await fetch(`/api/pedidos/${data.id}/pagamento-alternativo`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+            body: JSON.stringify({ forma })
+          });
+          const d2 = await r2.json().catch(() => ({}));
+          if (!r2.ok) {
+            alerta(d2.erro || 'Falha ao registrar pagamento', 'error');
+            // Pedido foi criado mas pagamento falhou (ex: cota esgotada). Vai pra página do pedido.
+            setTimeout(() => { window.location.href = `/pedido.html?id=${data.id}`; }, 1800);
+            return;
+          }
+          window.location.href = `/pedido.html?id=${data.id}`;
+        } catch (e) {
+          alerta('Erro de conexão ao registrar pagamento', 'error');
+        }
+        return;
+      }
+
+      // forma === 'mercadopago': gera o link e mostra modal (não redireciona o operador).
       try {
         const payRes = await fetch(`/api/pedidos/${data.id}/pagamento`, {
           method: 'POST',
@@ -630,18 +731,97 @@
         });
         const payData = await payRes.json().catch(() => ({}));
         if (payRes.ok && payData.init_point) {
-          window.location.href = payData.init_point;
+          linkMPGerado = payData.init_point;
+          abrirModalLink(payData.init_point);
           return;
         }
-        // Falha em criar preference (ex: MP não configurado): cai pro acompanhamento normal.
-        console.warn('Falha ao criar pagamento MP:', payData);
-        alerta(payData.mensagem || payData.erro || 'Não foi possível abrir o checkout do Mercado Pago. Você pode pagar pela página do pedido.', 'error');
+        alerta(payData.mensagem || payData.erro || 'Não foi possível gerar o link do Mercado Pago.', 'error');
+        setTimeout(() => { window.location.href = `/pedido.html?id=${data.id}`; }, 1800);
       } catch (ePay) {
         console.warn('Erro ao criar pagamento:', ePay);
+        window.location.href = `/pedido.html?id=${data.id}`;
       }
-      window.location.href = `/pedido.html?id=${data.id}`;
     } catch (e) {
       alerta('Erro de conexão', 'error');
+    }
+  }
+
+  function abrirModalLink(url) {
+    document.getElementById('modal-link-url').textContent = url;
+    // Pré-preenche email do cliente (se informado no form)
+    const emailCli = document.getElementById('cliente_email').value.trim();
+    if (emailCli) document.getElementById('email-cliente-link').value = emailCli;
+    // Monta link wa.me se cliente tem WhatsApp informado
+    const wa = document.getElementById('cliente_whatsapp').value.replace(/\D/g, '');
+    const aWa = document.getElementById('btn-whatsapp-link');
+    if (wa && wa.length >= 10) {
+      const num = wa.startsWith('55') ? wa : '55' + wa;
+      const txt = encodeURIComponent(`Olá! Segue o link de pagamento da sua consulta: ${url}`);
+      aWa.href = `https://wa.me/${num}?text=${txt}`;
+      aWa.style.display = '';
+    } else {
+      // Sem WhatsApp do cliente: abre wa.me sem número (usuário escolhe contato)
+      const txt = encodeURIComponent(`Olá! Segue o link de pagamento da sua consulta: ${url}`);
+      aWa.href = `https://wa.me/?text=${txt}`;
+    }
+    document.getElementById('modal-link').style.display = 'flex';
+  }
+
+  function fecharModalLink() {
+    document.getElementById('modal-link').style.display = 'none';
+  }
+
+  function irParaPedido() {
+    if (pedidoCriadoId) window.location.href = `/pedido.html?id=${pedidoCriadoId}`;
+    else fecharModalLink();
+  }
+
+  async function copiarLinkMP() {
+    if (!linkMPGerado) return;
+    try {
+      await navigator.clipboard.writeText(linkMPGerado);
+      alerta('Link copiado!', 'success');
+    } catch (e) {
+      // Fallback: select + execCommand
+      const ta = document.createElement('textarea');
+      ta.value = linkMPGerado;
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand('copy');
+      document.body.removeChild(ta);
+      alerta('Link copiado!', 'success');
+    }
+  }
+
+  async function enviarEmailLink() {
+    if (!pedidoCriadoId) return;
+    const email = document.getElementById('email-cliente-link').value.trim();
+    const msg = document.getElementById('email-link-msg');
+    msg.textContent = '';
+    if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      msg.style.color = '#dc2626';
+      msg.textContent = 'Email inválido';
+      return;
+    }
+    msg.style.color = '#6b7280';
+    msg.textContent = 'Enviando...';
+    try {
+      const r = await fetch(`/api/pedidos/${pedidoCriadoId}/enviar-email-pagamento`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ email })
+      });
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok) {
+        msg.style.color = '#dc2626';
+        msg.textContent = d.erro || d.mensagem || 'Falha ao enviar';
+        return;
+      }
+      msg.style.color = '#16a34a';
+      msg.textContent = '✓ Email enviado para ' + email;
+    } catch (e) {
+      msg.style.color = '#dc2626';
+      msg.textContent = 'Erro de conexão';
     }
   }
 
