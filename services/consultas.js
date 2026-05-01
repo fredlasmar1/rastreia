@@ -1744,22 +1744,24 @@ async function consultarCertidaoFGTS(cnpj) {
 }
 
 // A.6 — Marcas INPI
-// O endpoint InfoSimples `inpi-marcas` não aceita CNPJ direto — exige
-// `pesquisa_textual` (ou `marca`). Buscamos pela razão social do alvo.
+// O endpoint InfoSimples `inpi/marcas` não aceita CNPJ direto — exige
+// `pesquisa_textual`. Buscamos pela razão social do alvo.
 async function consultarMarcasINPI(cnpj, razaoSocial) {
-  const fonte = 'INPI via InfoSimples';
+  const fonte = 'INPI Marcas via InfoSimples';
   const termo = String(razaoSocial || '').trim();
   if (!termo) {
     return {
       disponivel: false,
       fonte,
-      nota: 'Razão social não fornecida — não é possível buscar marcas no INPI',
-      link_manual: 'https://busca.inpi.gov.br/pePI/'
+      nota: 'Razão social não fornecida'
     };
   }
-  const r = await chamarInfoSimples('/consultas/inpi-marcas', { pesquisa_textual: termo }, 'INPI Marcas');
+  const r = await chamarInfoSimples('/consultas/inpi/marcas', { pesquisa_textual: termo }, 'INPI Marcas');
   if (!r.ok) {
     return { disponivel: false, fonte, erro: r.erro, link_manual: 'https://busca.inpi.gov.br/pePI/' };
+  }
+  if (r.sem_dados) {
+    return { disponivel: true, total: 0, marcas: [], fonte, consultado_em: new Date().toISOString() };
   }
   const d = r.data;
   const lista = d.marcas || d.processos || d.itens || [];
@@ -1773,6 +1775,33 @@ async function consultarMarcasINPI(cnpj, razaoSocial) {
     disponivel: true,
     total: marcas.length,
     marcas,
+    fonte,
+    consultado_em: new Date().toISOString()
+  };
+}
+
+// A.6.1 — Patentes INPI
+async function consultarPatentesINPI(cnpj) {
+  const fonte = 'INPI Patentes via InfoSimples';
+  const r = await chamarInfoSimples('/consultas/inpi/patentes', { cnpj: limparDoc(cnpj) }, 'INPI Patentes');
+  if (!r.ok) {
+    return { disponivel: false, fonte, erro: r.erro, link_manual: 'https://busca.inpi.gov.br/pePI/' };
+  }
+  if (r.sem_dados) {
+    return { disponivel: true, total: 0, patentes: [], fonte, consultado_em: new Date().toISOString() };
+  }
+  const d = r.data;
+  const lista = d.patentes || d.processos || d.itens || [];
+  const patentes = (Array.isArray(lista) ? lista : []).map(p => ({
+    titulo: p.titulo || p.nome || '',
+    numero: p.numero || p.numero_pedido || '',
+    situacao: p.situacao || p.status || '',
+    deposito_em: p.data_deposito || p.deposito_em || ''
+  }));
+  return {
+    disponivel: true,
+    total: patentes.length,
+    patentes,
     fonte,
     consultado_em: new Date().toISOString()
   };
