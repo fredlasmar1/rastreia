@@ -241,6 +241,51 @@ ALTER TABLE pedidos ADD COLUMN IF NOT EXISTS mp_init_point TEXT;
 
 ---
 
+## PAGAMENTO MULTI-MÉTODO (Fase 9)
+
+O operador escolhe a forma de cobrança ao criar o pedido. Não há redirect
+automático para o checkout do MP — quando o operador escolhe "Mercado Pago",
+o sistema **gera um link** (init_point) que ele envia ao cliente final via
+WhatsApp ou email.
+
+### Formas de pagamento (campo `pedidos.forma_pagamento`)
+
+| Forma         | O que faz                                                     | Webhook MP? |
+|---------------|---------------------------------------------------------------|-------------|
+| `mercadopago` | Cria preference, mostra link copiável + WA + email            | Sim         |
+| `dinheiro`    | Marca como pago imediatamente, dispara pipeline               | Não         |
+| `plano`       | Debita 1 da cota mensal do operador, marca pago, pipeline     | Não         |
+| (NULL)        | "Apenas registrar" — pedido fica aguardando_pagamento         | —           |
+
+### Plano (cota mensal por usuário)
+
+Cada usuário do sistema (operador) tem uma cota mensal configurada por um admin
+em `/usuarios.html` → botão "Plano". Colunas em `usuarios`:
+
+- `plano_cota_mensal` — 0 = sem plano, >0 = limite mensal de consultas
+- `plano_consultas_usadas` — contador do ciclo atual
+- `plano_ciclo_inicio` — 1º dia do mês do ciclo. Reset preguiçoso: ao virar o
+  mês, no primeiro acesso à API o contador zera automaticamente.
+
+Quando o operador cobra "do plano", `services/planos_usuario.debitarPlano()`
+faz um UPDATE atômico condicional (`plano_consultas_usadas < plano_cota_mensal`)
+para evitar passar do limite sob concorrência.
+
+### Endpoints novos
+- `POST /api/pedidos/:id/pagamento-alternativo` — body `{forma: 'dinheiro'|'plano'}`
+- `POST /api/pedidos/:id/enviar-email-pagamento` — body `{email}` (envia link MP)
+- `GET  /api/me/plano` — status do plano do usuário logado
+- `GET  /api/admin/usuarios/:id/plano` — admin
+- `PATCH /api/admin/usuarios/:id/plano` — admin, body `{cota_mensal}`
+- `POST /api/admin/usuarios/:id/plano/resetar` — admin
+
+### Email (SMTP)
+`services/email.js` usa nodemailer. Configure `SMTP_HOST`, `SMTP_USER`,
+`SMTP_PASS` (e opcionalmente `SMTP_PORT`, `SMTP_FROM`, `SMTP_SECURE`). Se não
+configurado, `POST /enviar-email-pagamento` retorna 503 com mensagem clara.
+
+---
+
 ## MÓDULO IMOBILIÁRIO — A IMPLEMENTAR
 
 ### Novo produto: Due Diligence Imobiliária (R$997)
@@ -368,6 +413,14 @@ SERASA_API_KEY=                     # Fase 2 — requer contrato empresarial
 # PAGAMENTOS
 MP_ACCESS_TOKEN=                    # Mercado Pago: mercadopago.com.br/developers
 MP_WEBHOOK_SECRET=                  # Validar autenticidade dos webhooks MP
+
+# EMAIL (SMTP) — usado para enviar link de pagamento ao cliente
+SMTP_HOST=                          # ex: smtp.gmail.com / smtp.office365.com / smtp.zoho.com
+SMTP_PORT=587                       # 465 (SSL), 587 (STARTTLS), 25 (sem TLS)
+SMTP_USER=                          # login (geralmente o email remetente)
+SMTP_PASS=                          # senha de app (NÃO use a senha normal da conta)
+SMTP_FROM=                          # remetente exibido — opcional. Default: SMTP_USER
+SMTP_SECURE=                        # "true" força TLS implícito (porta 465). Inferido pela porta se vazio
 
 # WHATSAPP
 EVOLUTION_API_URL=                  # URL da sua instância Evolution API
