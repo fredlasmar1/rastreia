@@ -1520,19 +1520,9 @@ async function chamarInfoSimples(path, body, origem) {
   }
 }
 
-// Mapa SEFAZ por UF — slugs aproximados do InfoSimples + fallback URL pública.
-const SEFAZ_INFOSIMPLES = {
-  SP: { slug: 'sefaz/sp/divida-ativa', url: 'https://www.dividaativa.pge.sp.gov.br' },
-  RJ: { slug: 'sefaz/rj/certidao-divida-ativa', url: 'https://www.fazenda.rj.gov.br' },
-  MG: { slug: 'sefaz/mg/certidao-debitos', url: 'https://www.fazenda.mg.gov.br' },
-  GO: { slug: 'sefaz/go/certidao-debitos', url: 'https://www.sefaz.go.gov.br' },
-  ES: { slug: 'sefaz/es/certidao-negativa', url: 'https://internet.sefaz.es.gov.br' },
-  BA: { slug: 'sefaz/ba/certidao-debitos', url: 'https://www.sefaz.ba.gov.br' },
-  RS: { slug: 'sefaz/rs/certidao-situacao-fiscal', url: 'https://www.sefaz.rs.gov.br' },
-  PR: { slug: 'sefaz/pr/certidao-debitos', url: 'https://www.fazenda.pr.gov.br' },
-  SC: { slug: 'sefaz/sc/certidao-debitos', url: 'https://www.sef.sc.gov.br' },
-  DF: { slug: 'sefaz/df/certidao-debitos', url: 'https://www.fazenda.df.gov.br' }
-};
+// Mapa SEFAZ por UF — InfoSimples não tem endpoint genérico estadual padronizado.
+// Mantemos vazio: todas as UFs caem no fallback "consultar manual" abaixo.
+const SEFAZ_INFOSIMPLES = {};
 
 const SEFAZ_FALLBACK_URL = {
   AC: 'https://sefaz.ac.gov.br', AL: 'https://www.sefaz.al.gov.br', AM: 'https://online.sefaz.am.gov.br',
@@ -1546,17 +1536,9 @@ const SEFAZ_FALLBACK_URL = {
   SE: 'https://www.sefaz.se.gov.br', SP: 'https://www.fazenda.sp.gov.br', TO: 'https://www.sefaz.to.gov.br'
 };
 
-const PREFEITURA_INFOSIMPLES = {
-  'sao-paulo':   { slug: 'prefeitura/sao-paulo/cnd', url: 'https://www.prefeitura.sp.gov.br' },
-  'rio-de-janeiro': { slug: 'prefeitura/rio-de-janeiro/cnd', url: 'https://carioca.rio' },
-  'belo-horizonte': { slug: 'prefeitura/belo-horizonte/cnd', url: 'https://prefeitura.pbh.gov.br' },
-  'goiania':     { slug: 'prefeitura/goiania/cnd', url: 'https://www.goiania.go.gov.br' },
-  'anapolis':    { slug: 'prefeitura/anapolis/cnd', url: 'https://www.anapolis.go.gov.br' },
-  'vitoria':     { slug: 'prefeitura/vitoria/cnd', url: 'https://www.vitoria.es.gov.br' },
-  'vila-velha':  { slug: 'prefeitura/vila-velha/cnd', url: 'https://www.vilavelha.es.gov.br' },
-  'salvador':    { slug: 'prefeitura/salvador/cnd', url: 'https://www.salvador.ba.gov.br' },
-  'brasilia':    { slug: 'prefeitura/brasilia/cnd', url: 'https://www.df.gov.br' }
-};
+// Mapa Prefeitura por município — InfoSimples não tem endpoint genérico municipal
+// padronizado. Mantemos vazio: todos os municípios caem no fallback manual.
+const PREFEITURA_INFOSIMPLES = {};
 
 function slugMunicipio(nome) {
   return String(nome || '').toLowerCase()
@@ -1576,7 +1558,7 @@ function classificarSituacaoCND(texto) {
 async function consultarCNDFederal(cnpj) {
   const fonte = 'PGFN/RFB via InfoSimples';
   const doc = limparDoc(cnpj);
-  const r = await chamarInfoSimples('/consultas/receita-federal/cnd-pgfn', { cnpj: doc }, 'CND Federal');
+  const r = await chamarInfoSimples('/consultas/receita-federal-pgfn', { cnpj: doc }, 'CND Federal');
   if (!r.ok) {
     return {
       disponivel: false,
@@ -1702,7 +1684,7 @@ async function consultarCNDTrabalhistaTST(cnpj) {
 // A.5 — Certidão FGTS (Caixa)
 async function consultarCertidaoFGTS(cnpj) {
   const fonte = 'Caixa/FGTS via InfoSimples';
-  const r = await chamarInfoSimples('/consultas/caixa/regularidade-fgts', { cnpj: limparDoc(cnpj) }, 'FGTS');
+  const r = await chamarInfoSimples('/consultas/caixa-regularidade', { cnpj: limparDoc(cnpj) }, 'FGTS');
   if (!r.ok) {
     return {
       disponivel: false,
@@ -1727,9 +1709,20 @@ async function consultarCertidaoFGTS(cnpj) {
 }
 
 // A.6 — Marcas INPI
-async function consultarMarcasINPI(cnpj) {
+// O endpoint InfoSimples `inpi-marcas` não aceita CNPJ direto — exige
+// `pesquisa_textual` (ou `marca`). Buscamos pela razão social do alvo.
+async function consultarMarcasINPI(cnpj, razaoSocial) {
   const fonte = 'INPI via InfoSimples';
-  const r = await chamarInfoSimples('/consultas/inpi/marcas', { cnpj: limparDoc(cnpj) }, 'INPI Marcas');
+  const termo = String(razaoSocial || '').trim();
+  if (!termo) {
+    return {
+      disponivel: false,
+      fonte,
+      nota: 'Razão social não fornecida — não é possível buscar marcas no INPI',
+      link_manual: 'https://busca.inpi.gov.br/pePI/'
+    };
+  }
+  const r = await chamarInfoSimples('/consultas/inpi-marcas', { pesquisa_textual: termo }, 'INPI Marcas');
   if (!r.ok) {
     return { disponivel: false, fonte, erro: r.erro, link_manual: 'https://busca.inpi.gov.br/pePI/' };
   }
@@ -2046,7 +2039,7 @@ async function executarConsultasParaAlvo(alvo, { precisaVinculos, precisaVeiculo
       consultarCNDMunicipal(documento, muniCnpj, ufCnpj),
       consultarCNDTrabalhistaTST(documento),
       consultarCertidaoFGTS(documento),
-      consultarMarcasINPI(documento),
+      consultarMarcasINPI(documento, cadastral?.razao_social || ''),
       consultarPortalTransparencia(documento),
       consultarImoveisVeiculosPJ(documento, ufCnpj)
     ];
