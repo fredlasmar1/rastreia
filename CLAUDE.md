@@ -400,14 +400,15 @@ BASE_URL=https://rastreia-production.up.railway.app
 
 # APIs DE DADOS — GRATUITAS
 DATAJUD_API_KEY=                    # Opcional — sem ela usa chave pública
-TRANSPARENCIA_TOKEN=                # Gratuito: portaldatransparencia.gov.br/api-de-dados/cadastrar-email
+TRANSPARENCIA_TOKEN=                # Gratuito: portaldatransparencia.gov.br/api-de-dados/cadastrar-email (CEIS/CNEP)
+PORTAL_TRANSPARENCIA_TOKEN=         # Opcional — token Portal da Transparência para contratos públicos (Due Diligence Empresarial). Obter em portaldatransparencia.gov.br/api-de-dados/cadastrar-email
 
 # APIs DE DADOS — PAGAS
 DIRECTD_TOKEN=                      # app.directd.com.br (R$50 grátis para testar)
 ESCAVADOR_API_KEY=                  # api.escavador.com
 CNPJA_API_KEY=                      # cnpja.com
 ONR_API_KEY=                        # integracao.registrodeimoveis.org.br (módulo imobiliário)
-INFOSIMPLES_TOKEN=                  # infosimples.com (veículos/DETRAN)
+INFOSIMPLES_TOKEN=                  # infosimples.com — DETRAN (veículos) + CND Federal/Estadual/Municipal/TST/FGTS + INPI (Due Diligence Empresarial)
 SERASA_API_KEY=                     # Fase 2 — requer contrato empresarial
 
 # PAGAMENTOS
