@@ -1740,21 +1740,26 @@ async function consultarCertidaoFGTS(cnpj) {
     return {
       disponivel: true,
       situacao: 'INDETERMINADA',
-      descricao: 'CRF não disponível no momento na Caixa',
+      descricao: 'CRF não disponível na Caixa no momento (tente em alguns minutos)',
       fonte,
       consultado_em: new Date().toISOString()
     };
   }
   const d = r.data;
-  const tipo = d.situacao || d.resultado || d.tipo_certidao || '';
-  const regular = /regular|em\s+situa/i.test(tipo);
+  const txt = String(d.crf || d.situacao || d.mensagem || '').toLowerCase();
+  let situacao = 'INDETERMINADO';
+  if (txt.includes('regular') && !txt.includes('irregular') && !txt.includes('não regular') && !txt.includes('nao regular')) {
+    situacao = 'REGULAR';
+  } else if (txt.includes('irregular') || txt.includes('não regular') || txt.includes('nao regular')) {
+    situacao = 'IRREGULAR';
+  }
   return {
     disponivel: true,
-    situacao: regular ? 'REGULAR' : (tipo ? 'IRREGULAR' : 'INDETERMINADO'),
-    descricao: tipo,
-    emitida_em: d.data_emissao || d.emissao || '',
-    valida_ate: d.data_validade || d.validade || '',
-    link_pdf: d.link_pdf || d.url_pdf || d.site_receipt || '',
+    situacao,
+    descricao: d.crf || d.situacao || '',
+    emitida_em: d.validade_inicio_data || '',
+    valida_ate: d.validade_fim_data || '',
+    link_pdf: d.site_receipt || '',
     fonte,
     consultado_em: new Date().toISOString()
   };
