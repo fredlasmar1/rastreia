@@ -324,6 +324,13 @@ function diasDesde(dataStr) {
 
 function calcularScore(tipo, dados) {
   if (!dados) dados = {};
+
+  // Due Diligence Empresarial usa motor próprio (mais agressivo).
+  if (tipo === 'due_diligence') {
+    const { calcularScoreDDEmpresarial } = require('./score_dd_empresarial');
+    return calcularScoreDDEmpresarial(dados);
+  }
+
   const alertas = [];
   const contribuicoes = []; // dimensão, delta, motivo - para transparência
 
@@ -605,14 +612,15 @@ function gerarChecklist(tipo, dadosAutomaticos) {
       { item: 'Verificar Serasa PJ manualmente', link: 'https://www.serasaexperian.com.br', obrigatorio: false },
     ],
     due_diligence: [
-      { item: 'Emitir CND Federal', link: 'https://solucoes.receita.fazenda.gov.br/servicos/certidaointernet/pj/emitir', obrigatorio: true },
-      { item: cndEstadualLabel, link: sefazUrl, obrigatorio: true },
-      { item: cndMuniLabel, link: '', obrigatorio: true },
-      { item: 'Emitir CND Trabalhista (TST)', link: 'https://www.tst.jus.br/certidao', obrigatorio: true },
-      { item: 'Verificar FGTS (Caixa Econômica)', link: 'https://www.caixa.gov.br', obrigatorio: true },
-      { item: 'Pesquisar marcas e patentes (INPI)', link: 'https://busca.inpi.gov.br', obrigatorio: false },
-      { item: 'Verificar contratos públicos (Portal da Transparência)', link: 'https://portaldatransparencia.gov.br', obrigatorio: false },
-      { item: 'Confirmar Dossiê PF de cada sócio individualmente', link: '', obrigatorio: true },
+      // Itens automatizados (CND Federal, Estadual, Municipal, TST, FGTS, INPI,
+      // Transparência, Dossiê dos sócios) saíram do checklist — agora são
+      // consultados em tempo real pelo orquestrador. Mantemos só verificações
+      // que ainda exigem ação humana ou documentos privados.
+      { item: municipio ? `Solicitar matrícula imobiliária dos imóveis registrados no Cartório de Registro de Imóveis de ${municipio}` : 'Solicitar matrícula imobiliária dos imóveis no Cartório de Registro de Imóveis', link: 'https://www.registrodeimoveis.org.br', obrigatorio: true },
+      { item: 'Solicitar contratos privados relevantes (locação, fornecimento, financiamentos) — análise documental', link: '', obrigatorio: true },
+      { item: 'Pesquisar marcas/patentes adicionais e processos administrativos no INPI', link: 'https://busca.inpi.gov.br', obrigatorio: false },
+      { item: 'Auditoria contábil/financeira por contador independente (balanços últimos 3 exercícios)', link: '', obrigatorio: false },
+      { item: 'Conferir alvará de funcionamento e licenças setoriais junto à prefeitura', link: '', obrigatorio: true },
     ],
     analise_devedor: [
       { item: 'Verificar Serasa Score do devedor', link: 'https://www.serasaexperian.com.br', obrigatorio: false },
