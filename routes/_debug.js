@@ -55,4 +55,24 @@ router.get('/mp-preference', autenticar, admin, async (req, res) => {
   }
 });
 
+// Lista os meios de pagamento disponíveis para a conta dona do ACCESS_TOKEN.
+// Se PIX não aparecer aqui, significa que a conta MP não tem PIX habilitado para
+// recebimento (mesmo que tenha chave PIX para uso pessoal).
+router.get('/mp-payment-methods', autenticar, admin, async (req, res) => {
+  const token = process.env.MERCADOPAGO_ACCESS_TOKEN || process.env.MP_ACCESS_TOKEN;
+  if (!token) return res.status(500).json({ erro: 'MERCADOPAGO_ACCESS_TOKEN não configurado' });
+  try {
+    const r = await axios.get('https://api.mercadopago.com/v1/payment_methods', {
+      headers: { Authorization: `Bearer ${token.trim()}` },
+      timeout: 15000
+    });
+    const todos = r.data || [];
+    const pix = todos.filter(m => (m.id||'').toLowerCase().includes('pix') || (m.payment_type_id||'').toLowerCase().includes('bank_transfer'));
+    const resumo = todos.map(m => ({ id: m.id, name: m.name, payment_type_id: m.payment_type_id, status: m.status }));
+    res.json({ ok: true, total: todos.length, pix_disponivel: pix.length > 0, pix, resumo });
+  } catch (e) {
+    res.json({ ok: false, status: e.response?.status, data: e.response?.data, erro: e.message });
+  }
+});
+
 module.exports = router;
