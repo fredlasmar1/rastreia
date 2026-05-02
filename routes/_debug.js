@@ -26,4 +26,33 @@ router.get('/infosimples', autenticar, admin, async (req, res) => {
   }
 });
 
+// Inspeciona uma preferência MP para verificar quais métodos de pagamento o MP
+// está oferecendo (PIX, cartão, etc). Use após criar um pedido para validar o fix.
+router.get('/mp-preference', autenticar, admin, async (req, res) => {
+  const { id } = req.query;
+  if (!id) return res.status(400).json({ erro: 'id da preferência é obrigatório' });
+  const token = process.env.MERCADOPAGO_ACCESS_TOKEN || process.env.MP_ACCESS_TOKEN;
+  if (!token) return res.status(500).json({ erro: 'MERCADOPAGO_ACCESS_TOKEN não configurado' });
+  try {
+    const r = await axios.get(`https://api.mercadopago.com/checkout/preferences/${id}`, {
+      headers: { Authorization: `Bearer ${token.trim()}` },
+      timeout: 15000
+    });
+    // resumo focado em métodos de pagamento
+    const data = r.data || {};
+    res.json({
+      ok: true,
+      id: data.id,
+      init_point: data.init_point,
+      payment_methods: data.payment_methods,
+      date_of_expiration: data.date_of_expiration,
+      payer: data.payer,
+      items: data.items,
+      raw: data
+    });
+  } catch (e) {
+    res.json({ ok: false, status: e.response?.status, data: e.response?.data, erro: e.message });
+  }
+});
+
 module.exports = router;
