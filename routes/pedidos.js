@@ -716,14 +716,15 @@ router.post('/:id/concluir', autenticar, async (req, res) => {
     let pedido = pResult.rows[0];
     let dadosResult = await pool.query('SELECT * FROM dados_consulta WHERE pedido_id = $1', [pedido.id]);
 
-    // BUG #1 — fix: para Due Diligence Imobiliária, garantir que as consultas
-    // externas (Receita Federal, Escavador, DirectData, etc.) tenham terminado
-    // ANTES de gerar o PDF. Caso contrário o relatório saía com "INDISPONÍVEL"
-    // mesmo com APIs configuradas (ver pedido c52eb88d-309f-4765-8ddf-ecbb639342aa
-    // onde o PDF foi gerado 15s antes do log de consultas concluídas).
-    // Se não há linhas em dados_consulta, executamos as consultas inline e
-    // recarregamos antes de chamar gerarDossie.
-    if (pedido.tipo === 'due_diligence_imobiliaria' && dadosResult.rows.length === 0) {
+    // Rede de segurança (todos os tipos): se as consultas externas (Receita
+    // Federal, Escavador, DirectData, etc.) ainda não rodaram, dados_consulta
+    // fica vazio e o PDF sairia "INDISPONÍVEL" sem erro algum — foi o que
+    // ocorreu no pedido 4534fee2 (#74, dossie_pf), gerado direto do "Iniciar
+    // Análise" sem passar pelo "Executar Consultas".
+    // Antes esta proteção valia só para due_diligence_imobiliaria; agora cobre
+    // qualquer produto. Se não há linhas em dados_consulta, executamos as
+    // consultas inline e recarregamos antes de chamar gerarDossie.
+    if (dadosResult.rows.length === 0) {
       console.log(`[concluir] pedido ${pedido.id}: dados_consulta vazio — executando consultas inline antes do PDF`);
       const consultaOut = await executarConsultasParaPedido(pedido.id, req.usuario.id);
       if (consultaOut.erro) {
