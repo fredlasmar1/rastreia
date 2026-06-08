@@ -20,6 +20,20 @@ const axios = require('axios');
 
 const BASE = process.env.CREDIFY_BASE_URL || 'https://api.credify.com.br';
 
+// IdConsulta é um número FIXO por endpoint (catálogo Credify), NÃO um valor livre.
+// Confirmados ao vivo (conta 44583, HTTP 200): veicular=369, gravame=533,
+// renainf=536, indiciosinistro=450. Os 3 sem número público ficam via env até
+// a Credify informar; sem o número, a função retorna "não configurada".
+const ID_CONSULTA = {
+  '/veicularbnacionalonline': process.env.CREDIFY_ID_VEICULAR || '369',
+  '/gravame': process.env.CREDIFY_ID_GRAVAME || '533',
+  '/renainf': process.env.CREDIFY_ID_RENAINF || '536',
+  '/indiciosinistro': process.env.CREDIFY_ID_SINISTRO || '450',
+  '/renajud': process.env.CREDIFY_ID_RENAJUD || null,
+  '/historicoproprietario': process.env.CREDIFY_ID_HISTORICO || null,
+  '/veiculototal': process.env.CREDIFY_ID_VEICULOTOTAL || null
+};
+
 let _tokenCache = { token: null, expiraEm: 0 };
 
 function normalizarPlaca(placa) {
@@ -54,9 +68,10 @@ async function obterToken() {
     timeout: 30000
   });
 
-  const sucesso = resp.data?.Success === true || resp.data?.success === true;
+  // A API retorna o campo de status com typo ("Sucess", sem o 2º "s"), então
+  // NÃO dá pra confiar nele. O sinal real de sucesso é o token vir preenchido.
   const token = resp.data?.Dados || resp.data?.dados || resp.data?.token || resp.data?.Token;
-  if (!sucesso || !token) {
+  if (!token) {
     const msg = resp.data?.Message || resp.data?.message || 'Autenticação Credify falhou';
     const e = new Error(msg);
     e.codigo = 'auth_falhou';
@@ -82,6 +97,16 @@ async function chamar(endpoint, body, fonte) {
     };
   }
 
+  const idConsulta = ID_CONSULTA[endpoint];
+  if (!idConsulta) {
+    return {
+      erro: 'Consulta Credify não configurada',
+      detalhes: `Falta o IdConsulta do endpoint ${endpoint} — configure a variável de ambiente correspondente.`,
+      fonte,
+      disponivel: false
+    };
+  }
+
   let token;
   try {
     token = await obterToken();
@@ -90,13 +115,16 @@ async function chamar(endpoint, body, fonte) {
   }
 
   try {
-    const resp = await axios.post(`${BASE}${endpoint}`, body, {
+    // A Credify exige o corpo aninhado em "Consulta" + o IdConsulta correto do
+    // endpoint (o valor do call site é sobrescrito pelo número do catálogo).
+    const payload = { Consulta: { ...body, IdConsulta: String(idConsulta) } };
+    const resp = await axios.post(`${BASE}${endpoint}`, payload, {
       headers: {
         accept: 'application/json',
         'content-type': 'application/json',
         Authorization: `Bearer ${token}`
       },
-      timeout: 45000
+      timeout: 60000
     });
     return resp.data || {};
   } catch (e) {
@@ -361,7 +389,7 @@ async function consultarHistoricoProprietarios(placa) {
 // ─────────────────────────────────────────────
 async function consultarIndicioSinistro(placa) {
   const placaLimpa = normalizarPlaca(placa);
-  const data = await chamar('/indiciosinistroveicular', {
+  const data = await chamar('/indiciosinistro', {
     IdConsulta: novoIdConsulta(),
     Placa: placaLimpa
   }, 'Credify IndicioSinistroVeicular');
