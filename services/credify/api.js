@@ -186,7 +186,9 @@ async function consultarVeicularBNacionalOnLine(placa) {
   if (data.erro) return data;
 
   const status = statusResposta(data);
-  const v = extrairBloco(data, 'VEICULARBNACIONALONLINE', 'VEICULAR') || {};
+  const bloco = extrairBloco(data, 'VEICULARBNACIONALONLINE', 'VEICULAR') || {};
+  // A Credify embrulha os campos em REGISTRO_1 — desembrulhar antes de ler.
+  const v = bloco.REGISTRO_1 || bloco.registro_1 || bloco;
 
   if (!status.ok && !v.PLACA && !v.placa) {
     return {
@@ -197,24 +199,34 @@ async function consultarVeicularBNacionalOnLine(placa) {
     };
   }
 
+  const t = (x) => String(x || '').trim();
+  // Restrições (RESTRICAO1..4) — ignora vazias e "SEM RESTRICAO".
+  const restricoes = [v.RESTRICAO1, v.RESTRICAO2, v.RESTRICAO3, v.RESTRICAO4]
+    .map(t).filter(r => r && !/^SEM RESTRICAO$/i.test(r));
+
+  const marca = t(v.MARCA || v.marca);
+  const modelo = t(v.MODELO || v.modelo);
   return {
     disponivel: true,
-    placa: v.PLACA || v.placa || placaLimpa,
-    marca: v.MARCA || v.marca || '',
-    modelo: v.MODELO || v.modelo || '',
-    marca_modelo: [(v.MARCA || v.marca || ''), (v.MODELO || v.modelo || '')].filter(Boolean).join(' '),
-    ano_fabricacao: v.ANO_FABRICACAO || v.anoFabricacao || '',
-    ano_modelo: v.ANO_MODELO || v.anoModelo || '',
-    cor: v.COR || v.cor || '',
-    combustivel: v.COMBUSTIVEL || v.combustivel || '',
-    chassi: v.CHASSI || v.chassi || '',
-    renavam: v.RENAVAM || v.renavam || '',
-    municipio: v.MUNICIPIO || v.municipio || '',
-    uf: v.UF || v.uf || '',
-    tipo_veiculo: v.TIPO || v.tipo || '',
-    categoria: v.CATEGORIA || v.categoria || '',
-    especie: v.ESPECIE || v.especie || '',
-    situacao: v.SITUACAO || v.situacao || '',
+    placa: t(v.PLACA || v.placa) || placaLimpa,
+    marca,
+    modelo,
+    marca_modelo: t(v.MARCAMODELO || v.MARCA_MODELO) || [marca, modelo].filter(Boolean).join('/'),
+    ano_fabricacao: t(v.ANO_FABRICACAO || v.anoFabricacao),
+    ano_modelo: t(v.ANO_MODELO || v.anoModelo),
+    cor: t(v.COR || v.cor),
+    combustivel: t(v.COMBUSTIVEL || v.combustivel),
+    chassi: t(v.CHASSI || v.chassi),
+    renavam: t(v.RENAVAM || v.renavam),
+    municipio: t(v.MUNICIPIO || v.municipio),
+    uf: t(v.UF || v.uf),
+    tipo_veiculo: t(v.TIPO_VEICULO || v.TIPO || v.tipo),
+    categoria: t(v.CATEGORIA || v.categoria),
+    especie: t(v.ESPECIE_VEICULO || v.ESPECIE || v.especie),
+    situacao: t(v.SITUACAO_VEICULO || v.SITUACAO || v.situacao),
+    procedencia: t(v.PROCEDENCIA_VEICULO || v.PROCEDENCIA),
+    tem_restricao: restricoes.length > 0,
+    restricoes,
     raw: v,
     fonte: 'Credify VeicularBNacionalOnLine',
     consultado_em: new Date().toISOString()
