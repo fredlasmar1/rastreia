@@ -24,9 +24,33 @@ const {
   secaoVinculosSocietarios, secaoChecklist, secaoParecerAnalista
 } = require('./sections');
 
+// ─── Coleta unificada do patrimônio ───────────────────────────────
+// Centraliza a leitura para que TODAS as seções (imóveis, veículos,
+// estratégia, conclusão) enxerguem as mesmas listas, independentemente
+// da fonte/forma. Evita que a estratégia conclua "inviável" enquanto a
+// tabela de veículos mostra carros (bug de chave divergente).
+function coletarPatrimonio(dados) {
+  const fonteImoveis = dados.imoveis || {};
+  const imoveis = (Array.isArray(fonteImoveis.itens) && fonteImoveis.itens)
+    || (Array.isArray(fonteImoveis.imoveis) && fonteImoveis.imoveis)
+    || [];
+
+  let veiculos = [];
+  for (const f of [dados.historico_veiculos_proprietario, dados.veiculos, dados.veiculos_pj]) {
+    if (f && Array.isArray(f.veiculos) && f.veiculos.length) { veiculos = f.veiculos; break; }
+  }
+
+  const empresas = dados.vinculos?.empresas || [];
+  return { imoveis, veiculos, empresas };
+}
+
 // ─── Imóveis ──────────────────────────────────────────────────────
 function secaoImoveis(doc, y, dados) {
-  const imoveis = dados.imoveis?.itens || [];
+  // Aceita tanto a forma interna { itens } quanto a do ONR RI Digital { imoveis }.
+  const fonteImoveis = dados.imoveis || {};
+  const imoveis = (Array.isArray(fonteImoveis.itens) && fonteImoveis.itens)
+    || (Array.isArray(fonteImoveis.imoveis) && fonteImoveis.imoveis)
+    || [];
   y = secao(doc, 'IMÓVEIS E BENS RAÍZES', y);
 
   if (!imoveis.length) {
@@ -48,8 +72,15 @@ function secaoImoveis(doc, y, dados) {
       valorTotal += Number(im.valor_estimado) || 0;
       doc.fillColor(COR.verde).fontSize(8).font('Helvetica-Bold').text(formatarBRL(im.valor_estimado), MARGEM + LARGURA - 110, y + 4, { width: 100, align: 'right' });
     }
-    if (im.em_nome_de) {
-      doc.fillColor(COR.cinza).fontSize(6.5).font('Helvetica-Oblique').text(`Em nome de: ${im.em_nome_de}`, MARGEM + 8, y + 22);
+    const emNomeDe = im.em_nome_de
+      || (Array.isArray(im.proprietarios) && im.proprietarios.length
+            ? im.proprietarios.map(p => typeof p === 'string' ? p : (p.nome || '')).filter(Boolean).join(', ')
+            : '');
+    const onus = Array.isArray(im.onus) ? im.onus.filter(Boolean) : [];
+    let rodape = emNomeDe ? `Em nome de: ${emNomeDe}` : '';
+    if (onus.length) rodape += `${rodape ? '  |  ' : ''}Ônus: ${onus.join(', ')}`;
+    if (rodape) {
+      doc.fillColor(onus.length ? COR.vermelho : COR.cinza).fontSize(6.5).font('Helvetica-Oblique').text(truncar(rodape, 130), MARGEM + 8, y + 22, { width: LARGURA - 16, lineBreak: false });
     }
     y += 32;
   });
@@ -63,43 +94,98 @@ function secaoImoveis(doc, y, dados) {
 
 // ─── Veículos (do investigado + empresas vinculadas) ───────────────
 function secaoVeiculos(doc, y, dados) {
-  const hv = dados.historico_veiculos_proprietario || {};
-  const veiculos = Array.isArray(hv.veiculos) ? hv.veiculos : [];
+  // O patrimônio veicular pode vir de fontes diferentes conforme o fluxo:
+  //  - historico_veiculos_proprietario: fluxo de consulta veicular por placa (DirectData)
+  //  - veiculos: Investigação Patrimonial chama consultarVeiculos (DETRAN-GO/Infosimples)
+  //  - veiculos_pj: patrimônio veicular de PJ (Due Diligence)
+  // Cada fonte tem campos próprios; normalizamos abaixo para uma linha única.
+  const fontes = [
+    dados.historico_veiculos_proprietario,
+    dados.veiculos,
+    dados.veiculos_pj
+  ].filter(Boolean);
+
+  let veiculos = [];
+  let fonteNome = '';
+  let notaIndisponivel = '';
+  for (const f of fontes) {
+    const arr = Array.isArray(f.veiculos) ? f.veiculos : [];
+    if (arr.length) { veiculos = arr; fonteNome = f.fonte || ''; break; }
+    if (!notaIndisponivel && f.disponivel === false) {
+      notaIndisponivel = f.nota || f.detalhes || f.erro || '';
+    }
+  }
+
+  // Normaliza cada veículo para um shape comum (campos variam entre as fontes).
+  const norm = veiculos.map(v => {
+    const descricao = v.veiculo
+      || [v.marca, v.modelo].filter(Boolean).join(' ')
+      || '-';
+    const ano = v.ano || v.ano_modelo || v.anoModelo || '';
+    return {
+      placa: v.placa || '-',
+      descricao: ano && !String(descricao).includes(String(ano)) ? `${descricao} ${ano}` : descricao,
+      renavam: v.renavam || '-',
+      chassi: v.chassi || '-',
+      situacao: v.situacao || v.situacaoVeiculo || '-',
+      restricoes: Array.isArray(v.restricoes) ? v.restricoes.filter(Boolean) : []
+    };
+  });
+
   y = secao(doc, 'VEÍCULOS', y);
 
-  if (!veiculos.length) {
+  if (!norm.length) {
     return boxEmIntegracao(doc, y,
-      'CONSULTA VEICULAR POR CPF/CNPJ — Em integração',
-      'Listagem completa de veículos por documento será disponibilizada via Credify (/veiculodocumento, /veiculodocumentofrota) no próximo release. Parcial via DirectData HistoricoVeiculos sem retorno para este alvo.'
+      notaIndisponivel ? 'CONSULTA VEICULAR — sem retorno para este alvo' : 'CONSULTA VEICULAR POR CPF/CNPJ — Em integração',
+      notaIndisponivel
+        ? `${notaIndisponivel} Para consulta imediata: DETRAN do estado do alvo ou Credify /veiculodocumento.`
+        : 'Listagem de veículos por documento via DETRAN-GO (Infosimples) / Credify. Nenhum veículo retornado para este alvo, ou fonte não configurada.'
     );
   }
 
-  doc.fillColor('#111827').fontSize(9).font('Helvetica-Bold').text(`${veiculos.length} veículo(s) identificado(s)`, MARGEM, y); y += 14;
+  doc.fillColor('#111827').fontSize(9).font('Helvetica-Bold').text(`${norm.length} veículo(s) identificado(s)`, MARGEM, y);
+  if (fonteNome) doc.fillColor(COR.cinza).fontSize(7).font('Helvetica-Oblique').text(`Fonte: ${fonteNome}`, MARGEM + LARGURA - 200, y + 2, { width: 200, align: 'right' });
+  y += 14;
 
   y = verificarPagina(doc, y, 18);
   doc.rect(MARGEM, y, LARGURA, 14).fill(COR.azul);
   doc.fillColor('#ffffff').fontSize(7.5).font('Helvetica-Bold');
-  doc.text('PLACA', MARGEM + 6, y + 4, { width: 58, lineBreak: false });
-  doc.text('VEÍCULO', MARGEM + 68, y + 4, { width: 248, lineBreak: false });
-  doc.text('RENAVAM', MARGEM + 320, y + 4, { width: 76, lineBreak: false });
-  doc.text('CHASSI', MARGEM + 400, y + 4, { width: 86, lineBreak: false });
-  doc.text('AQUIS.', MARGEM + 490, y + 4, { width: 55, lineBreak: false });
+  doc.text('PLACA', MARGEM + 6, y + 4, { width: 52, lineBreak: false });
+  doc.text('VEÍCULO', MARGEM + 60, y + 4, { width: 184, lineBreak: false });
+  doc.text('RENAVAM', MARGEM + 248, y + 4, { width: 68, lineBreak: false });
+  doc.text('CHASSI', MARGEM + 320, y + 4, { width: 94, lineBreak: false });
+  doc.text('SITUAÇÃO', MARGEM + 418, y + 4, { width: 72, lineBreak: false });
   y += 14;
 
-  veiculos.slice(0, 20).forEach((v, i) => {
+  let comRestricao = [];
+  norm.slice(0, 20).forEach((v, i) => {
     y = verificarPagina(doc, y, 14);
     doc.rect(MARGEM, y, LARGURA, 13).fill(i % 2 === 0 ? '#ffffff' : '#f9fafb');
-    doc.fillColor('#111827').fontSize(7.5).font('Helvetica-Bold').text(v.placa || '-', MARGEM + 6, y + 3, { width: 58, lineBreak: false });
-    doc.font('Helvetica').text(truncar(v.veiculo || [v.marca, v.modelo].filter(Boolean).join(' ') || '-', 46), MARGEM + 68, y + 3, { width: 248, lineBreak: false });
-    doc.text(v.renavam || '-', MARGEM + 320, y + 3, { width: 76, lineBreak: false });
-    doc.text(truncar(v.chassi || '-', 16), MARGEM + 400, y + 3, { width: 86, lineBreak: false });
-    doc.text(v.data_aquisicao || '-', MARGEM + 490, y + 3, { width: 55, lineBreak: false });
+    doc.fillColor('#111827').fontSize(7.5).font('Helvetica-Bold').text(v.placa, MARGEM + 6, y + 3, { width: 52, lineBreak: false });
+    doc.font('Helvetica').text(truncar(v.descricao, 34), MARGEM + 60, y + 3, { width: 184, lineBreak: false });
+    doc.text(v.renavam, MARGEM + 248, y + 3, { width: 68, lineBreak: false });
+    doc.text(truncar(v.chassi, 18), MARGEM + 320, y + 3, { width: 94, lineBreak: false });
+    const corSit = v.restricoes.length ? COR.vermelho : '#111827';
+    doc.fillColor(corSit).text(truncar(v.restricoes.length ? 'C/ RESTRIÇÃO' : v.situacao, 14), MARGEM + 418, y + 3, { width: 72, lineBreak: false });
+    if (v.restricoes.length) comRestricao.push(`${v.placa}: ${v.restricoes.join(', ')}`);
     y += 13;
   });
-  if (veiculos.length > 20) {
+  if (norm.length > 20) {
     y = verificarPagina(doc, y, 12);
-    doc.fillColor(COR.cinza).fontSize(7).font('Helvetica-Oblique').text(`+${veiculos.length - 20} veículo(s) não exibido(s)`, MARGEM + 6, y);
+    doc.fillColor(COR.cinza).fontSize(7).font('Helvetica-Oblique').text(`+${norm.length - 20} veículo(s) não exibido(s) nesta tabela`, MARGEM + 6, y);
     y += 10;
+  }
+
+  // Restrições são o sinal patrimonial mais relevante (RENAJUD = penhorável/bloqueado).
+  if (comRestricao.length) {
+    y += 4;
+    y = verificarPagina(doc, y, 14 + comRestricao.length * 10);
+    doc.fillColor(COR.vermelho).fontSize(8).font('Helvetica-Bold').text('VEÍCULOS COM RESTRIÇÃO', MARGEM, y); y += 11;
+    comRestricao.slice(0, 10).forEach(r => {
+      y = verificarPagina(doc, y, 10);
+      doc.fillColor('#111827').fontSize(7).font('Helvetica').text(`- ${r}`, MARGEM + 6, y, { width: LARGURA - 12 });
+      y += 9;
+    });
   }
   return y + 6;
 }
@@ -168,9 +254,7 @@ function secaoInterpostas(doc, y, dados) {
 function secaoEstrategiaExecucao(doc, y, dados) {
   y = secao(doc, 'ESTRATÉGIA DE EXECUÇÃO', y);
 
-  const imoveis = dados.imoveis?.itens || [];
-  const veiculos = dados.historico_veiculos_proprietario?.veiculos || [];
-  const empresas = dados.vinculos?.empresas || [];
+  const { imoveis, veiculos, empresas } = coletarPatrimonio(dados);
   const valorImoveis = imoveis.reduce((acc, im) => acc + (Number(im.valor_estimado) || 0), 0);
   const valorTotalLocalizado = valorImoveis;
 
@@ -208,9 +292,10 @@ function secaoEstrategiaExecucao(doc, y, dados) {
 
 // ─── Conclusão (viabilidade) ───────────────────────────────────────
 function secaoConclusao(doc, y, dados) {
-  const imoveis = (dados.imoveis?.itens || []).length;
-  const veiculos = (dados.historico_veiculos_proprietario?.veiculos || []).length;
-  const empresas = (dados.vinculos?.empresas || []).length;
+  const pat = coletarPatrimonio(dados);
+  const imoveis = pat.imoveis.length;
+  const veiculos = pat.veiculos.length;
+  const empresas = pat.empresas.length;
 
   y = secao(doc, 'CONCLUSÃO', y);
 
