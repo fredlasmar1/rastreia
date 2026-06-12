@@ -2126,12 +2126,17 @@ async function executarConsultasParaAlvo(alvo, { precisaVinculos, precisaVeiculo
 
   if (precisaVinculos) promises.push(consultarVinculos(documento));
   if (precisaVeiculos) promises.push(consultarVeiculos(documento));
+  // DETRAN-GO (consultarVeiculos) só cobre Goiás. HistoricoVeiculos (DirectData)
+  // é nacional e devolve placa/renavam/chassi/data_aquisicao — fonte primária do
+  // patrimônio veicular por documento, independente do estado de registro.
+  if (precisaVeiculos) promises.push(consultarHistoricoVeiculos(documento));
 
   const resultados = await Promise.all(promises);
   const [processos, transparencia, score_credito, negativacoes, perfil_economico] = resultados;
   let i = 5;
   const vinculos = precisaVinculos ? resultados[i++] : null;
   const veiculos = precisaVeiculos ? resultados[i++] : null;
+  const historico_veiculos = precisaVeiculos ? resultados[i++] : null;
 
   // ─── DUE DILIGENCE EMPRESARIAL — fontes adicionais ─────────────────
   // CND Federal/Estadual/Municipal/TST/FGTS, INPI, Portal Transparência e
@@ -2190,6 +2195,7 @@ async function executarConsultasParaAlvo(alvo, { precisaVinculos, precisaVeiculo
     ...(perfil_economico ? { perfil_economico } : {}),
     ...(vinculos?.total ? { vinculos } : {}),
     ...(veiculos ? { veiculos } : {}),
+    ...(historico_veiculos ? { historico_veiculos_proprietario: historico_veiculos } : {}),
     ...(pgfn ? { pgfn } : {}),
     ...(debitos_estaduais ? { debitos_estaduais } : {}),
     ...(cnd_municipal ? { cnd_municipal } : {}),
