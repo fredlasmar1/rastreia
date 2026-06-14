@@ -270,6 +270,71 @@ function secaoInterpostas(doc, y, dados) {
   return y + 4;
 }
 
+// ─── Pistas para investigação manual ───────────────────────────────
+// Leads acionáveis derivados das fontes já consultadas: comarcas (dos
+// endereços) onde puxar certidão de imóveis, empresas do alvo cujo CNPJ
+// pode deter bens, e checklist de fontes manuais/gratuitas.
+function secaoPistasInvestigacao(doc, y, dados) {
+  const enderecos = dados.receita_federal?.enderecos || [];
+  const empresas = dados.vinculos?.empresas || [];
+  const ruralNota = dados.imoveis_rurais && dados.imoveis_rurais.disponivel === false
+    ? dados.imoveis_rurais.nota : '';
+
+  // Comarcas únicas a partir dos endereços do alvo.
+  const comarcas = [];
+  const vistos = new Set();
+  enderecos.forEach(e => {
+    const cidade = String(e.cidade || '').trim();
+    const uf = String(e.uf || '').trim();
+    if (!cidade) return;
+    const k = `${cidade}/${uf}`.toLowerCase();
+    if (vistos.has(k)) return;
+    vistos.add(k);
+    comarcas.push(`${cidade}${uf ? '/' + uf : ''}`);
+  });
+
+  // Só renderiza se houver pelo menos um lead concreto.
+  if (!comarcas.length && !empresas.length) return y;
+
+  y = secao(doc, 'PISTAS PARA INVESTIGAÇÃO PATRIMONIAL', y);
+  doc.fillColor(COR.cinza).fontSize(7).font('Helvetica')
+    .text('Leads acionáveis para diligência manual em cartórios e órgãos, derivados das fontes consultadas.', MARGEM, y, { width: LARGURA });
+  y += 16;
+
+  if (comarcas.length) {
+    doc.fillColor(COR.azul).fontSize(9).font('Helvetica-Bold').text('COMARCAS PARA PESQUISA DE IMÓVEIS', MARGEM, y); y += 12;
+    const txt = `Solicitar certidão / pesquisa de bens nos Cartórios de Registro de Imóveis de: ${comarcas.join('  ·  ')}.`;
+    y = verificarPagina(doc, y, 24);
+    doc.fillColor('#111827').fontSize(7).font('Helvetica').text(txt, MARGEM + 6, y, { width: LARGURA - 12 });
+    y += doc.heightOfString(txt, { width: LARGURA - 12 }) + 8;
+  }
+
+  if (empresas.length) {
+    doc.fillColor(COR.azul).fontSize(9).font('Helvetica-Bold').text('BENS A VERIFICAR NAS EMPRESAS DO ALVO', MARGEM, y); y += 12;
+    doc.fillColor('#111827').fontSize(7).font('Helvetica').text('Imóveis e veículos costumam estar no CNPJ — verificar o patrimônio de:', MARGEM + 6, y); y += 10;
+    empresas.slice(0, 10).forEach(emp => {
+      y = verificarPagina(doc, y, 10);
+      doc.fillColor('#111827').fontSize(7).font('Helvetica').text(`- ${emp.razao_social || 'Empresa'}${emp.cnpj ? ` | ${emp.cnpj}` : ''}`, MARGEM + 10, y, { width: LARGURA - 20 });
+      y += 9;
+    });
+    y += 4;
+  }
+
+  doc.fillColor(COR.azul).fontSize(9).font('Helvetica-Bold').text('FONTES PARA CHECAGEM MANUAL', MARGEM, y); y += 12;
+  const fontes = [
+    'CNIB — indisponibilidade.org.br/certidao (grátis): ordem de indisponibilidade de bens por CPF (indício de imóvel + juízo competente).',
+    ruralNota || 'INCRA/SIGEF: imóveis rurais por CPF (requer login gov.br).',
+    'ONR — Pesquisa Qualificada: imóveis urbanos por CPF (requer credenciamento direto no ONR).',
+    'RENAJUD / DETRAN do estado do alvo: veículos e restrições.'
+  ];
+  fontes.forEach(f => {
+    y = verificarPagina(doc, y, 12);
+    doc.fillColor('#111827').fontSize(7).font('Helvetica').text(`- ${f}`, MARGEM + 6, y, { width: LARGURA - 12 });
+    y += doc.heightOfString(f, { width: LARGURA - 12 }) + 3;
+  });
+  return y + 6;
+}
+
 // ─── Estratégia de execução com ordem de penhora ───────────────────
 function secaoEstrategiaExecucao(doc, y, dados) {
   y = secao(doc, 'ESTRATÉGIA DE EXECUÇÃO', y);
@@ -370,6 +435,9 @@ function render(doc, pedido, dados, score, checklist, produto) {
   y = secaoVeiculos(doc, y, dados);
   y = secaoVinculosSocietarios(doc, y, dados);
   y = secaoInterpostas(doc, y, dados);
+
+  // Pistas acionáveis para diligência manual (comarcas, empresas, fontes)
+  y = secaoPistasInvestigacao(doc, y, dados);
 
   // Processos como réu (execuções em curso)
   y = secaoProcessos(doc, y, dados, pedido);

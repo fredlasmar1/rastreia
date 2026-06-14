@@ -1184,6 +1184,51 @@ async function consultarVeiculos(cpf) {
 }
 
 // =============================================
+// INCRA/SIGEF — IMÓVEIS RURAIS POR CPF/CNPJ (InfoSimples)
+// Descoberta real de terra rural por DONO. Requer credencial gov.br/SIGEF
+// (SIGEF_LOGIN_CPF + SIGEF_LOGIN_SENHA). Sem ela, retorna indisponível sem
+// quebrar — a nota é usada pela seção de Pistas do relatório.
+// =============================================
+async function consultarImoveisRuraisSIGEF(documento) {
+  const INFO_TOKEN = process.env.INFOSIMPLES_TOKEN;
+  if (!INFO_TOKEN) {
+    return { disponivel: false, nota: 'InfoSimples não configurado.', fonte: 'INCRA/SIGEF' };
+  }
+  const loginCpf = process.env.SIGEF_LOGIN_CPF;
+  const loginSenha = process.env.SIGEF_LOGIN_SENHA;
+  if (!loginCpf || !loginSenha) {
+    return {
+      disponivel: false,
+      nota: 'Imóveis rurais por CPF (INCRA/SIGEF) exigem credencial gov.br — configurar SIGEF_LOGIN_CPF e SIGEF_LOGIN_SENHA.',
+      fonte: 'INCRA/SIGEF'
+    };
+  }
+  const doc = limparDoc(documento);
+  if (doc.length !== 11 && doc.length !== 14) {
+    return { disponivel: false, erro: 'Documento inválido', fonte: 'INCRA/SIGEF' };
+  }
+  try {
+    const body = { token: INFO_TOKEN, timeout: 600, login_cpf: loginCpf, login_senha: loginSenha };
+    if (doc.length === 11) body.cpf = doc; else body.cnpj = doc;
+    const res = await axios.post('https://api.infosimples.com/api/v2/consultas/incra/sigef/parcelas', body, { timeout: 90000 });
+    const data = res.data?.data?.[0] || {};
+    const resultados = Array.isArray(data.resultados) ? data.resultados : [];
+    const itens = resultados.map(p => ({
+      descricao: `${p.nome || 'Parcela rural'}${p.area_ha ? ` — ${p.area_ha} ha` : ''}`,
+      matricula: p.matricula || '',
+      cartorio: p.cns ? `CNS ${p.cns}` : '',
+      cidade: '', uf: '',
+      tipo: 'Rural (SIGEF)',
+      em_nome_de: p.detentor || '',
+      codigo: p.codigo_parcela || ''
+    }));
+    return { disponivel: true, total: itens.length, itens, fonte: 'INCRA/SIGEF (InfoSimples)', consultado_em: new Date().toISOString() };
+  } catch (e) {
+    return { disponivel: false, erro: 'SIGEF indisponível', detalhes: e.response?.data?.code_message || e.message, fonte: 'INCRA/SIGEF' };
+  }
+}
+
+// =============================================
 // CONSULTA VEICULAR POR PLACA (DirectData)
 // =============================================
 
@@ -2227,6 +2272,9 @@ async function executarConsultasParaAlvo(alvo, { precisaVinculos, precisaVeiculo
   // AML (DirectData): parentescos + sociedades (com co-sócios) — alimenta a
   // análise de interpostas pessoas e supre participações societárias.
   if (precisaVinculos) promises.push(consultarAML(documento));
+  // INCRA/SIGEF: imóveis rurais por CPF (InfoSimples, requer credencial gov.br).
+  // Mesmos produtos que precisaVeiculos (patrimonial + imobiliária).
+  if (precisaVeiculos) promises.push(consultarImoveisRuraisSIGEF(documento));
 
   const resultados = await Promise.all(promises);
   const [processos, transparencia, score_credito, negativacoes, perfil_economico] = resultados;
@@ -2235,6 +2283,7 @@ async function executarConsultasParaAlvo(alvo, { precisaVinculos, precisaVeiculo
   const veiculos = precisaVeiculos ? resultados[i++] : null;
   const historico_veiculos = precisaVeiculos ? resultados[i++] : null;
   const aml = precisaVinculos ? resultados[i++] : null;
+  const imoveis_rurais = precisaVeiculos ? resultados[i++] : null;
 
   // Interpostas a partir do AML + fallback societário: quando o
   // VinculosSocietarios falha (comum), usamos as sociedades do AML.
@@ -2314,6 +2363,10 @@ async function executarConsultasParaAlvo(alvo, { precisaVinculos, precisaVeiculo
     ...(historico_veiculos ? { historico_veiculos_proprietario: historico_veiculos } : {}),
     ...(interpostas ? { interpostas } : {}),
     ...(aml && aml.disponivel !== false ? { aml } : {}),
+    // Imóveis rurais do SIGEF preenchem a seção Imóveis quando há resultados;
+    // a nota (sem credencial/sem dados) fica disponível para a seção de Pistas.
+    ...(imoveis_rurais?.itens?.length ? { imoveis: imoveis_rurais } : {}),
+    ...(imoveis_rurais ? { imoveis_rurais } : {}),
     ...(pgfn ? { pgfn } : {}),
     ...(debitos_estaduais ? { debitos_estaduais } : {}),
     ...(cnd_municipal ? { cnd_municipal } : {}),
@@ -2458,7 +2511,7 @@ module.exports = {
   consultarEscavador, consultarDatajud, consultarTransparencia,
   consultarSerasa, consultarScore, consultarNegativacoes, consultarProtestos,
   consultarPerfilEconomico, consultarVinculos, consultarAML, montarInterpostas, consultarObito,
-  consultarONR, consultarMatricula, consultarVeiculos,
+  consultarONR, consultarMatricula, consultarVeiculos, consultarImoveisRuraisSIGEF,
   consultarVeiculoPorPlaca, consultarProprietariosPlaca, consultarHistoricoVeiculos,
   validarPlaca, normalizarPlaca,
   executarConsultaCompleta,
