@@ -322,7 +322,7 @@ function secaoPistasInvestigacao(doc, y, dados) {
 
   doc.fillColor(COR.azul).fontSize(9).font('Helvetica-Bold').text('FONTES PARA CHECAGEM MANUAL', MARGEM, y); y += 12;
   const fontes = [
-    'CNIB — indisponibilidade.org.br/certidao (grátis): ordem de indisponibilidade de bens por CPF (indício de imóvel + juízo competente).',
+    'CNIB (GRÁTIS, 1 clique) — indisponibilidade.onr.org.br/home/relatoriogratuito: consultar o CPF; se houver ordem de indisponibilidade de bens, o alvo COM CERTEZA possui imóvel (mostra o juízo). Resultado negativo não descarta posse.',
     ruralNota || 'INCRA/SIGEF: imóveis rurais por CPF (requer login gov.br).',
     'ONR — Pesquisa Qualificada: imóveis urbanos por CPF (requer credenciamento direto no ONR).',
     'RENAJUD / DETRAN do estado do alvo: veículos e restrições.'
