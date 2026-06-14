@@ -957,6 +957,100 @@ async function consultarVinculos(documento) {
 }
 
 // ─────────────────────────────────────────────
+// AML — Anti Money Laundering (Direct Data) | /api/AML | R$ 0,72 (PF)
+// Retorna óbito, PEP, parentescos e sociedades (com co-sócios). Base para
+// análise de interpostas pessoas E para descobrir o footprint societário do
+// alvo — mais completo que VinculosSocietarios (que falha onde o AML acerta).
+// ─────────────────────────────────────────────
+async function consultarAML(documento) {
+  if (!process.env.DIRECTD_TOKEN) return { disponivel: false, fonte: 'Direct Data AML' };
+  const doc = limparDoc(documento);
+  if (doc.length !== 11 && doc.length !== 14) {
+    return { disponivel: false, erro: 'Documento inválido', fonte: 'Direct Data AML' };
+  }
+  try {
+    const param = doc.length === 11 ? { Cpf: doc } : { Cnpj: doc };
+    const res = await axios.get('https://apiv3.directd.com.br/api/AML', {
+      params: { ...param, Token: process.env.DIRECTD_TOKEN },
+      timeout: 45000
+    });
+    const meta = res.data?.metaDados || {};
+    const r = res.data?.retorno || {};
+    if (Number(meta.resultadoId) !== 1 || !r || typeof r !== 'object') {
+      return { disponivel: false, erro: meta.mensagem || 'Sem retorno AML', fonte: 'Direct Data AML' };
+    }
+    const parentescos = (Array.isArray(r.parentescos) ? r.parentescos : []).map(p => ({
+      nome: p.nome || '',
+      cpf: limparDoc(p.cpf || p.documento || ''),
+      vinculo: p.vinculo || p.grauParentesco || p.parentesco || p.tipo || ''
+    })).filter(p => p.nome);
+    const sociedades = (Array.isArray(r.sociedades) ? r.sociedades : []).map(s => ({
+      cnpj: s.cnpj || '',
+      razao_social: s.razaoSocial || s.razao_social || '',
+      nome_fantasia: s.nomeFantasia || '',
+      data_abertura: String(s.dataAbertura || '').slice(0, 10),
+      baixada: !!s.baixada,
+      socios: (Array.isArray(s.socios) ? s.socios : []).map(c => ({
+        nome: c.nome || '', cpf: limparDoc(c.cpf || '')
+      })).filter(c => c.nome)
+    }));
+    return {
+      disponivel: true, documento: doc, nome: r.nome || '',
+      pep: !!r.pep, obito: !!r.obito,
+      parentescos, sociedades,
+      fonte: 'Direct Data AML', consultado_em: new Date().toISOString()
+    };
+  } catch (e) {
+    const status = e.response?.status;
+    return { disponivel: false, erro: status ? `HTTP ${status}` : e.message, fonte: 'Direct Data AML' };
+  }
+}
+
+// Sobrenomes "fortes" de um nome (remove o primeiro nome, partículas e
+// sobrenomes ultra-comuns que gerariam falso parentesco).
+const _SOBRENOMES_COMUNS = new Set(['silva','santos','souza','sousa','oliveira','pereira','lima','ferreira','costa','rodrigues','almeida','nascimento','carvalho','gomes','martins','araujo','ribeiro','alves','barbosa','dias']);
+const _PARTICULAS = new Set(['da','de','do','das','dos','e']);
+function _sobrenomesFortes(nome) {
+  return String(nome || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '')
+    .split(/\s+/).slice(1)
+    .filter(t => t.length >= 3 && !_PARTICULAS.has(t) && !_SOBRENOMES_COMUNS.has(t));
+}
+function _compartilhaSobrenome(nomeCo, sobrenomesAlvo) {
+  if (!sobrenomesAlvo.length) return false;
+  return _sobrenomesFortes(nomeCo).some(t => sobrenomesAlvo.includes(t));
+}
+
+// Deriva a análise de interpostas pessoas a partir do AML:
+//  - parentescos diretos;
+//  - empresas onde um co-sócio compartilha sobrenome com o alvo (provável família);
+//  - sócios que se repetem em ≥2 empresas do alvo (rede recorrente).
+function montarInterpostas(aml) {
+  if (!aml || aml.disponivel === false) return null;
+  const sobrenomes = _sobrenomesFortes(aml.nome);
+  const alvoDoc = limparDoc(aml.documento || '');
+  const alvoNome = String(aml.nome || '').trim().toLowerCase();
+  // Identifica o próprio alvo na lista de sócios para NÃO contá-lo como interposta.
+  const ehAlvo = (c) => (c.cpf && alvoDoc && limparDoc(c.cpf) === alvoDoc) || (String(c.nome || '').trim().toLowerCase() === alvoNome);
+  const empresas_familia = [];
+  const contagem = {};
+  (aml.sociedades || []).forEach(s => {
+    (s.socios || []).forEach(c => {
+      if (ehAlvo(c)) return; // pula o próprio investigado
+      const chave = c.cpf || c.nome.toLowerCase();
+      contagem[chave] = contagem[chave] || { socio: c.nome, empresas: 0 };
+      contagem[chave].empresas += 1;
+      if (_compartilhaSobrenome(c.nome, sobrenomes)) {
+        empresas_familia.push({ razao_social: s.razao_social, cnpj: s.cnpj, socio: c.nome, relacao: 'sobrenome em comum' });
+      }
+    });
+  });
+  const socios_comum = Object.values(contagem).filter(x => x.empresas >= 2).map(x => ({ socio: x.socio, empresas: x.empresas }));
+  const parentescos = aml.parentescos || [];
+  if (!parentescos.length && !empresas_familia.length && !socios_comum.length && !aml.pep) return null;
+  return { pep: aml.pep, parentescos, empresas_familia, socios_comum, fonte: aml.fonte };
+}
+
+// ─────────────────────────────────────────────
 // 10. ÓBITO — Direct Data
 // Endpoint: /api/Obito | R$ 0,36
 // ─────────────────────────────────────────────
@@ -2130,6 +2224,9 @@ async function executarConsultasParaAlvo(alvo, { precisaVinculos, precisaVeiculo
   // é nacional e devolve placa/renavam/chassi/data_aquisicao — fonte primária do
   // patrimônio veicular por documento, independente do estado de registro.
   if (precisaVeiculos) promises.push(consultarHistoricoVeiculos(documento));
+  // AML (DirectData): parentescos + sociedades (com co-sócios) — alimenta a
+  // análise de interpostas pessoas e supre participações societárias.
+  if (precisaVinculos) promises.push(consultarAML(documento));
 
   const resultados = await Promise.all(promises);
   const [processos, transparencia, score_credito, negativacoes, perfil_economico] = resultados;
@@ -2137,6 +2234,25 @@ async function executarConsultasParaAlvo(alvo, { precisaVinculos, precisaVeiculo
   const vinculos = precisaVinculos ? resultados[i++] : null;
   const veiculos = precisaVeiculos ? resultados[i++] : null;
   const historico_veiculos = precisaVeiculos ? resultados[i++] : null;
+  const aml = precisaVinculos ? resultados[i++] : null;
+
+  // Interpostas a partir do AML + fallback societário: quando o
+  // VinculosSocietarios falha (comum), usamos as sociedades do AML.
+  const interpostas = montarInterpostas(aml);
+  let vinculosFinal = vinculos;
+  if ((!vinculos || !vinculos.total) && aml?.sociedades?.length) {
+    vinculosFinal = {
+      total: aml.sociedades.length,
+      empresas: aml.sociedades.map(s => ({
+        cnpj: s.cnpj,
+        razao_social: s.razao_social,
+        cargo: 'Sócio',
+        situacao: s.baixada ? 'BAIXADA' : 'ATIVA',
+        data_entrada: s.data_abertura
+      })),
+      fonte: 'Direct Data (AML)'
+    };
+  }
 
   // ─── DUE DILIGENCE EMPRESARIAL — fontes adicionais ─────────────────
   // CND Federal/Estadual/Municipal/TST/FGTS, INPI, Portal Transparência e
@@ -2193,9 +2309,11 @@ async function executarConsultasParaAlvo(alvo, { precisaVinculos, precisaVeiculo
     ...(score_credito?.score ? { score_credito } : {}),
     ...(negativacoes?.status ? { negativacoes } : {}),
     ...(perfil_economico ? { perfil_economico } : {}),
-    ...(vinculos?.total ? { vinculos } : {}),
+    ...(vinculosFinal?.total ? { vinculos: vinculosFinal } : {}),
     ...(veiculos ? { veiculos } : {}),
     ...(historico_veiculos ? { historico_veiculos_proprietario: historico_veiculos } : {}),
+    ...(interpostas ? { interpostas } : {}),
+    ...(aml && aml.disponivel !== false ? { aml } : {}),
     ...(pgfn ? { pgfn } : {}),
     ...(debitos_estaduais ? { debitos_estaduais } : {}),
     ...(cnd_municipal ? { cnd_municipal } : {}),
@@ -2339,7 +2457,7 @@ module.exports = {
   consultarCNPJ, consultarCPF, consultarProcessos,
   consultarEscavador, consultarDatajud, consultarTransparencia,
   consultarSerasa, consultarScore, consultarNegativacoes, consultarProtestos,
-  consultarPerfilEconomico, consultarVinculos, consultarObito,
+  consultarPerfilEconomico, consultarVinculos, consultarAML, montarInterpostas, consultarObito,
   consultarONR, consultarMatricula, consultarVeiculos,
   consultarVeiculoPorPlaca, consultarProprietariosPlaca, consultarHistoricoVeiculos,
   validarPlaca, normalizarPlaca,

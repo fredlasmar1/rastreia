@@ -193,36 +193,56 @@ function secaoVeiculos(doc, y, dados) {
 // ─── Vínculos e interpostas pessoas ────────────────────────────────
 function secaoInterpostas(doc, y, dados) {
   const interpostas = dados.interpostas || {};
-  const parentescos = dados.receita_federal?.parentescos || [];
+  // Parentescos vêm da cadastral (Direct Data) e/ou do AML — unifica e deduplica.
+  const parentescosRaw = [
+    ...(dados.receita_federal?.parentescos || []),
+    ...(interpostas.parentescos || [])
+  ];
+  const vistos = new Set();
+  const parentescos = parentescosRaw.filter(p => {
+    const k = (p.nome || '').trim().toLowerCase();
+    if (!k || vistos.has(k)) return false;
+    vistos.add(k); return true;
+  });
   const empresasFamilia = interpostas.empresas_familia || [];
   const transferenciasRecentes = interpostas.transferencias || [];
   const sociosComum = interpostas.socios_comum || [];
+  const pep = !!interpostas.pep;
 
   y = secao(doc, 'VÍNCULOS E INTERPOSTAS PESSOAS', y);
 
-  const temAlgo = parentescos.length || empresasFamilia.length || transferenciasRecentes.length || sociosComum.length;
+  const temAlgo = pep || parentescos.length || empresasFamilia.length || transferenciasRecentes.length || sociosComum.length;
   if (!temAlgo) {
     return boxEmIntegracao(doc, y,
-      'ANÁLISE DE INTERPOSTAS PESSOAS — Em integração',
-      'Cruzamento com parentescos (Credify /parentescopf), empresas de cônjuges/filhos e transferências patrimoniais recentes serão disponibilizados no próximo release.'
+      'ANÁLISE DE INTERPOSTAS PESSOAS — sem indícios',
+      'Sem parentescos, sócios de mesmo sobrenome ou rede societária recorrente identificados para este alvo (fonte: Direct Data AML). Transferências patrimoniais recentes dependem do ONR (em integração).'
     );
+  }
+
+  if (pep) {
+    y = verificarPagina(doc, y, 18);
+    doc.rect(MARGEM, y, LARGURA, 16).fill('#fef3c7');
+    doc.fillColor('#92400e').fontSize(8).font('Helvetica-Bold').text('PEP — Pessoa Exposta Politicamente (ou relacionada a uma). Reforça due diligence.', MARGEM + 8, y + 4, { width: LARGURA - 16 });
+    y += 22;
   }
 
   if (parentescos.length) {
     doc.fillColor(COR.azul).fontSize(9).font('Helvetica-Bold').text('PARENTESCO DIRETO', MARGEM, y); y += 12;
     parentescos.slice(0, 8).forEach(p => {
       y = verificarPagina(doc, y, 11);
-      doc.fillColor('#111827').fontSize(7).font('Helvetica').text(`- ${p.nome}${p.tipo ? ` (${p.tipo})` : ''}${p.documento ? ` - ${p.documento}` : ''}`, MARGEM + 6, y, { width: LARGURA - 12 });
+      const rel = p.tipo || p.vinculo || '';
+      const docp = p.documento || p.cpf || '';
+      doc.fillColor('#111827').fontSize(7).font('Helvetica').text(`- ${p.nome}${rel ? ` (${rel})` : ''}${docp ? ` - ${docp}` : ''}`, MARGEM + 6, y, { width: LARGURA - 12 });
       y += 10;
     });
     y += 4;
   }
 
   if (empresasFamilia.length) {
-    doc.fillColor(COR.azul).fontSize(9).font('Helvetica-Bold').text('EMPRESAS DE FAMILIARES', MARGEM, y); y += 12;
+    doc.fillColor(COR.azul).fontSize(9).font('Helvetica-Bold').text('EMPRESAS COM SÓCIO DE MESMO SOBRENOME (POSSÍVEL FAMÍLIA)', MARGEM, y); y += 12;
     empresasFamilia.slice(0, 10).forEach(e => {
       y = verificarPagina(doc, y, 12);
-      doc.fillColor('#111827').fontSize(7).font('Helvetica').text(`- ${e.razao_social} | ${e.cnpj || ''} | Sócio: ${e.socio} (${e.relacao || 'familiar'})`, MARGEM + 6, y, { width: LARGURA - 12 });
+      doc.fillColor('#111827').fontSize(7).font('Helvetica').text(`- ${e.razao_social} | ${e.cnpj || ''} | Sócio: ${e.socio} (${e.relacao || 'sobrenome em comum'})`, MARGEM + 6, y, { width: LARGURA - 12 });
       y += 11;
     });
     y += 4;
