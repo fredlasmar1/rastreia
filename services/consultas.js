@@ -1199,7 +1199,7 @@ async function consultarImoveisRuraisSIGEF(documento) {
   if (!loginCpf || !loginSenha) {
     return {
       disponivel: false,
-      nota: 'Imóveis rurais por CPF (INCRA/SIGEF) exigem credencial gov.br — configurar SIGEF_LOGIN_CPF e SIGEF_LOGIN_SENHA.',
+      nota: 'Imóveis rurais por CPF — consulta GRÁTIS em sigef.incra.gov.br/consultar/parcelas/ (exige login gov.br do operador; busca pelo CPF do alvo). Automação: configurar SIGEF_LOGIN_CPF e SIGEF_LOGIN_SENHA.',
       fonte: 'INCRA/SIGEF'
     };
   }
