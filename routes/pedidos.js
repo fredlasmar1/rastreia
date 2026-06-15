@@ -668,12 +668,30 @@ async function executarConsultasParaPedido(pedidoId, usuarioId) {
     }
   }
 
-  await pool.query('DELETE FROM dados_consulta WHERE pedido_id = $1', [pedido.id]);
-  for (const [fonte, dados] of Object.entries(resultados)) {
-    await pool.query(
-      'INSERT INTO dados_consulta (pedido_id, fonte, dados) VALUES ($1, $2, $3)',
-      [pedido.id, fonte, JSON.stringify(dados)]
-    );
+  // Salvamento ATÔMICO e SERIALIZADO. Antes era DELETE + N INSERTs soltos: se
+  // duas execuções concorressem (duplo-clique / "Concluir" disparado enquanto as
+  // consultas ainda rodavam), elas se intercalavam — gerando linhas duplicadas e,
+  // pior, um snapshot PARCIAL de dados_consulta que o /concluir lia e virava PDF
+  // sem vínculos/interpostas (caso do pedido #78). A transação garante all-or-
+  // nothing (o leitor nunca vê pela metade) e o advisory lock por pedido serializa
+  // execuções concorrentes (a segunda espera a primeira, sem duplicar).
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    await client.query('SELECT pg_advisory_xact_lock(hashtext($1))', [pedido.id]);
+    await client.query('DELETE FROM dados_consulta WHERE pedido_id = $1', [pedido.id]);
+    for (const [fonte, dados] of Object.entries(resultados)) {
+      await client.query(
+        'INSERT INTO dados_consulta (pedido_id, fonte, dados) VALUES ($1, $2, $3)',
+        [pedido.id, fonte, JSON.stringify(dados)]
+      );
+    }
+    await client.query('COMMIT');
+  } catch (eTx) {
+    await client.query('ROLLBACK').catch(() => {});
+    throw eTx;
+  } finally {
+    client.release();
   }
 
   await pool.query('INSERT INTO logs (pedido_id, usuario_id, acao) VALUES ($1, $2, $3)',
