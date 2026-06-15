@@ -105,14 +105,26 @@ function secaoVeiculos(doc, y, dados) {
     dados.veiculos_pj
   ].filter(Boolean);
 
+  // Rótulo amigável da fonte para a mensagem ("consulta feita em ...").
+  const rotuloFonte = (s) => String(s || '')
+    .replace(/DirectData HistoricoVeiculos/i, 'DirectData (nacional)')
+    .replace(/Infosimples DETRAN-GO/i, 'DETRAN-GO');
+
   let veiculos = [];
   let fonteNome = '';
-  let notaIndisponivel = '';
+  let consultaFeitaSemVeiculo = false; // alguma base RESPONDEU, porém com 0 veículos
+  let notaFalha = '';                  // alguma base não pôde ser consultada (falha/não config.)
+  const basesOk = [];
   for (const f of fontes) {
     const arr = Array.isArray(f.veiculos) ? f.veiculos : [];
     if (arr.length) { veiculos = arr; fonteNome = f.fonte || ''; break; }
-    if (!notaIndisponivel && f.disponivel === false) {
-      notaIndisponivel = f.nota || f.detalhes || f.erro || '';
+    // `vazio` (DirectData) ou base que respondeu com lista vazia (DETRAN total 0,
+    // disponivel != false) = consulta OK, alvo sem veículo. Caso contrário, falha.
+    if (f.vazio || (f.disponivel !== false && Array.isArray(f.veiculos))) {
+      consultaFeitaSemVeiculo = true;
+      if (f.fonte) basesOk.push(rotuloFonte(f.fonte));
+    } else if (f.disponivel === false && !notaFalha) {
+      notaFalha = f.motivo || f.nota || f.detalhes || f.erro || '';
     }
   }
 
@@ -135,11 +147,20 @@ function secaoVeiculos(doc, y, dados) {
   y = secao(doc, 'VEÍCULOS', y);
 
   if (!norm.length) {
+    // Estado 1: a consulta FOI feita e o alvo não tem veículo (resultado válido).
+    if (consultaFeitaSemVeiculo) {
+      const bases = [...new Set(basesOk)].join(' e ') || 'DETRAN-GO e DirectData nacional';
+      return boxEmIntegracao(doc, y,
+        'NENHUM VEÍCULO EM NOME DO ALVO',
+        `Consulta realizada com sucesso em ${bases}. O investigado NÃO consta como proprietário de veículo — sem bem móvel veicular penhorável localizado. (DETRAN-GO cobre Goiás; DirectData cobre âmbito nacional.)`
+      );
+    }
+    // Estado 2: a consulta NÃO pôde ser feita (falha/fonte não configurada).
     return boxEmIntegracao(doc, y,
-      notaIndisponivel ? 'CONSULTA VEICULAR — sem retorno para este alvo' : 'CONSULTA VEICULAR POR CPF/CNPJ — Em integração',
-      notaIndisponivel
-        ? `${notaIndisponivel} Para consulta imediata: DETRAN do estado do alvo ou Credify /veiculodocumento.`
-        : 'Listagem de veículos por documento via DETRAN-GO (Infosimples) / Credify. Nenhum veículo retornado para este alvo, ou fonte não configurada.'
+      notaFalha ? 'CONSULTA VEICULAR — não foi possível consultar' : 'CONSULTA VEICULAR POR CPF/CNPJ — Em integração',
+      notaFalha
+        ? `${notaFalha} Para consulta imediata: DETRAN do estado do alvo ou Credify /veiculodocumento.`
+        : 'Listagem de veículos por documento via DETRAN-GO (Infosimples) / Credify. Fonte não configurada para este alvo.'
     );
   }
 

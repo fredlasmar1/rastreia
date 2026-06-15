@@ -1570,10 +1570,24 @@ async function consultarHistoricoVeiculos(cpfCnpj) {
       : Array.isArray(retorno.listaVeiculos) ? retorno.listaVeiculos
       : [];
 
-    if ((resultadoId && resultadoId !== 1) || listaBruta.length === 0) {
+    // Consulta bem-sucedida (resultadoId 1) porém SEM veículos = o alvo não é
+    // proprietário de veículo. Isso é um RESULTADO válido, não uma falha — marca
+    // `vazio:true` para o PDF mostrar "nenhum veículo em nome do alvo" em vez de
+    // vazar a mensagem crua da API (ex.: "Sucesso") como se fosse erro.
+    const semErroApi = !resultadoId || resultadoId === 1;
+    if (semErroApi && listaBruta.length === 0) {
       return {
         disponivel: false,
-        erro: meta.mensagem || meta.resultado || 'Nenhum veiculo vinculado encontrado',
+        vazio: true,
+        motivo: 'Consulta realizada com sucesso — nenhum veículo localizado em nome do documento.',
+        documento: doc,
+        fonte: 'DirectData HistoricoVeiculos'
+      };
+    }
+    if (resultadoId && resultadoId !== 1) {
+      return {
+        disponivel: false,
+        erro: meta.mensagem || meta.resultado || 'Falha na consulta de veículos',
         codigo_api: meta.resultadoId || null,
         documento: doc,
         tempo_ms: meta.tempoExecucaoMs,
