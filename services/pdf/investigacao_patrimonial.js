@@ -54,9 +54,12 @@ function secaoImoveis(doc, y, dados) {
   y = secao(doc, 'IMÓVEIS E BENS RAÍZES', y);
 
   if (!imoveis.length) {
+    // Honesto: NÃO afirmamos "sem imóveis" porque a pesquisa de imóvel urbano
+    // (ONR) ainda não roda. Linha curta sem assertir ausência. Detalhe de como
+    // pesquisar está na seção PISTAS PARA INVESTIGAÇÃO.
     return boxEmIntegracao(doc, y,
-      'CONSULTA DE IMÓVEIS — Em integração',
-      'Pesquisa de imóveis por CPF/CNPJ via ONR (Operador Nacional do Registro) em integração no próximo release. Para consulta imediata: certidão de atos em cartórios da(s) comarca(s) onde o investigado reside/atua.'
+      'Imóveis: pesquisa não realizada — requer ONR (urbano) ou cartório',
+      ''
     );
   }
 
@@ -149,18 +152,13 @@ function secaoVeiculos(doc, y, dados) {
   if (!norm.length) {
     // Estado 1: a consulta FOI feita e o alvo não tem veículo (resultado válido).
     if (consultaFeitaSemVeiculo) {
-      const bases = [...new Set(basesOk)].join(' e ') || 'DETRAN-GO e DirectData nacional';
-      return boxEmIntegracao(doc, y,
-        'NENHUM VEÍCULO EM NOME DO ALVO',
-        `Consulta realizada com sucesso em ${bases}. O investigado NÃO consta como proprietário de veículo — sem bem móvel veicular penhorável localizado. (DETRAN-GO cobre Goiás; DirectData cobre âmbito nacional.)`
-      );
+      return boxEmIntegracao(doc, y, 'Sem veículos para esse CPF/CNPJ', '');
     }
-    // Estado 2: a consulta NÃO pôde ser feita (falha/fonte não configurada).
+    // Estado 2: a consulta NÃO pôde ser feita (falha/fonte não configurada) —
+    // distinto de "não tem veículo", para não afirmar ausência sem ter consultado.
     return boxEmIntegracao(doc, y,
-      notaFalha ? 'CONSULTA VEICULAR — não foi possível consultar' : 'CONSULTA VEICULAR POR CPF/CNPJ — Em integração',
-      notaFalha
-        ? `${notaFalha} Para consulta imediata: DETRAN do estado do alvo ou Credify /veiculodocumento.`
-        : 'Listagem de veículos por documento via DETRAN-GO (Infosimples) / Credify. Fonte não configurada para este alvo.'
+      notaFalha ? 'Não foi possível consultar veículos' : 'Consulta veicular — em integração',
+      ''
     );
   }
 
