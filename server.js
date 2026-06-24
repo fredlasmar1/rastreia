@@ -291,6 +291,25 @@ app.post('/api/admin/status-apis/limpar', _autMon, _admMon, (req, res) => {
   }
 });
 
+// Placar de saúde das APIs (dashboard admin).
+// GET  → status consolidado (cache + probes grátis automáticos, sem custo).
+// POST /testar → força teste completo, incluindo DirectData/CNPJá (consome 1 consulta cada).
+const placarApis = require('./services/placarApis');
+app.get('/api/admin/placar-apis', _autMon, _admMon, async (req, res) => {
+  try {
+    res.json(await placarApis.obterPlacar({ forcarPagas: req.query.testar === '1' }));
+  } catch (e) {
+    res.status(500).json({ erro: e.message });
+  }
+});
+app.post('/api/admin/placar-apis/testar', _autMon, _admMon, async (req, res) => {
+  try {
+    res.json(await placarApis.montarPlacar({ incluirPagas: true }));
+  } catch (e) {
+    res.status(500).json({ erro: e.message });
+  }
+});
+
 // Rotas API
 app.use('/api/auth', require('./routes/auth'));
 const pagamentosRouter = require('./routes/pagamentos');

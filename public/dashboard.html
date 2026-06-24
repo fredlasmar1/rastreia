@@ -32,6 +32,9 @@
   <!-- Banner de alertas operacionais (APIs externas) - visivel apenas para admin -->
   <div id="banner-alertas" style="display:none;margin-bottom:20px"></div>
 
+  <!-- Placar de saude das APIs - visivel apenas para admin -->
+  <div id="placar-apis" style="display:none;margin-bottom:20px"></div>
+
   <!-- Stats -->
   <div class="stats-grid" id="stats">
     <div class="stat-card"><div class="stat-label">Total de Pedidos</div><div class="stat-valor" id="s-total">...</div></div>
@@ -203,6 +206,91 @@
     window.location.href = '/';
   }
 
+  // ─── Placar de saúde das APIs ───────────────────────────────
+  const PLACAR_ST = {
+    operante:        { cor: '#16a34a', txt: 'Operante' },
+    sem_credito:     { cor: '#ea580c', txt: 'Sem crédito' },
+    limite:          { cor: '#d97706', txt: 'Limite atingido' },
+    token_invalido:  { cor: '#dc2626', txt: 'Token inválido' },
+    fora_do_ar:      { cor: '#dc2626', txt: 'Fora do ar' },
+    nao_configurada: { cor: '#94a3b8', txt: 'Não configurada' },
+    nao_testada:     { cor: '#94a3b8', txt: 'Não testada' }
+  };
+  const PLACAR_GERAL = {
+    operante:    { emoji: '🟢', txt: 'Tudo operante' },
+    atencao:     { emoji: '🟠', txt: 'Atenção' },
+    sem_credito: { emoji: '🟠', txt: 'Sem crédito em provedor' },
+    critico:     { emoji: '🔴', txt: 'Falha em provedor' }
+  };
+
+  function tempoRel(iso) {
+    if (!iso) return '';
+    const s = Math.floor((Date.now() - new Date(iso).getTime()) / 1000);
+    if (s < 0) return 'agora';
+    if (s < 60) return 'há ' + s + 's';
+    if (s < 3600) return 'há ' + Math.floor(s / 60) + ' min';
+    if (s < 86400) return 'há ' + Math.floor(s / 3600) + 'h';
+    return 'há ' + Math.floor(s / 86400) + 'd';
+  }
+
+  function renderPlacar(r) {
+    const el = document.getElementById('placar-apis');
+    const g = PLACAR_GERAL[r.geral] || PLACAR_GERAL.operante;
+    const linhas = r.apis.map(a => {
+      const st = PLACAR_ST[a.status] || PLACAR_ST.nao_testada;
+      const link = (a.status === 'sem_credito' && a.link)
+        ? ` <a href="${esc(a.link)}" target="_blank" style="color:#ea580c;font-weight:700;text-decoration:underline">↗ recarregar</a>` : '';
+      const quando = a.verificado_em ? `<span style="color:#94a3b8;font-size:11px;white-space:nowrap">${esc(tempoRel(a.verificado_em))}</span>` : '';
+      return `<div style="display:flex;align-items:center;gap:10px;padding:9px 4px;border-bottom:1px solid #f1f5f9">
+        <span style="width:11px;height:11px;border-radius:50%;background:${st.cor};flex:none"></span>
+        <span style="font-weight:600;min-width:120px">${esc(a.nome)}</span>
+        <span style="color:${st.cor};font-size:13px;font-weight:700;min-width:120px">${esc(st.txt)}</span>
+        <span style="color:#64748b;font-size:12px;flex:1">${esc(a.motivo || '')}${link}</span>
+        ${quando}
+      </div>`;
+    }).join('');
+    el.innerHTML = `<div class="card">
+      <div class="card-header" style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap">
+        <span class="card-title">🩺 Saúde das APIs &nbsp;<span style="font-weight:700;font-size:14px">${g.emoji} ${esc(g.txt)}</span></span>
+        <span style="display:flex;align-items:center;gap:10px">
+          <span style="color:#94a3b8;font-size:12px">atualizado ${esc(tempoRel(r.geral_em))}</span>
+          <button id="btn-testar-apis" class="btn btn-sm btn-outline" onclick="testarApis()">🔄 Testar agora</button>
+        </span>
+      </div>
+      <div style="padding:4px 6px 0">${linhas}</div>
+      <div style="padding:10px 6px 2px;color:#94a3b8;font-size:11px;line-height:1.5">
+        ${r.incluiu_pagas ? '✔ DirectData e CNPJá testadas ativamente neste ciclo.' : 'DirectData e CNPJá só são testadas ao clicar “Testar agora” (consomem 1 consulta cada). As demais são checadas automaticamente, sem custo.'}
+      </div>
+    </div>`;
+    el.style.display = '';
+  }
+
+  async function carregarPlacarApis() {
+    if (!isAdmin) return;
+    try {
+      const r = await api('/api/admin/placar-apis');
+      if (!r || !r.apis) { document.getElementById('placar-apis').style.display = 'none'; return; }
+      renderPlacar(r);
+    } catch (_) { /* silencioso */ }
+  }
+
+  async function testarApis() {
+    const btn = document.getElementById('btn-testar-apis');
+    if (btn) { btn.disabled = true; btn.textContent = 'Testando…'; }
+    try {
+      const res = await fetch('/api/admin/placar-apis/testar', { method: 'POST', headers: { Authorization: `Bearer ${token}` } });
+      if (res.status === 401) { logout(); return; }
+      const r = await res.json();
+      if (r && r.apis) renderPlacar(r);
+      else alert('Falha ao testar: ' + (r && r.erro ? r.erro : 'resposta inválida'));
+    } catch (e) {
+      alert('Falha ao testar: ' + e.message);
+    } finally {
+      const b = document.getElementById('btn-testar-apis');
+      if (b) { b.disabled = false; b.textContent = '🔄 Testar agora'; }
+    }
+  }
+
   async function carregarAlertasAPI() {
     if (usuario.perfil !== 'admin') return;
     try {
@@ -236,7 +324,8 @@
   carregarStats();
   carregarPedidos();
   carregarAlertasAPI();
-  setInterval(() => { carregarStats(); carregarPedidos(); carregarAlertasAPI(); }, 30000);
+  carregarPlacarApis();
+  setInterval(() => { carregarStats(); carregarPedidos(); carregarAlertasAPI(); carregarPlacarApis(); }, 30000);
 </script>
 </body>
 </html>
