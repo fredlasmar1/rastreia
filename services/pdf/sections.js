@@ -353,9 +353,39 @@ function secaoScoreCredito(doc, y, dados) {
   const scoreCredito = dados.score_credito || {};
   if (!scoreCredito.score) return y;
 
+  const corDe = (s) => s >= 700 ? COR.verde : s >= 400 ? COR.laranja : COR.vermelho;
+  const bv = dados.boa_vista || {};
+  const temBV = Number(bv.score) > 0;
+
+  // ── Duas opiniões de bureau lado a lado (QUOD + Boa Vista/SCPC) ──
+  if (temBV) {
+    y = secao(doc, 'SCORE DE CRÉDITO — 2 BUREAUS', y);
+    const sQ = Number(scoreCredito.score) || 0;
+    const sB = Number(bv.score) || 0;
+    const gap = 12;
+    const w = (LARGURA - gap) / 2;
+    const caixa = (x, titulo, s, faixa) => {
+      doc.rect(x, y, w, 48).fill('#f8fafc').stroke(COR.borda);
+      doc.fillColor(COR.cinza).fontSize(8).font('Helvetica-Bold').text(titulo, x + 10, y + 6);
+      doc.fillColor(corDe(s)).fontSize(24).font('Helvetica-Bold').text(`${s}`, x + 10, y + 17);
+      const wNum = doc.widthOfString(`${s}`);
+      doc.fillColor(COR.cinza).fontSize(8).font('Helvetica').text('/1000', x + 12 + wNum, y + 30);
+      doc.fillColor(corDe(s)).fontSize(8).font('Helvetica-Bold').text(faixa || '', x + 60 + wNum, y + 22, { width: w - 70 - wNum });
+    };
+    caixa(MARGEM, 'QUOD (bancos)', sQ, scoreCredito.faixa);
+    caixa(MARGEM + w + gap, 'Boa Vista / SCPC', sB, bv.faixa);
+    y += 52;
+    const nota = Math.abs(sQ - sB) >= 200
+      ? `Os bureaus divergem (QUOD ${sQ} x Boa Vista ${sB}) — bases e modelos diferentes. Para a visão Serasa, consultar o Serasa diretamente.`
+      : 'QUOD e Boa Vista são bureaus distintos e podem divergir do Serasa, que usa modelo próprio.';
+    doc.fillColor(COR.cinza).fontSize(7).font('Helvetica').text(nota, MARGEM, y, { width: LARGURA });
+    return y + 16;
+  }
+
+  // ── Fallback: caixa única QUOD (quando não há 2ª opinião) ──
   y = secao(doc, 'SCORE DE CRÉDITO (QUOD)', y);
   const scoreCred = Number(scoreCredito.score) || 0;
-  const corCred = scoreCred >= 700 ? COR.verde : scoreCred >= 400 ? COR.laranja : COR.vermelho;
+  const corCred = corDe(scoreCred);
   doc.rect(MARGEM, y, LARGURA, 40).fill('#f8fafc').stroke(COR.borda);
   doc.fillColor(corCred).fontSize(22).font('Helvetica-Bold').text(`${scoreCred}`, MARGEM + 10, y + 4);
   doc.fillColor(COR.cinza).fontSize(8).font('Helvetica').text('/1000', MARGEM + 55, y + 10);
