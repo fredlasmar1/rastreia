@@ -172,7 +172,7 @@ router.get('/', autenticar, async (req, res) => {
 router.post('/', autenticar, async (req, res) => {
   try {
     const {
-      tipo, cliente_nome, cliente_email, cliente_whatsapp,
+      tipo, cliente_nome, cliente_email, cliente_whatsapp, cliente_id,
       alvo_nome, alvo_documento, alvo_tipo, alvo_placa,
       // LGPD
       finalidade, aceite_termos,
@@ -295,10 +295,10 @@ router.post('/', autenticar, async (req, res) => {
         finalidade, ip_solicitante, aceite_termos, token_publico,
         alvo2_nome, alvo2_documento, alvo2_tipo,
         imovel_matricula, imovel_endereco, imovel_estado, alvo_placa,
-        tier_veicular, addons_veicular
+        tier_veicular, addons_veicular, cliente_id
       )
       VALUES ($1, 'aguardando_pagamento', $2, $3, $4, $5, $6, $7, $8, $9, $10,
-              $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23)
+              $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24)
       RETURNING *`,
       [
         tipo, cliente_nome.trim(), cliente_email, cliente_whatsapp,
@@ -307,7 +307,8 @@ router.post('/', autenticar, async (req, res) => {
         alvo2_nome?.trim() || null, alvo2DocLimpo, alvo2_tipo || null,
         imovel_matricula || null, imovel_endereco || null, imovel_estado || 'GO',
         placaLimpa,
-        tierSlug, addonsList.length ? addonsList.join(',') : null
+        tierSlug, addonsList.length ? addonsList.join(',') : null,
+        (cliente_id && String(cliente_id).trim()) || null
       ]
     );
 

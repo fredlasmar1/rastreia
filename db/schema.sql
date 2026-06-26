@@ -348,3 +348,7 @@ ALTER TABLE clientes ADD COLUMN IF NOT EXISTS plano_cota_mensal INTEGER DEFAULT 
 ALTER TABLE clientes ADD COLUMN IF NOT EXISTS plano_consultas_usadas INTEGER DEFAULT 0;
 ALTER TABLE clientes ADD COLUMN IF NOT EXISTS plano_ciclo_inicio DATE;
 ALTER TABLE clientes ADD COLUMN IF NOT EXISTS plano_valor_mensal NUMERIC(10,2) DEFAULT 0;
+
+-- Fase 2: liga o pedido ao cliente cadastrado (p/ cobrar do plano do mensalista)
+ALTER TABLE pedidos ADD COLUMN IF NOT EXISTS cliente_id UUID REFERENCES clientes(id);
+CREATE INDEX IF NOT EXISTS idx_pedidos_cliente_id ON pedidos(cliente_id);

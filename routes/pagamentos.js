@@ -23,6 +23,7 @@ const {
 const { PRODUTOS } = require('../services/produtos');
 const { liberarPedidoPago } = require('../services/pipeline_pedido');
 const planosUsuario = require('../services/planos_usuario');
+const planosCliente = require('../services/planos_cliente');
 const emailService = require('../services/email');
 
 // ─── POST /api/pedidos/:id/pagamento ────────────────────────────────
@@ -216,8 +217,8 @@ async function webhookMP(req, res) {
 async function pagamentoAlternativo(req, res) {
   try {
     const forma = (req.body?.forma || '').toLowerCase();
-    if (!['dinheiro', 'plano'].includes(forma)) {
-      return res.status(400).json({ erro: "Campo 'forma' deve ser 'dinheiro' ou 'plano'" });
+    if (!['dinheiro', 'plano', 'plano_cliente'].includes(forma)) {
+      return res.status(400).json({ erro: "Campo 'forma' deve ser 'dinheiro', 'plano' ou 'plano_cliente'" });
     }
 
     const r = await pool.query('SELECT * FROM pedidos WHERE id = $1', [req.params.id]);
@@ -248,7 +249,20 @@ async function pagamentoAlternativo(req, res) {
       restantesPlano = deb.restantes;
     }
 
-    const mpRef = forma === 'dinheiro' ? 'dinheiro' : 'plano';
+    // Fase 2: cobra do plano mensal do CLIENTE vinculado ao pedido.
+    let restantesPlanoCliente = null;
+    if (forma === 'plano_cliente') {
+      if (!pedido.cliente_id) {
+        return res.status(400).json({ erro: 'Pedido sem cliente cadastrado vinculado. Selecione um cliente para cobrar do plano dele.' });
+      }
+      const deb = await planosCliente.debitar(pedido.cliente_id);
+      if (!deb.ok) {
+        return res.status(400).json({ erro: deb.erro || 'Não foi possível debitar do plano do cliente', status: deb.status });
+      }
+      restantesPlanoCliente = deb.status ? deb.status.restantes : null;
+    }
+
+    const mpRef = forma;
     await pool.query(
       `UPDATE pedidos
           SET status = 'pago', pago_em = NOW(), mp_payment_id = $1,
@@ -268,6 +282,7 @@ async function pagamentoAlternativo(req, res) {
 
     const resp = { ok: true, status: 'pago', forma };
     if (restantesPlano !== null) resp.plano_restantes = restantesPlano;
+    if (restantesPlanoCliente !== null) resp.plano_cliente_restantes = restantesPlanoCliente;
     res.json(resp);
   } catch (e) {
     console.error('[pagamentos] alternativo erro:', e);
