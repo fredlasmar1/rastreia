@@ -33,7 +33,7 @@ function secaoSituacaoPatrimonial(doc, y, dados) {
   if (!imoveis.length && !veiculos.length && !empresas.length) {
     return boxEmIntegracao(doc, y,
       'LEVANTAMENTO PATRIMONIAL RESUMIDO — Em integração',
-      'Para levantamento patrimonial completo (imóveis + todos os veículos + contas), utilizar o produto Investigação Patrimonial (R$ 497).'
+      'Para levantamento patrimonial completo (imóveis + todos os veículos + contas), utilizar o produto Investigação Patrimonial (R$ 199).'
     );
   }
 

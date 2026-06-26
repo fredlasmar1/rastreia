@@ -49,17 +49,17 @@ const uploadDocumentos = multer({
 });
 
 const PRECOS = {
-  dossie_pf: 197,
-  dossie_pj: 397,
-  due_diligence: 997,
+  dossie_pf: 89,
+  dossie_pj: 149,
+  due_diligence: 597,
   due_diligence_imobiliaria: 997,
-  analise_devedor: 250,
-  investigacao_patrimonial: 497,
+  analise_devedor: 119,
+  investigacao_patrimonial: 199,
   consulta_veicular: 97,
-  consulta_veicular_simples: 12,
-  consulta_veicular_mediana: 39,
-  consulta_veicular_completa: 79,
-  consulta_restricoes: 19
+  consulta_veicular_simples: 19.90,
+  consulta_veicular_mediana: 34.90,
+  consulta_veicular_completa: 49.90,
+  consulta_restricoes: 14.90
 };
 
 const PRAZOS = {

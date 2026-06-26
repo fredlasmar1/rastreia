@@ -9,7 +9,7 @@ const PRODUTOS = {
 
   dossie_pf: {
     nome: 'Dossiê Pessoa Física',
-    preco: 197,
+    preco: 89,
     prazo_horas: 2,
     icone: '👤',
     publico_alvo: [
@@ -40,7 +40,7 @@ const PRODUTOS = {
 
   dossie_pj: {
     nome: 'Dossiê Pessoa Jurídica',
-    preco: 397,
+    preco: 149,
     prazo_horas: 2,
     icone: '🏢',
     publico_alvo: [
@@ -72,7 +72,7 @@ const PRODUTOS = {
 
   due_diligence: {
     nome: 'Due Diligence Empresarial',
-    preco: 997,
+    preco: 597,
     prazo_horas: 24,
     icone: '🔎',
     publico_alvo: [
@@ -105,7 +105,7 @@ const PRODUTOS = {
 
   analise_devedor: {
     nome: 'Análise de Devedor',
-    preco: 250,
+    preco: 119,
     prazo_horas: 2,
     icone: '⚖️',
     publico_alvo: [
@@ -162,7 +162,7 @@ const PRODUTOS = {
 
   investigacao_patrimonial: {
     nome: 'Investigação Patrimonial',
-    preco: 497,
+    preco: 199,
     prazo_horas: 4,
     icone: '🏦',
     publico_alvo: [
@@ -193,7 +193,7 @@ const PRODUTOS = {
 
   consulta_restricoes: {
     nome: 'Consulta de Restrições no CPF',
-    preco: 19,
+    preco: 14.90,
     prazo_horas: 0.25,
     icone: '🚦',
     publico_alvo: [
@@ -213,7 +213,7 @@ const PRODUTOS = {
 
   consulta_veicular_simples: {
     nome: 'Consulta Veicular Simples',
-    preco: 12,
+    preco: 19.90,
     prazo_horas: 0.25,
     icone: '🚗',
     sem_alvo_documento: true,
@@ -232,7 +232,7 @@ const PRODUTOS = {
 
   consulta_veicular_mediana: {
     nome: 'Consulta Veicular Mediana',
-    preco: 39,
+    preco: 34.90,
     prazo_horas: 0.25,
     icone: '🚗',
     sem_alvo_documento: true,
@@ -254,7 +254,7 @@ const PRODUTOS = {
 
   consulta_veicular_completa: {
     nome: 'Consulta Veicular Completa',
-    preco: 79,
+    preco: 49.90,
     prazo_horas: 0.25,
     icone: '🚗',
     sem_alvo_documento: true,
