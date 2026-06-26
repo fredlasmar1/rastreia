@@ -1389,9 +1389,10 @@ async function _obterTokenCredify() {
     timeout: 30000
   });
 
-  const sucesso = resp.data?.Success === true || resp.data?.success === true;
+  // A API Credify retorna o status com typo ("Sucess", sem o 2º "s"), então NÃO dá
+  // pra confiar nesse campo. O sinal real de sucesso é o token vir preenchido.
   const token = resp.data?.Dados || resp.data?.dados || resp.data?.token || resp.data?.Token;
-  if (!sucesso || !token) {
+  if (!token) {
     const msg = resp.data?.Message || resp.data?.message || 'Autenticação Credify falhou';
     const e = new Error(msg);
     e.codigo = 'auth_falhou';
@@ -1431,12 +1432,23 @@ async function consultarProprietariosPlaca(placa) {
     };
   }
 
-  const idConsulta = String(Date.now()).slice(-10);
+  // IdConsulta é um número FIXO de catálogo da Credify por endpoint (não pode ser
+  // timestamp, senão a API rejeita com "O IdConsulta não é válido para este EndPoint").
+  const idConsulta = process.env.CREDIFY_ID_HISTORICO;
+  if (!idConsulta) {
+    return {
+      disponivel: false,
+      erro: 'Histórico de proprietários (Credify) não configurado',
+      detalhes: 'Defina CREDIFY_ID_HISTORICO com o número de catálogo do endpoint /historicoproprietario.',
+      placa: placaLimpa,
+      fonte: 'Credify HistoricoProprietario'
+    };
+  }
   let resp;
   try {
+    // Corpo aninhado em "Consulta" (exigência da API Credify).
     resp = await axios.post(`${CREDIFY_BASE}/historicoproprietario`, {
-      IdConsulta: idConsulta,
-      Placa: placaLimpa
+      Consulta: { IdConsulta: String(idConsulta), Placa: placaLimpa }
     }, {
       headers: {
         accept: 'application/json',
