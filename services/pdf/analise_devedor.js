@@ -110,7 +110,15 @@ function secaoCapacidadePagamento(doc, y, dados, pedido) {
     y = linha(doc, 'Situação RF', cadastral.situacao || '-', y, 13);
   }
   if (scoreCredito.score) {
-    y = linha(doc, 'Score QUOD', `${scoreCredito.score}/1000 (${scoreCredito.faixa || '-'})`, y, 13);
+    y = linha(doc, 'Score QUOD', `${scoreCredito.score}/1000 (${scoreCredito.faixa || '-'}) — bureau dos bancos`, y, 13);
+  }
+  const bvAD = dados.boa_vista || {};
+  if (bvAD.score) {
+    const sq = Number(scoreCredito.score || 0), sb = Number(bvAD.score || 0);
+    const div = (sq && Math.abs(sq - sb) >= 200)
+      ? ' — 2ª opinião, divergente do QUOD (p/ visão Serasa, consultar Serasa)'
+      : ' — 2ª opinião (SCPC)';
+    y = linha(doc, 'Score Boa Vista', `${sb}/1000 (${bvAD.faixa || '-'})${div}`, y, 13);
   }
   return y + 6;
 }
