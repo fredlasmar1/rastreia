@@ -172,10 +172,10 @@ const PRODUTOS = {
       'Escritório de advocacia para instrução de execução',
       'Quem suspeita que devedor ocultou patrimônio',
     ],
-    argumento: 'Ganhar a ação é só metade do caminho. Se não localizar os bens, não recebe. Mapeamos imóveis, veículos, empresas e participações societárias do devedor — tudo para você entrar na execução com alvo certo.',
+    argumento: 'Ganhar a ação é só metade do caminho. Se não localizar os bens, não recebe. Mapeamos veículos, empresas, participações societárias e interpostas (laranjas) do devedor, além de imóveis rurais e o roteiro de busca de imóveis urbanos — tudo para você entrar na execução com alvo certo.',
     dados_entregues: [
       { secao: 'IDENTIFICAÇÃO E LOCALIZAÇÃO ATUAL', campos: ['Dados completos do investigado', 'Todos os endereços identificados', 'Telefones para localização', 'CPF/CNPJ de todos os vínculos'] },
-      { secao: 'IMÓVEIS E BENS RAÍZES', campos: ['Imóveis registrados em nome próprio', 'Imóveis em nome de empresas vinculadas', 'Participação em condomínios', 'Matrícula e cartório de registro (quando disponível)', 'Estimativa de valor de mercado'] },
+      { secao: 'IMÓVEIS E BENS RAÍZES', campos: ['Imóveis rurais por CPF (SIGEF/INCRA, quando disponível)', 'Imóveis urbanos: roteiro de busca em cartório/ONR (pesquisa qualificada sob demanda)', 'Imóveis em nome de empresas vinculadas (quando disponível)', 'Matrícula e cartório de registro (quando disponível)'] },
       { secao: 'VEÍCULOS', campos: ['Veículos em nome do investigado', 'Veículos em nome de empresas vinculadas', 'Placa, modelo, ano, chassi (quando disponível)', 'Situação de multas e restrições'] },
       { secao: 'EMPRESAS E PARTICIPAÇÕES SOCIETÁRIAS', campos: ['Todas as empresas abertas em nome do investigado', 'Participação societária em outras empresas', 'CNPJs ativos e encerrados', 'Capital social de cada empresa', 'Situação de cada empresa na RF'] },
       { secao: 'VÍNCULOS E INTERPOSTAS PESSOAS', campos: ['Empresas de familiares diretos (cônjuge, filhos)', 'Histórico de transferências patrimoniais recentes', 'Sócios em comum com outras empresas', 'Possíveis laranjas identificados'] },
