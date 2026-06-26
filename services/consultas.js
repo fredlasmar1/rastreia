@@ -720,20 +720,42 @@ function normalizarFalencias(arr) {
   return result;
 }
 
+// Cache curto por documento p/ NÃO cobrar 2x a Boa Vista (R$3,50/consulta) dentro
+// do mesmo pipeline: negativações (consultarApontamentosBoaVista) e a 2ª opinião de
+// score (consultarBoaVista) usam a MESMA chamada HTTP.
+let _bvCache = { doc: null, ts: 0, data: null };
+async function _boaVistaRaw(doc) {
+  const agora = Date.now();
+  if (_bvCache.doc === doc && (agora - _bvCache.ts) < 120000) return _bvCache.data;
+  const isPF = doc.length <= 11;
+  const url = isPF
+    ? 'https://apiv3.directd.com.br/api/BoaVistaAcertaCompletoPositivoPF'
+    : 'https://apiv3.directd.com.br/api/BoaVistaDefineLimitePositivoPJ';
+  const params = isPF
+    ? { CPF: doc, Token: process.env.DIRECTD_TOKEN }
+    : { CNPJ: doc, Token: process.env.DIRECTD_TOKEN };
+  const res = await axios.get(url, { params, timeout: 30000 });
+  const data = res.data?.retorno || {};
+  _bvCache = { doc, ts: agora, data };
+  return data;
+}
+
+// Faixa textual do score Boa Vista (0-1000), análoga à do QUOD.
+function _faixaBoaVista(s) {
+  if (s <= 0) return '';
+  if (s < 300) return 'Alto índice de inadimplência';
+  if (s < 500) return 'Índice de inadimplência elevado';
+  if (s < 700) return 'Médio índice de inadimplência';
+  return 'Baixo índice de inadimplência';
+}
+
 async function consultarApontamentosBoaVista(doc) {
   // Retorna o array de apontamentos (credor, valor, data, contrato...) via
   // Boa Vista Acerta Completo (PF) / Define Limite Positivo (PJ).
   // Em caso de falha, retorna [] e segue o fluxo principal.
   try {
     const isPF = doc.length <= 11;
-    const url = isPF
-      ? 'https://apiv3.directd.com.br/api/BoaVistaAcertaCompletoPositivoPF'
-      : 'https://apiv3.directd.com.br/api/BoaVistaDefineLimitePositivoPJ';
-    const params = isPF
-      ? { CPF: doc, Token: process.env.DIRECTD_TOKEN }
-      : { CNPJ: doc, Token: process.env.DIRECTD_TOKEN };
-    const res = await axios.get(url, { params, timeout: 30000 });
-    const retorno = res.data?.retorno || {};
+    const retorno = await _boaVistaRaw(doc);
     const pend = isPF
       ? (retorno.pendenciasFinanceiras || {})
       : (retorno.restricoes?.pendenciasFinanceiras || {});
@@ -756,6 +778,32 @@ async function consultarApontamentosBoaVista(doc) {
     const msg = e.response?.data?.metaDados?.mensagem || e.message;
     console.warn(`[BoaVistaApontamentos] Sem detalhamento (${status || 'erro'}): ${msg}`);
     return [];
+  }
+}
+
+// 2ª fonte de bureau (Boa Vista/SCPC) — score próprio + negativações de base
+// diferente da QUOD. Mais próxima do "feeling Serasa" que o QUOD. Custo: R$3,50.
+async function consultarBoaVista(documento) {
+  if (!process.env.DIRECTD_TOKEN) return { disponivel: false, fonte: 'Boa Vista (SCPC)' };
+  try {
+    const doc = limparDoc(documento);
+    const retorno = await _boaVistaRaw(doc);
+    const sc = (retorno.scores && Array.isArray(retorno.scores.ocorrencias) && retorno.scores.ocorrencias[0]) || {};
+    const score = parseInt(String(sc.score || '0'), 10) || 0;
+    const negativacoes = await consultarApontamentosBoaVista(doc);
+    const isPF = doc.length <= 11;
+    const pend = isPF ? (retorno.pendenciasFinanceiras || {}) : (retorno.restricoes?.pendenciasFinanceiras || {});
+    return {
+      disponivel: true,
+      score: score || null,
+      faixa: score ? _faixaBoaVista(score) : '',
+      negativacoes,
+      total_pendencias: Number(String(pend.valorTotal || '0').replace(',', '.')) || 0,
+      qtd_pendencias: Number(pend.quantidadeOcorrencia || (negativacoes || []).length) || 0,
+      fonte: 'Boa Vista (SCPC)'
+    };
+  } catch (e) {
+    return { disponivel: false, erro: e.response?.status || e.message, fonte: 'Boa Vista (SCPC)' };
   }
 }
 
@@ -2301,6 +2349,9 @@ async function executarConsultasParaAlvo(alvo, { precisaVinculos, precisaVeiculo
   // INCRA/SIGEF: imóveis rurais por CPF (InfoSimples, requer credencial gov.br).
   // Mesmos produtos que precisaVeiculos (patrimonial + imobiliária).
   if (precisaVeiculos) promises.push(consultarImoveisRuraisSIGEF(documento));
+  // 2ª opinião de bureau (Boa Vista/SCPC): só nos produtos que olham crédito/dívida.
+  const precisaBoaVista = ['dossie_pf', 'analise_devedor', 'investigacao_patrimonial'].includes(tipo);
+  if (precisaBoaVista) promises.push(consultarBoaVista(documento));
 
   const resultados = await Promise.all(promises);
   const [processos, transparencia, score_credito, negativacoes, perfil_economico] = resultados;
@@ -2310,6 +2361,7 @@ async function executarConsultasParaAlvo(alvo, { precisaVinculos, precisaVeiculo
   const historico_veiculos = precisaVeiculos ? resultados[i++] : null;
   const aml = precisaVinculos ? resultados[i++] : null;
   const imoveis_rurais = precisaVeiculos ? resultados[i++] : null;
+  const boa_vista = precisaBoaVista ? resultados[i++] : null;
 
   // Interpostas a partir do AML + fallback societário: quando o
   // VinculosSocietarios falha (comum), usamos as sociedades do AML.
@@ -2382,6 +2434,7 @@ async function executarConsultasParaAlvo(alvo, { precisaVinculos, precisaVeiculo
     processos,
     ...(transparencia ? { transparencia } : {}),
     ...(score_credito?.score ? { score_credito } : {}),
+    ...(boa_vista && boa_vista.disponivel ? { boa_vista } : {}),
     ...(negativacoes?.status ? { negativacoes } : {}),
     ...(perfil_economico ? { perfil_economico } : {}),
     ...(vinculosFinal?.total ? { vinculos: vinculosFinal } : {}),
@@ -2535,7 +2588,7 @@ async function enriquecerSocios(socios, cnpj) {
 module.exports = {
   consultarCNPJ, consultarCPF, consultarProcessos,
   consultarEscavador, consultarDatajud, consultarTransparencia,
-  consultarSerasa, consultarScore, consultarNegativacoes, consultarProtestos,
+  consultarSerasa, consultarScore, consultarNegativacoes, consultarProtestos, consultarBoaVista,
   consultarPerfilEconomico, consultarVinculos, consultarAML, montarInterpostas, consultarObito,
   consultarONR, consultarMatricula, consultarVeiculos, consultarImoveisRuraisSIGEF,
   consultarVeiculoPorPlaca, consultarProprietariosPlaca, consultarHistoricoVeiculos,

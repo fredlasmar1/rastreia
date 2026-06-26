@@ -411,6 +411,19 @@ function calcularScore(tipo, dados) {
     }
   }
 
+  // 2ª opinião de bureau: Boa Vista/SCPC (base diferente da QUOD, mais próxima
+  // da visão Serasa). Informativo — NÃO entra na matemática do score p/ não
+  // duplicar o peso de crédito (o QUOD já pondera).
+  const bv = dados.boa_vista;
+  if (bv && bv.score) {
+    const sevBV = bv.score < 300 ? 'critico' : bv.score < 500 ? 'atencao' : 'observar';
+    alertar(`Score Boa Vista/SCPC (2ª opinião): ${bv.score}/1000 — ${bv.faixa || ''}`, bv.score >= 700 ? 'positivo' : sevBV);
+    const sqQ = Number((dados.score_credito || {}).score || 0);
+    if (sqQ && Math.abs(sqQ - bv.score) >= 200) {
+      alertar(`Bureaus divergem: QUOD ${sqQ} x Boa Vista ${bv.score} — para a visão Serasa, consultar o Serasa diretamente`, 'observar');
+    }
+  }
+
   // ============================================================
   // 3. NEGATIVAÇÕES / PROTESTOS (Direct Data)
   // ============================================================
