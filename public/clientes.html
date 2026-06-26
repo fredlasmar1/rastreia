@@ -92,6 +92,50 @@
   </div>
 </div>
 
+<!-- Modal de Plano Mensal -->
+<div id="plano-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:1000;align-items:center;justify-content:center">
+  <div style="background:#fff;border-radius:12px;padding:24px;max-width:480px;width:95%;max-height:90vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,0.3)">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:2px">
+      <h2 style="margin:0;font-size:18px;color:#1a3a5c">Plano mensal</h2>
+      <button onclick="fecharPlano()" style="background:none;border:none;font-size:24px;cursor:pointer;color:#6b7280">&times;</button>
+    </div>
+    <div id="plano-cliente-nome" style="color:#64748b;font-size:13px;margin-bottom:14px;font-weight:600"></div>
+    <input type="hidden" id="plano-cliente-id">
+
+    <div id="plano-uso" style="display:none;background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:12px;margin-bottom:16px">
+      <div style="display:flex;justify-content:space-between;align-items:baseline">
+        <span style="font-size:13px;color:#64748b">Uso deste mês</span>
+        <span id="plano-uso-num" style="font-weight:800;font-size:15px;color:#0f172a"></span>
+      </div>
+      <div style="height:8px;background:#eef2f7;border-radius:4px;overflow:hidden;margin:8px 0"><div id="plano-uso-bar" style="height:100%;width:0;background:#16a34a;transition:width .2s"></div></div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap">
+        <button class="btn btn-sm btn-primary" onclick="debitarPlano()">&#10003; Registrar consulta (&minus;1)</button>
+        <button class="btn btn-sm btn-outline" onclick="creditarPlano()">&#8617; Desfazer (+1)</button>
+        <button class="btn btn-sm btn-outline" onclick="resetarPlano()">&#10227; Resetar ciclo</button>
+      </div>
+    </div>
+
+    <div style="font-size:12px;font-weight:700;color:#475569;margin-bottom:6px">Modelo</div>
+    <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px">
+      <button class="btn btn-sm btn-outline" onclick="aplicarPreset('Essencial',4,297)">Essencial · 4 · R$297</button>
+      <button class="btn btn-sm btn-outline" onclick="aplicarPreset('Profissional',10,597)">Profissional · 10 · R$597</button>
+      <button class="btn btn-sm btn-outline" onclick="aplicarPreset('Conta-chave',20,1200)">Conta-chave · 20 · R$1.200</button>
+    </div>
+    <div class="form-grid">
+      <div class="form-group full"><label>Nome do plano</label><input type="text" id="plano-nome" placeholder="Ex: Profissional"></div>
+      <div class="form-group"><label>Cota por mês</label><input type="number" id="plano-cota" min="0" placeholder="0"></div>
+      <div class="form-group"><label>Mensalidade (R$)</label><input type="number" id="plano-valor" min="0" step="0.01" placeholder="0"></div>
+    </div>
+    <div style="display:flex;gap:10px;margin-top:16px;justify-content:space-between;align-items:center">
+      <button class="btn btn-outline" style="color:#dc2626;border-color:#dc2626" onclick="removerPlano()">Remover plano</button>
+      <div style="display:flex;gap:8px">
+        <button class="btn btn-outline" onclick="fecharPlano()">Fechar</button>
+        <button class="btn btn-primary" onclick="salvarPlano()">Salvar plano</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <div class="footer">
   Recobro Recuperacao de Credito | Anapolis - GO |
   <a href="/termos.html" target="_blank">Termos de Uso</a> |
@@ -105,6 +149,19 @@
   document.getElementById('nav-user').textContent = usuario.nome || '';
 
   function esc(str) { if (str == null) return ''; const d = document.createElement('div'); d.textContent = str; return d.innerHTML; }
+
+  function planoBadge(c) {
+    const cota = Number(c.plano_cota_mensal || 0);
+    if (!cota) return '<span style="color:#9ca3af">—</span>';
+    const usadas = Number(c.plano_consultas_usadas || 0);
+    const rest = Math.max(cota - usadas, 0);
+    const cor = usadas >= cota ? '#dc2626' : (rest <= Math.ceil(cota * 0.25) ? '#d97706' : '#16a34a');
+    const pct = Math.min(100, Math.round(usadas / cota * 100));
+    return `<div style="min-width:120px">
+      <div style="font-size:12px;font-weight:600;color:#334155">${esc(c.plano_nome || 'Plano')} · ${usadas}/${cota}</div>
+      <div style="height:5px;background:#eef2f7;border-radius:3px;overflow:hidden;margin-top:3px"><div style="height:100%;width:${pct}%;background:${cor}"></div></div>
+    </div>`;
+  }
 
   let buscaTimer = null;
   function debounceBusca() {
@@ -131,7 +188,7 @@
     el.innerHTML = `
       <table>
         <thead><tr>
-          <th>Nome</th><th>Email</th><th>WhatsApp</th><th>Empresa</th><th>CNPJ</th><th>Nicho</th><th>Acoes</th>
+          <th>Nome</th><th>Email</th><th>WhatsApp</th><th>Empresa</th><th>CNPJ</th><th>Nicho</th><th>Plano mensal</th><th>Acoes</th>
         </tr></thead>
         <tbody>
           ${data.clientes.map(c => `
@@ -142,7 +199,9 @@
               <td>${esc(c.empresa) || '<span style="color:#9ca3af">-</span>'}</td>
               <td><code>${esc(c.cnpj) || '-'}</code></td>
               <td>${esc(c.nicho) || '<span style="color:#9ca3af">-</span>'}</td>
+              <td>${planoBadge(c)}</td>
               <td style="white-space:nowrap">
+                <button class="btn btn-sm btn-outline" style="border-color:#2563eb;color:#2563eb" onclick="abrirPlano('${c.id}', '${esc(c.nome).replace(/'/g, "\\'")}')">Plano</button>
                 <button class="btn btn-sm btn-outline" onclick="editarCliente('${c.id}')">Editar</button>
                 <button class="btn btn-sm btn-outline" style="color:#dc2626;border-color:#dc2626" onclick="excluirCliente('${c.id}', '${esc(c.nome).replace(/'/g, "\\'")}')">Excluir</button>
               </td>
@@ -215,11 +274,83 @@
     setTimeout(() => { document.getElementById('alerta').innerHTML = ''; }, 4000);
   }
 
+  // ─── Plano mensal do cliente ───
+  async function abrirPlano(id, nome) {
+    document.getElementById('plano-cliente-id').value = id;
+    document.getElementById('plano-cliente-nome').textContent = nome || '';
+    const s = await apiJson(`/api/clientes/${id}/plano`);
+    preencherPlano(s);
+    document.getElementById('plano-overlay').style.display = 'flex';
+  }
+  function preencherPlano(s) {
+    if (!s || s.erro) s = { cota_mensal: 0, consultas_usadas: 0, restantes: 0, valor_mensal: 0, plano_nome: '' };
+    document.getElementById('plano-nome').value = s.plano_nome || '';
+    document.getElementById('plano-cota').value = s.cota_mensal || '';
+    document.getElementById('plano-valor').value = s.valor_mensal || '';
+    const uso = document.getElementById('plano-uso');
+    if (Number(s.cota_mensal) > 0) {
+      uso.style.display = '';
+      document.getElementById('plano-uso-num').textContent = `${s.consultas_usadas}/${s.cota_mensal}  (restam ${s.restantes})`;
+      const pct = Math.min(100, Math.round((s.consultas_usadas / s.cota_mensal) * 100));
+      const bar = document.getElementById('plano-uso-bar');
+      bar.style.width = pct + '%';
+      bar.style.background = s.restantes <= 0 ? '#dc2626' : (s.restantes <= Math.ceil(s.cota_mensal * 0.25) ? '#d97706' : '#16a34a');
+    } else {
+      uso.style.display = 'none';
+    }
+  }
+  function fecharPlano() { document.getElementById('plano-overlay').style.display = 'none'; carregarClientes(); }
+  function aplicarPreset(nome, cota, valor) {
+    document.getElementById('plano-nome').value = nome;
+    document.getElementById('plano-cota').value = cota;
+    document.getElementById('plano-valor').value = valor;
+  }
+  async function salvarPlano() {
+    const id = document.getElementById('plano-cliente-id').value;
+    const body = {
+      plano_nome: document.getElementById('plano-nome').value.trim(),
+      cota_mensal: parseInt(document.getElementById('plano-cota').value, 10) || 0,
+      valor_mensal: parseFloat(document.getElementById('plano-valor').value) || 0
+    };
+    const s = await apiJson(`/api/clientes/${id}/plano`, { method: 'PATCH', body: JSON.stringify(body) });
+    if (!s) return;
+    if (s.erro) return alerta(s.erro, 'error');
+    preencherPlano(s);
+    alerta('Plano salvo', 'success');
+  }
+  async function removerPlano() {
+    if (!confirm('Remover o plano deste cliente?')) return;
+    const id = document.getElementById('plano-cliente-id').value;
+    const s = await apiJson(`/api/clientes/${id}/plano`, { method: 'PATCH', body: JSON.stringify({ cota_mensal: 0, valor_mensal: 0, plano_nome: '' }) });
+    if (s && !s.erro) { preencherPlano(s); alerta('Plano removido', 'success'); }
+  }
+  async function debitarPlano() {
+    const id = document.getElementById('plano-cliente-id').value;
+    const s = await apiJson(`/api/clientes/${id}/plano/debitar`, { method: 'POST' });
+    if (!s) return;
+    if (s.erro) { alerta(s.erro, 'error'); if (s.status) preencherPlano(s.status); return; }
+    preencherPlano(s);
+  }
+  async function creditarPlano() {
+    const id = document.getElementById('plano-cliente-id').value;
+    const s = await apiJson(`/api/clientes/${id}/plano/creditar`, { method: 'POST' });
+    if (s && !s.erro) preencherPlano(s);
+  }
+  async function resetarPlano() {
+    if (!confirm('Zerar o contador deste mês para este cliente?')) return;
+    const id = document.getElementById('plano-cliente-id').value;
+    const s = await apiJson(`/api/clientes/${id}/plano/resetar`, { method: 'POST' });
+    if (s && !s.erro) { preencherPlano(s); alerta('Ciclo zerado', 'success'); }
+  }
+
   function logout() { localStorage.clear(); window.location.href = '/'; }
 
   // Fechar modal ao clicar fora
   document.getElementById('modal-overlay').addEventListener('click', function(e) {
     if (e.target === this) fecharForm();
+  });
+  document.getElementById('plano-overlay').addEventListener('click', function(e) {
+    if (e.target === this) fecharPlano();
   });
 
   carregarClientes();

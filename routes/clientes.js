@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const { autenticar } = require('./auth');
 const { pool } = require('../db');
+const planosCliente = require('../services/planos_cliente');
 
 // Listar clientes (com busca por nome/cnpj)
 router.get('/', autenticar, async (req, res) => {
@@ -92,6 +93,65 @@ router.delete('/:id', autenticar, async (req, res) => {
   } catch (e) {
     console.error('Erro ao excluir cliente:', e.message);
     res.status(500).json({ erro: 'Erro ao excluir cliente' });
+  }
+});
+
+// ─── Plano mensal do cliente (mensalista) ───────────────────────────
+// GET status do plano (com reset preguiçoso do ciclo)
+router.get('/:id/plano', autenticar, async (req, res) => {
+  try {
+    const s = await planosCliente.statusPlano(req.params.id);
+    if (!s) return res.status(404).json({ erro: 'Cliente não encontrado' });
+    res.json(s);
+  } catch (e) {
+    console.error('Erro status plano cliente:', e.message);
+    res.status(500).json({ erro: 'Erro ao obter plano' });
+  }
+});
+
+// Define/edita o plano (cota=0 remove). { plano_nome, cota_mensal, valor_mensal }
+router.patch('/:id/plano', autenticar, async (req, res) => {
+  try {
+    const out = await planosCliente.definirPlano(req.params.id, req.body || {});
+    if (!out.ok) return res.status(400).json({ erro: out.erro });
+    res.json(out.status);
+  } catch (e) {
+    console.error('Erro definir plano cliente:', e.message);
+    res.status(500).json({ erro: 'Erro ao definir plano' });
+  }
+});
+
+// Registra 1 consulta entregue (debita da cota)
+router.post('/:id/plano/debitar', autenticar, async (req, res) => {
+  try {
+    const out = await planosCliente.debitar(req.params.id);
+    if (!out.ok) return res.status(400).json({ erro: out.erro, status: out.status });
+    res.json(out.status);
+  } catch (e) {
+    console.error('Erro debitar plano cliente:', e.message);
+    res.status(500).json({ erro: 'Erro ao registrar consulta' });
+  }
+});
+
+// Desfaz 1 consulta (corrige erro)
+router.post('/:id/plano/creditar', autenticar, async (req, res) => {
+  try {
+    const out = await planosCliente.creditar(req.params.id);
+    res.json(out.status);
+  } catch (e) {
+    console.error('Erro creditar plano cliente:', e.message);
+    res.status(500).json({ erro: 'Erro ao desfazer consulta' });
+  }
+});
+
+// Zera o ciclo manualmente
+router.post('/:id/plano/resetar', autenticar, async (req, res) => {
+  try {
+    const out = await planosCliente.resetar(req.params.id);
+    res.json(out.status);
+  } catch (e) {
+    console.error('Erro resetar plano cliente:', e.message);
+    res.status(500).json({ erro: 'Erro ao resetar ciclo' });
   }
 });
 

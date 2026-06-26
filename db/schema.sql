@@ -341,3 +341,10 @@ ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS plano_cota_mensal INTEGER DEFAULT 
 ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS plano_consultas_usadas INTEGER DEFAULT 0;
 ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS plano_ciclo_inicio DATE;
 CREATE INDEX IF NOT EXISTS idx_pedidos_forma_pagamento ON pedidos(forma_pagamento);
+
+-- Plano de cota mensal por CLIENTE (mensalista). Ver services/planos_cliente.js
+ALTER TABLE clientes ADD COLUMN IF NOT EXISTS plano_nome VARCHAR(80);
+ALTER TABLE clientes ADD COLUMN IF NOT EXISTS plano_cota_mensal INTEGER DEFAULT 0;
+ALTER TABLE clientes ADD COLUMN IF NOT EXISTS plano_consultas_usadas INTEGER DEFAULT 0;
+ALTER TABLE clientes ADD COLUMN IF NOT EXISTS plano_ciclo_inicio DATE;
+ALTER TABLE clientes ADD COLUMN IF NOT EXISTS plano_valor_mensal NUMERIC(10,2) DEFAULT 0;
