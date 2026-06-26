@@ -402,9 +402,9 @@ function calcularScore(tipo, dados) {
     if (penalQuod > 0) {
       aplicar('QUOD', -penalQuod, `Score QUOD ${sq}/1000 (${scoreQuod.faixa || 'sem faixa'})${reducao < 1 ? ' - peso reduzido por sinal judicial' : ''}`);
       const sevQ = sq < 300 ? 'critico' : sq < 500 ? 'atencao' : 'observar';
-      alertar(`Score QUOD: ${sq}/1000 — ${scoreQuod.faixa || ''}`, sevQ);
+      alertar(`Score QUOD: ${sq}/1000 — ${scoreQuod.faixa || ''} · bureau QUOD (bancos); pode divergir do Serasa, que usa modelo próprio`, sevQ);
     } else if (sq >= 800) {
-      alertar(`Score QUOD: ${sq}/1000 — ${scoreQuod.faixa || 'Excelente'}`, 'positivo');
+      alertar(`Score QUOD: ${sq}/1000 — ${scoreQuod.faixa || 'Excelente'} · bureau QUOD (bancos); pode divergir do Serasa, que usa modelo próprio`, 'positivo');
     }
     if (scoreQuod.motivos?.length > 0) {
       scoreQuod.motivos.slice(0, 2).forEach(m => alertar(`QUOD: ${m}`, 'observar'));
