@@ -121,7 +121,10 @@ function secaoEstrategiaCobranca(doc, y, dados, score) {
   const scoreCredito = dados.score_credito || {};
   const patrimonio = (dados.imoveis?.itens?.length || 0) + (dados.historico_veiculos_proprietario?.veiculos?.length || 0);
   const execucoes = (processos.processos || []).filter(p => /execu.{0,3}o/i.test(p.classe || '') && p.status === 'Ativo').length;
-  const sQuod = Number(scoreCredito.score || 0);
+  // Decisão usa o bureau MAIS CONSERVADOR (menor entre QUOD e Boa Vista): quando os
+  // bureaus divergem, a estratégia de cobrança fica realista, não otimista.
+  const _scoresEC = [Number(scoreCredito.score || 0), Number((dados.boa_vista || {}).score || 0)].filter(x => x > 0);
+  const sQuod = _scoresEC.length ? Math.min.apply(null, _scoresEC) : 0;
   const pend = Number(negativacoes.total_pendencias || 0);
 
   y = secao(doc, 'ESTRATÉGIA DE COBRANÇA RECOMENDADA', y);
@@ -184,7 +187,9 @@ function secaoEstrategiaCobranca(doc, y, dados, score) {
 // ─── Score de Recuperabilidade ─────────────────────────────────────
 function secaoScoreRecuperabilidade(doc, y, dados, score) {
   const patrimonio = (dados.imoveis?.itens?.length || 0) + (dados.historico_veiculos_proprietario?.veiculos?.length || 0);
-  const sQuod = Number((dados.score_credito || {}).score || 0);
+  // Recuperabilidade usa o bureau MAIS CONSERVADOR (menor entre QUOD e Boa Vista).
+  const _scoresRec = [Number((dados.score_credito || {}).score || 0), Number((dados.boa_vista || {}).score || 0)].filter(x => x > 0);
+  const sQuod = _scoresRec.length ? Math.min.apply(null, _scoresRec) : 0;
   const pend = Number((dados.negativacoes || {}).total_pendencias || 0);
   const execucoes = ((dados.processos || {}).processos || []).filter(p => /execu.{0,3}o/i.test(p.classe || '') && p.status === 'Ativo').length;
 
@@ -215,7 +220,7 @@ function secaoScoreRecuperabilidade(doc, y, dados, score) {
   doc.fillColor(COR.cinza).fontSize(9).font('Helvetica').text('/100', MARGEM + 68, y + 28, { lineBreak: false });
   doc.fillColor(cor).fontSize(11).font('Helvetica-Bold').text(classif, MARGEM + 100, y + 6, { width: LARGURA - 110 });
   doc.fillColor('#111827').fontSize(9).font('Helvetica-Bold').text(`Recomendação: ${rec}`, MARGEM + 100, y + 26, { width: LARGURA - 110 });
-  doc.fillColor(COR.cinza).fontSize(7).font('Helvetica').text('Fatores: patrimônio + score crédito + protestos + execuções ativas', MARGEM + 100, y + 42, { width: LARGURA - 110 });
+  doc.fillColor(COR.cinza).fontSize(7).font('Helvetica').text('Fatores: patrimônio + score de crédito (bureau mais conservador) + protestos + execuções ativas', MARGEM + 100, y + 42, { width: LARGURA - 110 });
   return y + 60;
 }
 
