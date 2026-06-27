@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Rastreia — Faturamento</title>
+  <link rel="stylesheet" href="/css/style.css">
+  <style>
+    .fcards { display:grid; grid-template-columns:repeat(auto-fit,minmax(190px,1fr)); gap:14px; margin-bottom:24px; }
+    .fcard { background:#fff; border:1px solid #e2e8f0; border-radius:12px; padding:16px; box-shadow:0 1px 3px rgba(0,0,0,.06); }
+    .fcard .lbl { font-size:11px; text-transform:uppercase; letter-spacing:.5px; color:#64748b; font-weight:700; }
+    .fcard .val { font-size:24px; font-weight:800; color:#0f172a; margin-top:6px; }
+    .fcard .sub { font-size:12px; color:#94a3b8; margin-top:4px; }
+    .ftab { width:100%; border-collapse:collapse; background:#fff; border-radius:10px; overflow:hidden; box-shadow:0 1px 3px rgba(0,0,0,.06); }
+    .ftab th,.ftab td { padding:10px 14px; text-align:left; border-bottom:1px solid #eef2f7; font-size:13px; }
+    .ftab th { background:#f8fafc; font-size:11px; text-transform:uppercase; letter-spacing:.4px; color:#475569; }
+    .ftab td.num,.ftab th.num { text-align:right; font-variant-numeric:tabular-nums; }
+    .ftab tr:last-child td { border-bottom:none; }
+    .sechead { font-size:15px; font-weight:700; color:#0f172a; margin:26px 0 10px; }
+    .pos { color:#16a34a; font-weight:700; } .neg { color:#dc2626; font-weight:700; }
+    .chip { display:inline-block; padding:2px 8px; border-radius:9px; font-size:11px; font-weight:700; }
+    .chip-ok { background:#dcfce7; color:#14532d; } .chip-oc { background:#fef3c7; color:#92400e; }
+  </style>
+</head>
+<body>
+<nav class="nav">
+  <a href="/dashboard.html" class="nav-logo"><img src="/img/logo-recobro.jpg" alt="Recobro"><div><div class="nav-brand">RASTREIA</div></div></a>
+  <div class="nav-links">
+    <a href="/dashboard.html">Dashboard</a>
+    <a href="/novo-pedido.html">+ Novo Pedido</a>
+    <a href="/clientes.html">Clientes</a>
+    <a href="/faturamento.html" class="ativo">Faturamento</a>
+    <a href="/custos-api.html">API</a>
+    <a href="#" onclick="logout()">Sair</a>
+  </div>
+  <div class="nav-user" id="nav-user"></div>
+</nav>
+
+<div class="container">
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;flex-wrap:wrap;gap:10px">
+    <h1 class="page-title" style="margin:0">Faturamento</h1>
+    <button class="btn btn-sm btn-outline" onclick="carregar()">&#8635; Atualizar</button>
+  </div>
+  <div id="conteudo"><div class="loading"><div class="spinner"></div>Carregando...</div></div>
+</div>
+
+<div class="footer">Recobro Recuperacao de Credito | Anapolis - GO</div>
+
+<script>
+  const token = localStorage.getItem('rastreia_token');
+  if (!token) location.href = '/';
+  const usuario = JSON.parse(localStorage.getItem('rastreia_usuario') || '{}');
+  document.getElementById('nav-user').textContent = usuario.nome || '';
+  if (usuario.perfil !== 'admin') { alert('Apenas administradores.'); location.href = '/dashboard.html'; }
+
+  function logout() { localStorage.clear(); location.href = '/'; }
+  function esc(s){ const d=document.createElement('div'); d.textContent=s==null?'':s; return d.innerHTML; }
+  const brl = (n) => 'R$ ' + Number(n||0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const FORMAS = { mercadopago:'Mercado Pago (Pix/cartão)', dinheiro:'Dinheiro', plano:'Plano (operador)', plano_cliente:'Plano do cliente' };
+
+  async function carregar() {
+    const el = document.getElementById('conteudo');
+    el.innerHTML = '<div class="loading"><div class="spinner"></div>Carregando...</div>';
+    let r;
+    try {
+      const res = await fetch('/api/admin/faturamento', { headers: { Authorization: `Bearer ${token}` } });
+      if (res.status === 401) return logout();
+      r = await res.json();
+      if (r.erro) throw new Error(r.erro);
+    } catch (e) { el.innerHTML = `<div class="alert alert-error">Erro: ${esc(e.message)}</div>`; return; }
+    render(r);
+  }
+
+  function variacao(atual, anterior) {
+    if (!anterior) return '';
+    const pct = ((atual - anterior) / anterior) * 100;
+    const cls = pct >= 0 ? 'pos' : 'neg';
+    const seta = pct >= 0 ? '▲' : '▼';
+    return `<span class="${cls}">${seta} ${Math.abs(pct).toFixed(0)}%</span> vs mês anterior`;
+  }
+
+  function render(r) {
+    const rec = r.receita;
+    const cards = `
+      <div class="fcards">
+        <div class="fcard"><div class="lbl">Receita do mês</div><div class="val">${brl(rec.mes)}</div><div class="sub">${rec.mes_pedidos} pedido(s) · ${variacao(rec.mes, rec.mes_anterior)}</div></div>
+        <div class="fcard"><div class="lbl">Lucro do mês</div><div class="val pos">${brl(r.lucro_mes)}</div><div class="sub">margem ${r.margem_mes_pct}% · custo API ${brl(r.custo_mes)}</div></div>
+        <div class="fcard"><div class="lbl">Hoje</div><div class="val">${brl(rec.hoje)}</div><div class="sub">${rec.hoje_pedidos} pedido(s)</div></div>
+        <div class="fcard"><div class="lbl">Mês anterior</div><div class="val">${brl(rec.mes_anterior)}</div><div class="sub">${rec.mes_anterior_pedidos} pedido(s)</div></div>
+        <div class="fcard"><div class="lbl">Total acumulado</div><div class="val">${brl(rec.total)}</div><div class="sub">${rec.total_pedidos} pedido(s)</div></div>
+        <div class="fcard"><div class="lbl">Recorrência (mensalistas)</div><div class="val">${brl(r.mensalistas_resumo.recorrente_mes)}/mês</div><div class="sub">${r.mensalistas_resumo.ativos} ativo(s) · ${r.mensalistas_resumo.ociosos} ocioso(s)</div></div>
+      </div>`;
+
+    const prod = !r.por_produto.length ? '<div class="loading">Sem vendas neste mês.</div>' : `
+      <table class="ftab">
+        <thead><tr><th>Produto</th><th class="num">Qtd</th><th class="num">Receita</th><th class="num">Custo API</th><th class="num">Lucro</th><th class="num">Margem</th></tr></thead>
+        <tbody>${r.por_produto.map(p => `
+          <tr><td><strong>${esc(p.nome)}</strong></td><td class="num">${p.qtd}</td><td class="num">${brl(p.receita)}</td>
+          <td class="num" style="color:#dc2626">${brl(p.custo_total)}</td><td class="num pos">${brl(p.lucro)}</td><td class="num">${p.margem_pct}%</td></tr>`).join('')}</tbody>
+      </table>`;
+
+    const forma = !r.por_forma.length ? '' : `
+      <table class="ftab">
+        <thead><tr><th>Forma de pagamento</th><th class="num">Qtd</th><th class="num">Total</th></tr></thead>
+        <tbody>${r.por_forma.map(f => `<tr><td>${esc(FORMAS[f.forma] || f.forma)}</td><td class="num">${f.qtd}</td><td class="num">${brl(f.total)}</td></tr>`).join('')}</tbody>
+      </table>`;
+
+    const mens = !r.mensalistas.length ? '<div class="loading">Nenhum cliente com plano mensal ainda.</div>' : `
+      <table class="ftab">
+        <thead><tr><th>Cliente</th><th>Plano</th><th class="num">Uso do mês</th><th class="num">Mensalidade</th><th>Status</th></tr></thead>
+        <tbody>${r.mensalistas.map(m => `
+          <tr><td><strong>${esc(m.nome)}</strong></td><td>${esc(m.plano)}</td>
+          <td class="num">${m.usadas}/${m.cota} <span style="color:#94a3b8">(restam ${m.restantes})</span></td>
+          <td class="num">${brl(m.valor_mensal)}</td>
+          <td>${m.ocioso ? '<span class="chip chip-oc">ocioso</span>' : '<span class="chip chip-ok">ativo</span>'}</td></tr>`).join('')}</tbody>
+      </table>`;
+
+    document.getElementById('conteudo').innerHTML =
+      cards +
+      `<div class="sechead">Por produto (mês atual)</div>${prod}` +
+      `<div class="sechead">Por forma de pagamento (mês atual)</div>${forma}` +
+      `<div class="sechead">Mensalistas</div>${mens}` +
+      `<div style="color:#94a3b8;font-size:11px;margin-top:16px">Receita = pedidos pagos (Pix/cartão, dinheiro e plano). Custo/lucro = estimativa de custo de API por produto. Mensalidades dos planos são cobradas à parte.</div>`;
+  }
+
+  carregar();
+</script>
+</body>
+</html>

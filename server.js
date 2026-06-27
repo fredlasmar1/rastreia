@@ -310,6 +310,17 @@ app.post('/api/admin/placar-apis/testar', _autMon, _admMon, async (req, res) => 
   }
 });
 
+// Painel de faturamento (visão de dono) — admin.
+const faturamento = require('./services/faturamento');
+app.get('/api/admin/faturamento', _autMon, _admMon, async (req, res) => {
+  try {
+    res.json(await faturamento.montar());
+  } catch (e) {
+    console.error('[faturamento]', e);
+    res.status(500).json({ erro: e.message });
+  }
+});
+
 // Rotas API
 app.use('/api/auth', require('./routes/auth'));
 const pagamentosRouter = require('./routes/pagamentos');
