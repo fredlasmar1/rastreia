@@ -2258,9 +2258,9 @@ async function executarConsultaCompleta(pedido) {
   }
 
   // Vínculos societários para produtos premium
-  const precisaVinculos = ['due_diligence', 'investigacao_patrimonial', 'due_diligence_imobiliaria'].includes(tipo);
+  const precisaVinculos = ['due_diligence', 'analise_devedor', 'investigacao_patrimonial', 'due_diligence_imobiliaria'].includes(tipo);
   // Veículos e imóveis para investigação patrimonial e imobiliária
-  const precisaVeiculos = ['investigacao_patrimonial', 'due_diligence_imobiliaria'].includes(tipo);
+  const precisaVeiculos = ['analise_devedor', 'investigacao_patrimonial', 'due_diligence_imobiliaria'].includes(tipo);
 
   // V3: para due_diligence_imobiliaria, podem haver múltiplos alvos vindos de
   // pedido_alvos (extraídos da IA). Roda o mesmo conjunto de consultas para
@@ -2350,7 +2350,7 @@ async function executarConsultasParaAlvo(alvo, { precisaVinculos, precisaVeiculo
   // Mesmos produtos que precisaVeiculos (patrimonial + imobiliária).
   if (precisaVeiculos) promises.push(consultarImoveisRuraisSIGEF(documento));
   // 2ª opinião de bureau (Boa Vista/SCPC): só nos produtos que olham crédito/dívida.
-  const precisaBoaVista = ['dossie_pf', 'analise_devedor', 'investigacao_patrimonial'].includes(tipo);
+  const precisaBoaVista = ['dossie_pf', 'dossie_pj', 'analise_devedor', 'investigacao_patrimonial', 'due_diligence'].includes(tipo);
   if (precisaBoaVista) promises.push(consultarBoaVista(documento));
 
   const resultados = await Promise.all(promises);
@@ -2362,6 +2362,25 @@ async function executarConsultasParaAlvo(alvo, { precisaVinculos, precisaVeiculo
   const aml = precisaVinculos ? resultados[i++] : null;
   const imoveis_rurais = precisaVeiculos ? resultados[i++] : null;
   const boa_vista = precisaBoaVista ? resultados[i++] : null;
+
+  // Item 1: mescla as negativações da Boa Vista/SCPC (base diferente da QUOD) na
+  // lista exibida — pega dívida que o QUOD não vê. Marca a origem do bureau.
+  if (boa_vista && Array.isArray(boa_vista.negativacoes) && boa_vista.negativacoes.length && negativacoes && typeof negativacoes === 'object') {
+    const chave = (p) => `${(p.credor || '').toLowerCase()}|${p.valor || 0}`;
+    const jaTem = new Set((negativacoes.pendencias || []).map(chave));
+    const novos = boa_vista.negativacoes
+      .filter(p => !jaTem.has(chave(p)))
+      .map(p => ({ ...p, origem_bureau: 'Boa Vista/SCPC' }));
+    if (novos.length) {
+      negativacoes.pendencias = [...(negativacoes.pendencias || []), ...novos];
+      const somaNovos = novos.reduce((s, p) => s + (Number(p.valor) || 0), 0);
+      negativacoes.total_pendencias = Number(negativacoes.total_pendencias || 0) + somaNovos;
+      if (!negativacoes.status || /n[aã]o\s*consta|sem pend/i.test(negativacoes.status)) {
+        negativacoes.status = 'Consta Pendência';
+      }
+      negativacoes.fonte = `${negativacoes.fonte || 'Direct Data'} + Boa Vista/SCPC`;
+    }
+  }
 
   // Interpostas a partir do AML + fallback societário: quando o
   // VinculosSocietarios falha (comum), usamos as sociedades do AML.

@@ -411,7 +411,7 @@ function secaoProtestos(doc, y, dados) {
     return y + 16;
   }
 
-  const temPendencia = negativacoes.total_pendencias > 0 || negativacoes.status === 'Consta Pendencia' || negativacoes.status === 'Consta Pendência';
+  const temPendencia = negativacoes.total_pendencias > 0 || negativacoes.status === 'Consta Pendencia' || negativacoes.status === 'Consta Pendência' || (negativacoes.pendencias?.length > 0);
   if (!temPendencia) {
     doc.rect(MARGEM, y, LARGURA, 18).fill('#dcfce7');
     doc.fillColor('#14532d').fontSize(8).font('Helvetica-Bold').text('NADA CONSTA - Nenhum protesto ou negativação encontrada.', MARGEM + 8, y + 4);
@@ -475,6 +475,23 @@ function secaoProtestos(doc, y, dados) {
         y += 10;
       });
     }
+    y += 4;
+  }
+  // Lista de credores / pendências financeiras (QUOD + Boa Vista/SCPC).
+  if (negativacoes.pendencias?.length > 0) {
+    doc.fillColor(COR.vermelho).fontSize(7).font('Helvetica-Bold').text('PENDÊNCIAS FINANCEIRAS / CREDORES:', MARGEM, y); y += 10;
+    negativacoes.pendencias.slice(0, 12).forEach(p => {
+      y = verificarPagina(doc, y, 12);
+      const partes = [
+        p.credor || 'Credor',
+        p.valor ? `R$ ${Number(p.valor).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` : '',
+        p.data_inclusao || p.data_ocorrencia || '',
+        p.tipo_contrato || '',
+        p.origem_bureau ? `(${p.origem_bureau})` : ''
+      ].filter(Boolean);
+      doc.fillColor('#111827').fontSize(6.5).font('Helvetica').text(`- ${partes.join(' | ')}`, MARGEM + 8, y, { width: LARGURA - 16 });
+      y += 10;
+    });
     y += 4;
   }
   doc.fillColor(COR.cinza).fontSize(5.5).font('Helvetica').text(`Fonte: ${negativacoes.fonte || 'Direct Data'}`, MARGEM, y);
