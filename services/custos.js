@@ -115,11 +115,13 @@ async function calcularCustoPedido(rows) {
 // Usado para ESTIMATIVA antes da consulta rodar (exibido no /novo-pedido.html).
 // Os valores reais são calculados em calcularCustoPedido() após a consulta.
 const APIS_POR_PRODUTO = {
-  dossie_pf: ['directd_pf_plus', 'escavador_processos', 'directd_score_quod', 'directd_negativacoes', 'transparencia'],
-  dossie_pj: ['cnpja', 'escavador_processos', 'directd_negativacoes', 'transparencia'],
-  due_diligence: ['cnpja', 'escavador_processos', 'directd_negativacoes', 'directd_perfil_economico', 'directd_vinculos', 'transparencia'],
-  analise_devedor: ['directd_pf_plus', 'escavador_processos', 'directd_negativacoes', 'directd_veiculos', 'directd_vinculos'],
-  investigacao_patrimonial: ['directd_pf_plus', 'escavador_processos', 'directd_vinculos', 'directd_veiculos', 'infosimples_detran_go'],
+  dossie_pf: ['directd_pf_plus', 'escavador_processos', 'directd_score_quod', 'directd_negativacoes', 'directd_boa_vista', 'directd_perfil_economico', 'transparencia'],
+  dossie_pj: ['cnpja', 'escavador_processos', 'directd_score_quod', 'directd_negativacoes', 'directd_boa_vista', 'directd_vinculos', 'transparencia'],
+  due_diligence: ['cnpja', 'escavador_processos', 'directd_negativacoes', 'directd_boa_vista', 'directd_perfil_economico', 'directd_vinculos', 'transparencia'],
+  // Análise de Devedor consulta patrimônio por CPF (Histórico de Veículos R$0,36 +
+  // DETRAN-GO R$0,26), NÃO por placa (directd_veiculos R$5,40).
+  analise_devedor: ['directd_pf_plus', 'escavador_processos', 'directd_score_quod', 'directd_negativacoes', 'directd_boa_vista', 'directd_perfil_economico', 'directd_vinculos', 'directd_historico_veiculos', 'infosimples_detran_go'],
+  investigacao_patrimonial: ['directd_pf_plus', 'escavador_processos', 'directd_vinculos', 'directd_boa_vista', 'directd_historico_veiculos', 'infosimples_detran_go'],
   due_diligence_imobiliaria: [
     'directd_pf_plus', 'escavador_processos', 'directd_score_quod', 'directd_negativacoes', // comprador
     'directd_pf_plus', 'escavador_processos', 'directd_negativacoes', 'directd_veiculos', 'directd_vinculos', // vendedor
