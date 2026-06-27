@@ -1070,6 +1070,8 @@
   // Inicializar
   renderProdutos();
   carregarEstimativasCusto();
+  // Pré-seleção do produto via ?tipo= (vindo dos cards do dashboard)
+  try { const _t = new URLSearchParams(location.search).get('tipo'); if (_t && PRODUTOS[_t]) selecionarProduto(_t); } catch (e) {}
 </script>
 </body>
 </html>

@@ -41,6 +41,10 @@
     <div class="stat-card verde"><div class="stat-label">Receita do Mês</div><div class="stat-valor" id="s-receita">...</div></div>
   </div>
 
+  <!-- Serviços (catálogo de todos os produtos) -->
+  <div style="font-size:15px;font-weight:700;color:#0f172a;margin:4px 0 10px">Serviços</div>
+  <div id="servicos-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:12px;margin-bottom:24px"></div>
+
   <!-- Filtros -->
   <div style="display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap;align-items:center">
     <button class="btn btn-sm btn-primary" onclick="filtrar('')">Todos</button>
@@ -236,6 +240,33 @@
     } catch (_) { /* silencioso */ }
   }
 
+  // Catálogo de serviços exibido no dashboard
+  const SERVICOS = [
+    { nome: 'Nome Limpo ou Sujo', preco: 'R$ 19,90', prazo: 'minutos', icone: '🚦', url: '/restricoes.html', desc: 'Negativações + score' },
+    { nome: 'Consulta Veicular', preco: 'a partir de R$ 19,90', prazo: '30 min', icone: '🚗', url: '/veicular.html', desc: 'Gravame, restrições, FIPE' },
+    { nome: 'Dossiê Pessoa Física', preco: 'R$ 69', prazo: '2h', icone: '👤', url: '/novo-pedido.html?tipo=dossie_pf', desc: 'Limpo/sujo + score + processos' },
+    { nome: 'Dossiê Pessoa Jurídica', preco: 'R$ 99', prazo: '2h', icone: '🏢', url: '/novo-pedido.html?tipo=dossie_pj', desc: 'Empresa + sócios + risco' },
+    { nome: 'Análise de Devedor', preco: 'R$ 99', prazo: '2h', icone: '⚖️', url: '/novo-pedido.html?tipo=analise_devedor', desc: 'Patrimônio + recuperabilidade' },
+    { nome: 'Investigação Patrimonial', preco: 'R$ 149', prazo: '4h', icone: '🏦', url: '/novo-pedido.html?tipo=investigacao_patrimonial', desc: 'Bens, empresas, interpostas' },
+    { nome: 'Due Diligence Empresarial', preco: 'R$ 497', prazo: '24h', icone: '🔎', url: '/novo-pedido.html?tipo=due_diligence', desc: 'Empresa + sócios + CNDs + parecer' },
+    { nome: 'Due Diligence Imobiliária', preco: 'R$ 797', prazo: '24h', icone: '🏠', url: '/novo-pedido.html?tipo=due_diligence_imobiliaria', desc: 'Comprador + vendedor + imóvel' }
+  ];
+  function renderServicos() {
+    const g = document.getElementById('servicos-grid');
+    if (!g) return;
+    g.innerHTML = SERVICOS.map(s => `
+      <a href="${s.url}" style="text-decoration:none;color:inherit;background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:14px;box-shadow:0 1px 3px rgba(0,0,0,.06);display:flex;flex-direction:column;gap:6px;transition:box-shadow .15s,transform .15s" onmouseover="this.style.boxShadow='0 6px 18px rgba(15,23,42,.12)';this.style.transform='translateY(-2px)'" onmouseout="this.style.boxShadow='0 1px 3px rgba(0,0,0,.06)';this.style.transform='none'">
+        <div style="font-size:22px">${s.icone}</div>
+        <div style="font-weight:700;font-size:14px;color:#0f172a">${esc(s.nome)}</div>
+        <div style="font-size:11px;color:#64748b;flex:1">${esc(s.desc || '')}</div>
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-top:4px">
+          <span style="font-weight:800;color:#16a34a;font-size:14px">${esc(s.preco)}</span>
+          <span style="font-size:11px;color:#94a3b8">⏱ ${esc(s.prazo)}</span>
+        </div>
+      </a>`).join('');
+  }
+
+  renderServicos();
   carregarStats();
   carregarPedidos();
   carregarAlertasAPI();
