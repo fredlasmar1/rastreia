@@ -2350,7 +2350,7 @@ async function executarConsultasParaAlvo(alvo, { precisaVinculos, precisaVeiculo
   // Mesmos produtos que precisaVeiculos (patrimonial + imobiliária).
   if (precisaVeiculos) promises.push(consultarImoveisRuraisSIGEF(documento));
   // 2ª opinião de bureau (Boa Vista/SCPC): só nos produtos que olham crédito/dívida.
-  const precisaBoaVista = ['dossie_pf', 'dossie_pj', 'analise_devedor', 'investigacao_patrimonial', 'due_diligence'].includes(tipo);
+  const precisaBoaVista = !!pedido.addon_boa_vista; // 2ª opinião Boa Vista vira ADD-ON opcional (+R$29) — fora da base p/ margem
   if (precisaBoaVista) promises.push(consultarBoaVista(documento));
 
   const resultados = await Promise.all(promises);

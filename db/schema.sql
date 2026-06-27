@@ -205,7 +205,7 @@ INSERT INTO api_custos (chave, rotulo, valor_brl, fonte, confianca) VALUES
   ('transparencia',          'Portal da Transparencia (CGU)',             0.0000, 'API publica gratuita',                                  'oficial'),
   ('infosimples_detran_go',  'InfoSimples DETRAN-GO',                     0.2600, 'Tabela publica InfoSimples',                            'oficial'),
   ('onr_matricula',          'ONR — Matricula de imovel',                 0.0000, 'Depende do cartorio, variavel',                         'estimado'),
-  ('directd_boa_vista',      'DirectData — Boa Vista Acerta/SCPC (2a opiniao)', 3.5000, 'Cardapio DirectData V4.3 (Credito)',             'oficial')
+  ('directd_boa_vista',      'DirectData — Boa Vista Acerta Completo PF (2a opiniao)', 14.0300, 'Cardapio DirectData V4 2026',           'oficial')
 ON CONFLICT (chave) DO UPDATE SET
   rotulo = EXCLUDED.rotulo,
   valor_brl = EXCLUDED.valor_brl,
@@ -353,3 +353,6 @@ ALTER TABLE clientes ADD COLUMN IF NOT EXISTS plano_valor_mensal NUMERIC(10,2) D
 -- Fase 2: liga o pedido ao cliente cadastrado (p/ cobrar do plano do mensalista)
 ALTER TABLE pedidos ADD COLUMN IF NOT EXISTS cliente_id UUID REFERENCES clientes(id);
 CREATE INDEX IF NOT EXISTS idx_pedidos_cliente_id ON pedidos(cliente_id);
+
+-- Add-on opcional: 2a opiniao de bureau (Boa Vista/SCPC, +R$29). Off por padrao.
+ALTER TABLE pedidos ADD COLUMN IF NOT EXISTS addon_boa_vista BOOLEAN DEFAULT false;

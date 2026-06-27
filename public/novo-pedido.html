@@ -324,32 +324,32 @@
   });
 
   const PRODUTOS = {
-    dossie_pf: { nome: 'Dossiê Pessoa Física', preco: 89, prazo: '2 horas', icone: '👤',
+    dossie_pf: { nome: 'Dossiê Pessoa Física', preco: 69, prazo: '2 horas', icone: '👤',
       argumento: 'Antes de assinar qualquer contrato com uma pessoa física, você precisa saber: ela tem processos como réu? Nome sujo? Patrimônio que garanta a dívida? Em 2 horas você tem a resposta.',
       dados: ['Dados pessoais completos (nome, CPF, data nasc., filiação)', 'Endereços e telefones atuais com flag WhatsApp', 'Classe social e renda estimada', 'Processos judiciais como réu (trabalhista, cível, criminal)', 'Negativações e protestos', 'Listas negras federais (CEIS/CNEP)', 'Score de risco + recomendação do analista'],
       publico: ['Empresário que vai vender a prazo para PF', 'Proprietário que vai alugar imóvel', 'Quem vai firmar sociedade', 'Quem vai emprestar dinheiro']
     },
-    dossie_pj: { nome: 'Dossiê Pessoa Jurídica', preco: 149, prazo: '2 horas', icone: '🏢',
+    dossie_pj: { nome: 'Dossiê Pessoa Jurídica', preco: 99, prazo: '2 horas', icone: '🏢',
       argumento: 'CNPJ ativo não significa empresa saudável. Antes de vender fiado ou assinar contrato, descubra: a empresa tem dívidas trabalhistas, execuções fiscais, sócios problemáticos?',
       dados: ['Dados completos da empresa (situação RF, porte, abertura, regime tributário)', 'Quadro societário com histórico de alterações', 'Simples Nacional e regime tributário', 'Processos judiciais: trabalhistas, cíveis, execuções fiscais', 'Listas negras federais CEIS e CNEP', 'Situação fiscal e protestos', 'Score de risco empresarial + recomendação'],
       publico: ['Fornecedor que vai conceder crédito a cliente PJ', 'Quem vai fechar contrato de prestação de serviços', 'Empresa buscando parceiro ou representante', 'Quem vai aceitar boleto de empresa desconhecida']
     },
-    due_diligence: { nome: 'Due Diligence Empresarial', preco: 597, prazo: '24 horas', icone: '🔎',
+    due_diligence: { nome: 'Due Diligence Empresarial', preco: 497, prazo: '24 horas', icone: '🔎',
       argumento: 'Comprar empresa sem due diligence é assinar cheque em branco. Passivos trabalhistas ocultos, sócios com histórico problemático, dívidas fiscais não declaradas — você herda tudo.',
       dados: ['Tudo do Dossiê PJ + análise aprofundada', 'Dossiê PF de cada sócio individualmente', 'Passivo judicial detalhado com valor de causa', 'Certidões (Federal, Estadual, Municipal, Trabalhista)', 'Patrimônio da empresa (imóveis, veículos, marcas)', 'Histórico completo de alterações societárias', 'Análise de risco por categoria (trabalhista, fiscal, societário)', 'Parecer técnico com recomendação: PROSSEGUIR / COM RESSALVAS / NÃO PROSSEGUIR'],
       publico: ['Quem vai comprar uma empresa ou ponto comercial', 'Investidor que vai aportar capital', 'Quem vai virar sócio de empresa existente', 'Advogado fazendo due diligence para cliente']
     },
-    analise_devedor: { nome: 'Análise de Devedor', preco: 119, prazo: '2 horas', icone: '⚖️',
+    analise_devedor: { nome: 'Análise de Devedor', preco: 99, prazo: '2 horas', icone: '⚖️',
       argumento: 'Antes de gastar com advogado e processo, descubra se o devedor tem patrimônio para pagar. Cobrar devedor "laranja" é jogar dinheiro fora.',
       dados: ['Identificação e endereços atuais para citação', 'Telefones ativos para contato de cobrança', 'Patrimônio identificado: imóveis, veículos, empresas', 'Histórico como devedor: execuções, protestos, negativações', 'Capacidade de pagamento estimada', 'Estratégia de cobrança recomendada', 'Score de recuperabilidade: RECUPERÁVEL / PARCIAL / IRRECUPERÁVEL'],
       publico: ['Empresa com cliente inadimplente', 'Escritório de advocacia antes de aceitar causa de êxito', 'Credor com título vencido avaliando ajuizar execução', 'Recobro analisando viabilidade de carteira']
     },
-    investigacao_patrimonial: { nome: 'Investigação Patrimonial', preco: 199, prazo: '4 horas', icone: '🏦',
+    investigacao_patrimonial: { nome: 'Investigação Patrimonial', preco: 149, prazo: '4 horas', icone: '🏦',
       argumento: 'Ganhar a ação é só metade do caminho. Se não localizar os bens, não recebe. Mapeamos veículos, empresas, participações societárias e interpostas (laranjas), além de imóveis rurais e o roteiro de busca de imóveis urbanos — para você entrar na execução com alvo certo.',
       dados: ['Imóveis registrados (próprios e via empresas vinculadas)', 'Veículos (DETRAN)', 'Todas as empresas abertas em nome do investigado', 'Participações societárias em outras empresas', 'Vínculos com interpostas pessoas (possíveis laranjas)', 'Execuções e penhoras já existentes', 'Estratégia de penhora recomendada (imóvel / veículo / quota / conta)', 'Estimativa de patrimônio localizável'],
       publico: ['Advogado com título judicial para executar', 'Credor com sentença favorável', 'Empresa que ganhou ação e quer receber', 'Quem suspeita que devedor ocultou patrimônio']
     },
-    due_diligence_imobiliaria: { nome: 'Due Diligence Imobiliária', preco: 997, prazo: '24 horas', icone: '🏠',
+    due_diligence_imobiliaria: { nome: 'Due Diligence Imobiliária', preco: 797, prazo: '24 horas', icone: '🏠',
       argumento: 'Antes de assinar o contrato de compra e venda, descubra: o comprador tem crédito? O vendedor tem penhora no imóvel? O imóvel está com a matrícula limpa? Em 24h analisamos os 3 elementos da transação.',
       dados: ['Dossiê PF do COMPRADOR (capacidade de pagamento, score)', 'Dossiê PF do VENDEDOR (execuções, penhoras, situação fiscal)', 'Matrícula do IMÓVEL (ônus, gravames, histórico)', 'Bens vinculados ao CPF do vendedor (ONR)', 'Veículos do vendedor (DETRAN)', 'Parecer técnico final: PROSSEGUIR / COM RESSALVAS / NÃO PROSSEGUIR', 'Cláusulas contratuais sugeridas'],
       publico: ['Comprador antes de assinar contrato', 'Imobiliária intermediando vendas', 'Advogado fazendo contrato de compra e venda', 'Quem vai financiar imóvel', 'Investidor em imóvel comercial']
@@ -361,11 +361,11 @@
     }
   };
   const PRODUTOS_ORIG = {
-    dossie_pf: { nome: 'Dossiê Pessoa Física', preco: 89, prazo: '2 horas' },
-    dossie_pj: { nome: 'Dossiê Pessoa Jurídica', preco: 149, prazo: '2 horas' },
-    due_diligence: { nome: 'Due Diligence Empresarial', preco: 997, prazo: '24 horas' },
-    analise_devedor: { nome: 'Análise de Devedor', preco: 119, prazo: '2 horas' },
-    investigacao_patrimonial: { nome: 'Investigação Patrimonial', preco: 199, prazo: '4 horas' }
+    dossie_pf: { nome: 'Dossiê Pessoa Física', preco: 69, prazo: '2 horas' },
+    dossie_pj: { nome: 'Dossiê Pessoa Jurídica', preco: 99, prazo: '2 horas' },
+    due_diligence: { nome: 'Due Diligence Empresarial', preco: 797, prazo: '24 horas' },
+    analise_devedor: { nome: 'Análise de Devedor', preco: 99, prazo: '2 horas' },
+    investigacao_patrimonial: { nome: 'Investigação Patrimonial', preco: 149, prazo: '4 horas' }
   };
 
   // V2: docs do imóvel sem tipo — a IA classifica automaticamente.
