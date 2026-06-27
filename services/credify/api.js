@@ -124,20 +124,25 @@ async function chamar(endpoint, body, fonte) {
         'content-type': 'application/json',
         Authorization: `Bearer ${token}`
       },
-      timeout: 60000
+      // 15s: se a Credify pendurar (ex.: Renainf instável), a consulta falha
+      // rápido e o veicular sai com "indisponível no momento" em vez de travar.
+      timeout: 15000
     });
     return resp.data || {};
   } catch (e) {
     const status = e.response?.status;
+    const isTimeout = e.code === 'ECONNABORTED' || /timeout/i.test(e.message || '');
     const apiMsg = e.response?.data?.Message
       || e.response?.data?.message
       || e.response?.data?.RESPOSTA?.DESCRICAORETORNO
       || e.message;
-    console.warn(`[Credify ${fonte}] HTTP ${status || '?'}: ${apiMsg}`);
+    console.warn(`[Credify ${fonte}] ${isTimeout ? 'TIMEOUT' : 'HTTP ' + (status || '?')}: ${apiMsg}`);
     return {
-      erro: status ? `Credify retornou HTTP ${status}` : 'Credify indisponível',
+      erro: isTimeout ? 'Serviço temporariamente indisponível (timeout)'
+        : (status ? `Credify retornou HTTP ${status}` : 'Credify indisponível'),
       detalhes: apiMsg,
       status_http: status || null,
+      timeout: isTimeout || undefined,
       fonte,
       disponivel: false
     };
