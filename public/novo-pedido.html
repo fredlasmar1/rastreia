@@ -251,6 +251,11 @@
     <div class="info-row" id="r-custo-row" style="display:none"><span class="info-label">Custo bruto (interno)</span><span id="r-custo" class="info-valor"></span></div>
     <div class="info-row" id="r-margem-row" style="display:none"><span class="info-label">Margem</span><span id="r-margem" class="info-valor"></span></div>
     <div class="info-row"><span class="info-label">Prazo de Entrega</span><span id="r-prazo" class="info-valor"></span></div>
+    <label id="addon-bv-wrap" style="display:none;align-items:flex-start;gap:8px;margin-top:12px;padding:10px;border:1px dashed #cbd5e1;border-radius:8px;cursor:pointer">
+      <input type="checkbox" id="addon-bv" onchange="toggleAddonBV()" style="margin-top:3px">
+      <span><strong style="font-size:13px;color:#334155">➕ Dupla-checagem de bureau</strong> <span style="color:#16a34a;font-weight:700">+R$ 29</span><br>
+      <span style="font-size:11px;color:#64748b">2ª opinião de endividamento (Boa Vista/SCPC) — base diferente do QUOD. Recomendado em negócio de valor alto.</span></span>
+    </label>
     <div class="section-title" style="margin-top:24px;font-size:14px">Como cobrar?</div>
     <div style="margin-top:10px;display:grid;grid-template-columns:1fr 1fr;gap:10px">
       <button id="btn-forma-plano-cliente" class="btn" onclick="criarPedido('plano_cliente')"
@@ -358,12 +363,17 @@
       argumento: 'Antes de comprar veículo usado ou aceitar como pagamento, descubra em 30 minutos: há restrições? Alienação fiduciária? Roubo/furto? Qual o valor FIPE real? Basta a placa.',
       dados: ['Identificação completa (marca, modelo, ano, chassi, renavam)', 'Situação atual do veículo no DETRAN', 'Restrições administrativas e judiciais', 'Alienação fiduciária e penhoras', 'Valor FIPE atualizado', 'Município e UF de registro', 'Histórico de roubo/furto'],
       publico: ['Comprador de veículo usado', 'Quem vai receber veículo como pagamento', 'Locadoras e revendas', 'Credor pesquisando veículo por placa', 'Leiloéiro e mecânica']
+    },
+    analise_inquilino: { nome: 'Análise de Inquilino', preco: 49, prazo: '2 horas', icone: '🔑',
+      argumento: 'Antes de entregar as chaves, saiba se o candidato tem renda compatível com o aluguel, nome limpo e histórico de despejo ou processos. Em 2 horas você decide com segurança.',
+      dados: ['Identificação e situação na Receita Federal', 'Endereços e telefones atuais', 'Faixa de renda e capacidade de pagar o aluguel', 'Nome limpo ou sujo (negativações, protestos, score)', 'Processos: ações de despejo, execuções, réu', 'Score de risco + recomendação: aprovar / pedir fiador / recusar'],
+      publico: ['Imobiliária analisando candidato a locação', 'Proprietário que aluga direto', 'Administradora de imóveis', 'Fiador avaliando o risco que vai assumir']
     }
   };
   const PRODUTOS_ORIG = {
     dossie_pf: { nome: 'Dossiê Pessoa Física', preco: 69, prazo: '2 horas' },
     dossie_pj: { nome: 'Dossiê Pessoa Jurídica', preco: 99, prazo: '2 horas' },
-    due_diligence: { nome: 'Due Diligence Empresarial', preco: 797, prazo: '24 horas' },
+    due_diligence: { nome: 'Due Diligence Empresarial', preco: 497, prazo: '24 horas' },
     analise_devedor: { nome: 'Análise de Devedor', preco: 99, prazo: '2 horas' },
     investigacao_patrimonial: { nome: 'Investigação Patrimonial', preco: 149, prazo: '4 horas' }
   };
@@ -499,6 +509,23 @@
     }
   }
 
+  // Add-on Boa Vista (+R$29) — estado e recálculo do valor exibido
+  let addonBV = false;
+  const ADDON_BV_OK = new Set(['dossie_pf', 'dossie_pj', 'analise_devedor', 'investigacao_patrimonial', 'due_diligence', 'analise_inquilino']);
+  function atualizarValorResumo() {
+    const p = PRODUTOS[tipoSelecionado]; if (!p) return;
+    const total = (Number(p.preco) || 0) + (addonBV ? 29 : 0);
+    const el = document.getElementById('r-valor');
+    if (el) el.textContent = 'R$ ' + total.toLocaleString('pt-BR');
+    const dn = document.getElementById('detalhe-nome');
+    if (dn) dn.textContent = p.icone + ' ' + p.nome + ' — R$ ' + total.toLocaleString('pt-BR') + (addonBV ? ' (com dupla-checagem)' : '');
+  }
+  function toggleAddonBV() {
+    const chk = document.getElementById('addon-bv');
+    addonBV = !!(chk && chk.checked);
+    atualizarValorResumo();
+  }
+
   function selecionarProduto(tipo) {
     tipoSelecionado = tipo;
     document.getElementById('tipo').value = tipo;
@@ -558,6 +585,13 @@
     document.getElementById('r-produto').textContent = p.nome;
     document.getElementById('r-valor').textContent = 'R$ ' + p.preco.toLocaleString('pt-BR');
     document.getElementById('r-prazo').textContent = p.prazo;
+
+    // Add-on Boa Vista: reseta e mostra só p/ dossiês (não veicular/restrições)
+    addonBV = false;
+    const _bvChk = document.getElementById('addon-bv');
+    if (_bvChk) _bvChk.checked = false;
+    document.getElementById('addon-bv-wrap').style.display = ADDON_BV_OK.has(tipo) ? 'flex' : 'none';
+    atualizarValorResumo();
 
     // Linhas de custo no resumo (só admin/operador)
     if (MOSTRAR_CUSTO && est) {
@@ -628,6 +662,7 @@
 
     const payload = { tipo, cliente_nome, cliente_whatsapp, cliente_email, finalidade, aceite_termos };
     if (clienteSelId) payload.cliente_id = clienteSelId;
+    payload.addon_boa_vista = addonBV; // backend só aplica +R$29 nos dossiês
 
     if (isVeicular) {
       const alvo_placa = document.getElementById('alvo_placa').value.toUpperCase().replace(/[^A-Z0-9]/g, '');

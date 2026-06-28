@@ -38,6 +38,36 @@ const PRODUTOS = {
     ],
   },
 
+  // Análise de Inquilino — Dossiê PF enxuto, focado em locação (imobiliárias).
+  // Reusa o pipeline e o PDF do dossie_pf (renderers[tipo] || dossie_pf).
+  analise_inquilino: {
+    nome: 'Análise de Inquilino',
+    preco: 49,
+    prazo_horas: 2,
+    icone: '🔑',
+    publico_alvo: [
+      'Imobiliária analisando candidato a locação',
+      'Proprietário que vai alugar direto',
+      'Administradora de imóveis',
+      'Fiador avaliando o risco que vai assumir',
+    ],
+    argumento: 'Antes de entregar as chaves, saiba se o candidato tem renda compatível com o aluguel, nome limpo e histórico de despejo ou processos. Em 2 horas você decide com segurança.',
+    dados_entregues: [
+      { secao: 'IDENTIFICAÇÃO', campos: ['Nome completo', 'CPF', 'Idade', 'Situação na Receita Federal'] },
+      { secao: 'CONTATO E LOCALIZAÇÃO', campos: ['Endereços recentes', 'Telefones', 'Emails'] },
+      { secao: 'CAPACIDADE DE PAGAMENTO', campos: ['Faixa de renda estimada', 'Classe social', 'Ocupação (CBO)'] },
+      { secao: 'NOME LIMPO OU SUJO', campos: ['Negativações', 'Protestos em cartório', 'Score de crédito'] },
+      { secao: 'PROCESSOS JUDICIAIS', campos: ['Ações de despejo', 'Processos como réu', 'Execuções'] },
+      { secao: 'SCORE E PARECER', campos: ['Score de risco (0-100)', 'Recomendação: aprovar / pedir fiador / recusar'] },
+    ],
+    fatores_score: [
+      { fator: 'negativacoes', peso: 30 },
+      { fator: 'processos_como_reu', peso: 25 },
+      { fator: 'situacao_rf', peso: 25 },
+      { fator: 'protestos', peso: 20 },
+    ],
+  },
+
   dossie_pj: {
     nome: 'Dossiê Pessoa Jurídica',
     preco: 99,

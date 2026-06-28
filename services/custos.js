@@ -116,6 +116,8 @@ async function calcularCustoPedido(rows) {
 // Os valores reais são calculados em calcularCustoPedido() após a consulta.
 const APIS_POR_PRODUTO = {
   dossie_pf: ['directd_pf_plus', 'escavador_processos', 'directd_score_quod', 'directd_negativacoes', 'directd_perfil_economico', 'transparencia'],
+  // Análise de Inquilino: PF enxuto p/ locação (cadastro + processos + score + negativações + renda)
+  analise_inquilino: ['directd_pf_plus', 'escavador_processos', 'directd_score_quod', 'directd_negativacoes', 'directd_perfil_economico'],
   dossie_pj: ['cnpja', 'escavador_processos', 'directd_score_quod', 'directd_negativacoes', 'directd_vinculos', 'transparencia'],
   due_diligence: ['cnpja', 'escavador_processos', 'directd_negativacoes', 'directd_perfil_economico', 'directd_vinculos', 'transparencia'],
   // Análise de Devedor consulta patrimônio por CPF (Histórico de Veículos R$0,36 +

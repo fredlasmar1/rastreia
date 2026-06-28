@@ -50,6 +50,7 @@ const uploadDocumentos = multer({
 
 const PRECOS = {
   dossie_pf: 69,
+  analise_inquilino: 49,
   dossie_pj: 99,
   due_diligence: 497,
   due_diligence_imobiliaria: 797,
@@ -64,6 +65,7 @@ const PRECOS = {
 
 const PRAZOS = {
   dossie_pf: 2,
+  analise_inquilino: 2,
   dossie_pj: 2,
   due_diligence: 24,
   due_diligence_imobiliaria: 24,
@@ -180,7 +182,9 @@ router.post('/', autenticar, async (req, res) => {
       alvo2_nome, alvo2_documento, alvo2_tipo,
       imovel_matricula, imovel_endereco, imovel_estado,
       // Veicular: tier e add-ons
-      tier_veicular, addons_veicular, valor_customizado
+      tier_veicular, addons_veicular, valor_customizado,
+      // Add-on opcional: 2a opinião de bureau (Boa Vista)
+      addon_boa_vista
     } = req.body;
 
     const isVeicular = TIPOS_VEICULARES.has(tipo);
@@ -258,6 +262,12 @@ router.post('/', autenticar, async (req, res) => {
       }
     }
 
+    // Add-on opcional: 2a opinião de bureau (Boa Vista/SCPC) — +R$29, só p/ dossiês
+    // (não veicular/restrições). Liga a coleta da Boa Vista no pipeline (pedido.addon_boa_vista).
+    const ADDON_BV_PRODUTOS = new Set(['dossie_pf', 'dossie_pj', 'analise_devedor', 'investigacao_patrimonial', 'due_diligence', 'analise_inquilino']);
+    const usaBoaVista = !!addon_boa_vista && ADDON_BV_PRODUTOS.has(tipo);
+    if (usaBoaVista) valor += 29;
+
     // Admin/operador pode sobrescrever o valor final (ex: desconto ou cobrança especial)
     if (typeof valor_customizado === 'number' && valor_customizado >= 0) {
       valor = valor_customizado;
@@ -295,10 +305,10 @@ router.post('/', autenticar, async (req, res) => {
         finalidade, ip_solicitante, aceite_termos, token_publico,
         alvo2_nome, alvo2_documento, alvo2_tipo,
         imovel_matricula, imovel_endereco, imovel_estado, alvo_placa,
-        tier_veicular, addons_veicular, cliente_id
+        tier_veicular, addons_veicular, cliente_id, addon_boa_vista
       )
       VALUES ($1, 'aguardando_pagamento', $2, $3, $4, $5, $6, $7, $8, $9, $10,
-              $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24)
+              $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25)
       RETURNING *`,
       [
         tipo, cliente_nome.trim(), cliente_email, cliente_whatsapp,
@@ -308,7 +318,8 @@ router.post('/', autenticar, async (req, res) => {
         imovel_matricula || null, imovel_endereco || null, imovel_estado || 'GO',
         placaLimpa,
         tierSlug, addonsList.length ? addonsList.join(',') : null,
-        (cliente_id && String(cliente_id).trim()) || null
+        (cliente_id && String(cliente_id).trim()) || null,
+        usaBoaVista
       ]
     );
 
