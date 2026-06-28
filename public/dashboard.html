@@ -241,32 +241,55 @@
   }
 
   // Catálogo de serviços exibido no dashboard
+  const MOSTRAR_CUSTO = usuario.perfil === 'admin' || usuario.perfil === 'operador';
+  let CUSTOS_EST = {};
   const SERVICOS = [
-    { nome: 'Nome Limpo ou Sujo', preco: 'R$ 19,90', prazo: 'minutos', icone: '🚦', url: '/restricoes.html', desc: 'Negativações + score' },
-    { nome: 'Consulta Veicular', preco: 'a partir de R$ 19,90', prazo: '30 min', icone: '🚗', url: '/veicular.html', desc: 'Gravame, restrições, FIPE' },
-    { nome: 'Dossiê Pessoa Física', preco: 'R$ 69', prazo: '2h', icone: '👤', url: '/novo-pedido.html?tipo=dossie_pf', desc: 'Limpo/sujo + score + processos' },
-    { nome: 'Dossiê Pessoa Jurídica', preco: 'R$ 99', prazo: '2h', icone: '🏢', url: '/novo-pedido.html?tipo=dossie_pj', desc: 'Empresa + sócios + risco' },
-    { nome: 'Análise de Devedor', preco: 'R$ 99', prazo: '2h', icone: '⚖️', url: '/novo-pedido.html?tipo=analise_devedor', desc: 'Patrimônio + recuperabilidade' },
-    { nome: 'Investigação Patrimonial', preco: 'R$ 149', prazo: '4h', icone: '🏦', url: '/novo-pedido.html?tipo=investigacao_patrimonial', desc: 'Bens, empresas, interpostas' },
-    { nome: 'Due Diligence Empresarial', preco: 'R$ 497', prazo: '24h', icone: '🔎', url: '/novo-pedido.html?tipo=due_diligence', desc: 'Empresa + sócios + CNDs + parecer' },
-    { nome: 'Due Diligence Imobiliária', preco: 'R$ 797', prazo: '24h', icone: '🏠', url: '/novo-pedido.html?tipo=due_diligence_imobiliaria', desc: 'Comprador + vendedor + imóvel' }
+    { nome: 'Nome Limpo ou Sujo', tipo: 'consulta_restricoes', preco: 19.90, precoLabel: 'R$ 19,90', prazo: 'minutos', icone: '🚦', url: '/restricoes.html', desc: 'Negativações + score' },
+    { nome: 'Consulta Veicular', tipo: 'consulta_veicular', preco: 19.90, precoLabel: 'a partir de R$ 19,90', prazo: '30 min', icone: '🚗', url: '/veicular.html', desc: 'Gravame, restrições, FIPE' },
+    { nome: 'Dossiê Pessoa Física', tipo: 'dossie_pf', preco: 69, precoLabel: 'R$ 69', prazo: '2h', icone: '👤', url: '/novo-pedido.html?tipo=dossie_pf', desc: 'Limpo/sujo + score + processos' },
+    { nome: 'Dossiê Pessoa Jurídica', tipo: 'dossie_pj', preco: 99, precoLabel: 'R$ 99', prazo: '2h', icone: '🏢', url: '/novo-pedido.html?tipo=dossie_pj', desc: 'Empresa + sócios + risco' },
+    { nome: 'Análise de Devedor', tipo: 'analise_devedor', preco: 99, precoLabel: 'R$ 99', prazo: '2h', icone: '⚖️', url: '/novo-pedido.html?tipo=analise_devedor', desc: 'Patrimônio + recuperabilidade' },
+    { nome: 'Investigação Patrimonial', tipo: 'investigacao_patrimonial', preco: 149, precoLabel: 'R$ 149', prazo: '4h', icone: '🏦', url: '/novo-pedido.html?tipo=investigacao_patrimonial', desc: 'Bens, empresas, interpostas' },
+    { nome: 'Due Diligence Empresarial', tipo: 'due_diligence', preco: 497, precoLabel: 'R$ 497', prazo: '24h', icone: '🔎', url: '/novo-pedido.html?tipo=due_diligence', desc: 'Empresa + sócios + CNDs + parecer' },
+    { nome: 'Due Diligence Imobiliária', tipo: 'due_diligence_imobiliaria', preco: 797, precoLabel: 'R$ 797', prazo: '24h', icone: '🏠', url: '/novo-pedido.html?tipo=due_diligence_imobiliaria', desc: 'Comprador + vendedor + imóvel' }
   ];
   function renderServicos() {
     const g = document.getElementById('servicos-grid');
     if (!g) return;
-    g.innerHTML = SERVICOS.map(s => `
+    g.innerHTML = SERVICOS.map(s => {
+      let custoBadge = '';
+      const est = CUSTOS_EST[s.tipo];
+      if (MOSTRAR_CUSTO && est) {
+        const c = Number(est.total_brl);
+        const m = s.preco > 0 ? ((s.preco - c) / s.preco * 100) : 0;
+        custoBadge = `<div style="font-size:10px;color:#94a3b8;border-top:1px dashed #e2e8f0;padding-top:5px;margin-top:2px">custo <strong style="color:#dc2626">R$ ${c.toFixed(2)}</strong> · margem <strong style="color:#16a34a">${m.toFixed(0)}%</strong></div>`;
+      }
+      return `
       <a href="${s.url}" style="text-decoration:none;color:inherit;background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:14px;box-shadow:0 1px 3px rgba(0,0,0,.06);display:flex;flex-direction:column;gap:6px;transition:box-shadow .15s,transform .15s" onmouseover="this.style.boxShadow='0 6px 18px rgba(15,23,42,.12)';this.style.transform='translateY(-2px)'" onmouseout="this.style.boxShadow='0 1px 3px rgba(0,0,0,.06)';this.style.transform='none'">
         <div style="font-size:22px">${s.icone}</div>
         <div style="font-weight:700;font-size:14px;color:#0f172a">${esc(s.nome)}</div>
         <div style="font-size:11px;color:#64748b;flex:1">${esc(s.desc || '')}</div>
         <div style="display:flex;justify-content:space-between;align-items:center;margin-top:4px">
-          <span style="font-weight:800;color:#16a34a;font-size:14px">${esc(s.preco)}</span>
+          <span style="font-weight:800;color:#16a34a;font-size:14px">${esc(s.precoLabel)}</span>
           <span style="font-size:11px;color:#94a3b8">⏱ ${esc(s.prazo)}</span>
         </div>
-      </a>`).join('');
+        ${custoBadge}
+      </a>`;
+    }).join('');
+  }
+  async function carregarCustosServicos() {
+    if (!MOSTRAR_CUSTO) return;
+    try {
+      const r = await fetch('/api/admin/custos/estimativa', { headers: { Authorization: `Bearer ${token}` } });
+      if (!r.ok) return;
+      const d = await r.json();
+      CUSTOS_EST = d.estimativas || {};
+      renderServicos();
+    } catch (e) { /* silencioso */ }
   }
 
   renderServicos();
+  carregarCustosServicos();
   carregarStats();
   carregarPedidos();
   carregarAlertasAPI();

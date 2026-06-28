@@ -128,6 +128,7 @@ const APIS_POR_PRODUTO = {
     'onr_matricula', // imóvel
     'claude_analise_imovel' // análise IA matrícula+escritura via Claude Sonnet 4.5
   ],
+  consulta_restricoes: ['directd_pf_plus', 'directd_negativacoes', 'directd_score_quod'],
   consulta_veicular: ['directd_veiculos']
 };
 
