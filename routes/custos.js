@@ -54,7 +54,7 @@ router.put('/:chave', autenticar, admin, async (req, res) => {
 });
 
 // GET /api/admin/custos/pedido/:id -> custo bruto de um pedido especifico
-router.get('/pedido/:id', autenticar, async (req, res) => {
+router.get('/pedido/:id', autenticar, admin, async (req, res) => {
   try {
     // operador e admin podem ver o custo bruto (nunca vai pro cliente)
     const dados = await pool.query(
@@ -71,7 +71,7 @@ router.get('/pedido/:id', autenticar, async (req, res) => {
 
 // GET /api/admin/custos/estimativa  -> estimativa de custo para TODOS os produtos
 // Usado no /novo-pedido.html para mostrar custo ao lado do preço sugerido
-router.get('/estimativa', autenticar, async (req, res) => {
+router.get('/estimativa', autenticar, admin, async (req, res) => {
   try {
     const tipos = Object.keys(APIS_POR_PRODUTO);
     const out = {};
@@ -86,7 +86,7 @@ router.get('/estimativa', autenticar, async (req, res) => {
 });
 
 // GET /api/admin/custos/estimativa/:tipo  -> estimativa de um produto específico
-router.get('/estimativa/:tipo', autenticar, async (req, res) => {
+router.get('/estimativa/:tipo', autenticar, admin, async (req, res) => {
   try {
     const est = await estimarCustoProduto(req.params.tipo);
     if (!est) return res.status(404).json({ erro: 'Produto desconhecido' });

@@ -432,7 +432,7 @@
   let tierSelecionado = 'completo';
   let addonsSelecionados = new Set();
   let MOSTRA_CUSTO_VEICULAR = false; // true se API retornar mostra_custo=true
-  const MOSTRAR_CUSTO = usuario.perfil === 'admin' || usuario.perfil === 'operador';
+  const MOSTRAR_CUSTO = usuario.perfil === 'admin'; // custo/margem é interno do dono — só admin
 
   function fmtBRL(v) { return 'R$ ' + Number(v).toLocaleString('pt-BR', { minimumFractionDigits: 2 }); }
   function corMargem(pct) { return pct >= 70 ? '#16a34a' : pct >= 40 ? '#ea580c' : '#dc2626'; }

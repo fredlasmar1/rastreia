@@ -241,7 +241,7 @@
   }
 
   // Catálogo de serviços exibido no dashboard
-  const MOSTRAR_CUSTO = usuario.perfil === 'admin' || usuario.perfil === 'operador';
+  const MOSTRAR_CUSTO = usuario.perfil === 'admin'; // custo/margem é interno do dono — só admin
   let CUSTOS_EST = {};
   const SERVICOS = [
     { nome: 'Nome Limpo ou Sujo', tipo: 'consulta_restricoes', preco: 19.90, precoLabel: 'R$ 19,90', prazo: 'minutos', icone: '🚦', url: '/restricoes.html', desc: 'Negativações + score' },
