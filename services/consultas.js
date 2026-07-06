@@ -2261,6 +2261,9 @@ async function executarConsultaCompleta(pedido) {
   const precisaVinculos = ['due_diligence', 'analise_devedor', 'investigacao_patrimonial', 'due_diligence_imobiliaria'].includes(tipo);
   // Veículos e imóveis para investigação patrimonial e imobiliária
   const precisaVeiculos = ['analise_devedor', 'investigacao_patrimonial', 'due_diligence_imobiliaria'].includes(tipo);
+  // Add-on Boa Vista (+R$29): flag vem do pedido; propagada por alvo (o `pedido`
+  // não existe no escopo de executarConsultasParaAlvo — ler lá causava ReferenceError).
+  const addonBoaVista = !!pedido.addon_boa_vista;
 
   // V3: para due_diligence_imobiliaria, podem haver múltiplos alvos vindos de
   // pedido_alvos (extraídos da IA). Roda o mesmo conjunto de consultas para
@@ -2298,7 +2301,7 @@ async function executarConsultaCompleta(pedido) {
     for (let idx = 0; idx < alvos.length; idx++) {
       const a = alvos[idx];
       console.log(`[v3] consultas alvo ${idx + 1}/${alvos.length}: doc=${a.documento} tipo=${a.tipo}`);
-      const r1 = await executarConsultasParaAlvo(a, { precisaVinculos, precisaVeiculos, tipo });
+      const r1 = await executarConsultasParaAlvo(a, { precisaVinculos, precisaVeiculos, tipo, addonBoaVista });
       // O primeiro alvo (principal) usa nomes padrão; demais ganham sufixo _N (2, 3, …).
       const sufixo = idx === 0 ? '' : `_${idx + 1}`;
       for (const [k, v] of Object.entries(r1)) {
@@ -2312,14 +2315,14 @@ async function executarConsultaCompleta(pedido) {
   // Demais produtos: alvo único do pedido
   return executarConsultasParaAlvo(
     { nome: alvo_nome, documento: alvo_documento, tipo: alvo_tipo },
-    { precisaVinculos, precisaVeiculos, tipo }
+    { precisaVinculos, precisaVeiculos, tipo, addonBoaVista }
   );
 }
 
 // V3: roda o conjunto de consultas externas para UM alvo (CPF/CNPJ).
 // Devolve um dicionário com chaves canônicas (sem sufixo) — o orquestrador
 // adiciona _N quando há múltiplos alvos.
-async function executarConsultasParaAlvo(alvo, { precisaVinculos, precisaVeiculos, tipo }) {
+async function executarConsultasParaAlvo(alvo, { precisaVinculos, precisaVeiculos, tipo, addonBoaVista }) {
   const { documento, tipo: tipoAlvo, nome } = alvo;
   if (!documento) return {};
 
@@ -2350,7 +2353,7 @@ async function executarConsultasParaAlvo(alvo, { precisaVinculos, precisaVeiculo
   // Mesmos produtos que precisaVeiculos (patrimonial + imobiliária).
   if (precisaVeiculos) promises.push(consultarImoveisRuraisSIGEF(documento));
   // 2ª opinião de bureau (Boa Vista/SCPC): só nos produtos que olham crédito/dívida.
-  const precisaBoaVista = !!pedido.addon_boa_vista; // 2ª opinião Boa Vista vira ADD-ON opcional (+R$29) — fora da base p/ margem
+  const precisaBoaVista = !!addonBoaVista; // 2ª opinião Boa Vista vira ADD-ON opcional (+R$29) — fora da base p/ margem
   if (precisaBoaVista) promises.push(consultarBoaVista(documento));
 
   const resultados = await Promise.all(promises);
