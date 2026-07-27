@@ -599,6 +599,13 @@ function secaoPerfilFinanceiroPF(doc, y, dados) {
   doc.fillColor(corCap).fontSize(8).font('Helvetica-Bold').text(`Capacidade de Pagamento: ${capacidade}`, MARGEM + 6, y); y += 12;
 
   const processosAtivos = (processos.processos || []).filter(p => p.status === 'Ativo').length;
+  // Quando a fonte principal de processos falhou e nada foi confirmado, o risco
+  // judicial é INDETERMINADO — não afirmar "BAIXO (0 de 0)" (conforto falso).
+  const judicialIndeterminado = !!(processos.indisponivel || (processos.escavador_falhou && (totalProcessos || 0) === 0));
+  if (judicialIndeterminado) {
+    doc.fillColor(COR.laranja).fontSize(8).font('Helvetica-Bold').text('Risco Judicial: NÃO VERIFICADO — fonte principal indisponível; reconsultar', MARGEM + 6, y);
+    return y + 14;
+  }
   const risco = processosAtivos > 5 ? 'ALTO' : processosAtivos > 0 ? 'MODERADO' : 'BAIXO';
   const corRisco = processosAtivos > 5 ? COR.vermelho : processosAtivos > 0 ? COR.laranja : COR.verde;
   doc.fillColor(corRisco).fontSize(8).font('Helvetica-Bold').text(`Risco Judicial: ${risco} (${processosAtivos} processo(s) ativo(s) de ${totalProcessos} total)`, MARGEM + 6, y);

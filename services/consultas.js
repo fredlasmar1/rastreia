@@ -351,6 +351,10 @@ async function consultarProcessos(documento, tipo, nome, uf) {
     datajud.escavador_detalhes = escavadorResult.detalhes;
     datajud.escavador_status_http = escavadorResult.status_http;
     if (datajud.total === 0) {
+      // Fonte principal (Escavador) falhou e o Datajud (cobertura parcial) não
+      // achou nada → NÃO dá para afirmar "nada consta". Marca como indisponível
+      // para o score e o PDF tratarem o risco judicial como INDETERMINADO.
+      datajud.indisponivel = true;
       datajud.nota = `Escavador indisponivel (${escavadorResult.status_http || 'erro'}): ${escavadorResult.detalhes}. Datajud consultado como fallback (${datajud.tribunais_consultados || ''}) — nenhum processo encontrado nas bases oficiais.`;
     }
   }
@@ -2330,7 +2334,10 @@ async function executarConsultasParaAlvo(alvo, { precisaVinculos, precisaVeiculo
   // e para enriquecer sócios (due_diligence). Em troca de paralelismo, ganhamos
   // dados consistentes por região e mini-dossiê de cada sócio.
   const cadastral = tipoAlvo === 'PJ' ? await consultarCNPJ(documento) : await consultarCPF(documento);
-  const ufAlvo = cadastral?.uf || '';
+  // Operação é Anápolis-GO: quando o cadastro não traz UF, assume GO para NÃO
+  // cair no default só-federal (STJ+TST) e perder o TJGO — onde estão os
+  // processos estaduais locais (ação de despejo, execução, cível).
+  const ufAlvo = cadastral?.uf || 'GO';
 
   const promises = [
     consultarProcessos(documento, tipoAlvo, nome, ufAlvo),
