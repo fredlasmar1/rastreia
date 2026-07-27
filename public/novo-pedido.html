@@ -326,6 +326,21 @@
   // Carrega plano do operador (cota mensal restante)
   document.addEventListener('DOMContentLoaded', () => {
     if (typeof loadPlano === 'function') loadPlano();
+
+    // Menos atrito: "quem solicitou", finalidade e aceite já vêm preenchidos
+    // (todos editáveis). Mantém o registro de finalidade da consulta (LGPD).
+    const campoNome = document.getElementById('cliente_nome');
+    if (campoNome && !campoNome.value.trim() && usuario.nome) {
+      campoNome.value = usuario.nome;
+    }
+    const campoFinalidade = document.getElementById('finalidade');
+    if (campoFinalidade && !campoFinalidade.value) {
+      campoFinalidade.value = 'analise_credito';
+    }
+    const campoAceite = document.getElementById('aceite_termos');
+    if (campoAceite && !campoAceite.checked) {
+      campoAceite.checked = true;
+    }
   });
 
   const PRODUTOS = {
