@@ -117,7 +117,7 @@ async function probarDatajud() {
   try {
     const r = await axios.post('https://api-publica.datajud.cnj.jus.br/api_publica_tjgo/_search',
       { query: { match_all: {} }, size: 1 },
-      { headers: { Authorization: `ApiKey ${process.env.DATAJUD_API_KEY}`, 'Content-Type': 'application/json' }, timeout: 15000, validateStatus: () => true });
+      { headers: { Authorization: `ApiKey ${process.env.DATAJUD_API_KEY}`, 'Content-Type': 'application/json' }, timeout: 30000, validateStatus: () => true });
     if (r.status === 200) return { status: 'operante', motivo: 'Consulta OK (gratuito)' };
     if (r.status === 429) return { status: 'limite', motivo: 'Limite de requisições atingido' };
     if (r.status === 401 || r.status === 403) return { status: 'token_invalido', motivo: 'Key recusada' };

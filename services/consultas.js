@@ -517,7 +517,7 @@ async function consultarDatajud(doc, tipo, nome, uf) {
       axios.post(
         `https://api-publica.datajud.cnj.jus.br/api_publica_${t}/_search`,
         query,
-        { headers, timeout: 12000 }
+        { headers, timeout: 30000 }
       )
     )
   );
