@@ -96,19 +96,29 @@ async function probarCredify() {
   } catch (e) { return classificarHttp(e, 'Credify'); }
 }
 
+// Pago: um teste REAL de saldo. O /usuario (grátis) autentica mesmo com o crédito
+// de API zerado (é dado de conta, não da API paga) → dava falso "operante". Aqui
+// batemos na consulta paga de processos: 402 (sem saldo) é rejeitado ANTES de
+// cobrar, então detectar "sem crédito" é grátis; um 200 consome 1 consulta. Por
+// isso é auto:false — só roda no "Testar agora".
 async function probarEscavador() {
   if (!process.env.ESCAVADOR_API_KEY) return { status: 'nao_configurada', motivo: 'API key ausente' };
   try {
-    const r = await axios.get('https://api.escavador.com/api/v2/usuario', {
+    const r = await axios.get('https://api.escavador.com/api/v2/envolvido/processos', {
+      params: { cpf_cnpj: CPF_TESTE },
       headers: { Authorization: `Bearer ${process.env.ESCAVADOR_API_KEY}`, Accept: 'application/json' },
-      timeout: 20000, validateStatus: () => true
+      timeout: 25000, validateStatus: () => true
     });
     const body = JSON.stringify(r.data || '').toLowerCase();
-    if (r.status === 200) return { status: 'operante', motivo: 'Autenticação OK' };
-    if (r.status === 402 || temSaldoInsuficiente(body)) return { status: 'sem_credito', motivo: 'Créditos esgotados' };
+    if (r.status === 402 || temSaldoInsuficiente(body)) return { status: 'sem_credito', motivo: 'Sem crédito de API — recarregar' };
+    if (r.status === 401) return { status: 'token_invalido', motivo: 'Token recusado' };
+    if (r.status === 403) return temSaldoInsuficiente(body)
+      ? { status: 'sem_credito', motivo: 'Sem crédito de API — recarregar' }
+      : { status: 'token_invalido', motivo: 'Acesso negado' };
     if (r.status === 429) return { status: 'limite', motivo: 'Limite de requisições atingido' };
-    if (r.status === 401 || r.status === 403) return { status: 'token_invalido', motivo: 'Token recusado' };
-    return { status: 'fora_do_ar', motivo: `HTTP ${r.status}` };
+    if (r.status >= 500) return { status: 'fora_do_ar', motivo: `Erro ${r.status} no provedor` };
+    // 200 → consulta processada = conta com saldo de API OK (consumiu 1 consulta).
+    return { status: 'operante', motivo: 'Acesso e saldo de API OK' };
   } catch (e) { return classificarHttp(e, 'Escavador'); }
 }
 
@@ -194,7 +204,7 @@ async function probarCnpja() {
 const CATALOGO = [
   { chave: 'directd',      nome: 'DirectData',     grupo: 'Dados cadastrais (PF)', auto: false, probe: probarDirectD,      link: 'https://app.directd.com.br' },
   { chave: 'credify',      nome: 'Credify',        grupo: 'Veicular',              auto: true,  probe: probarCredify },
-  { chave: 'escavador',    nome: 'Escavador',      grupo: 'Processos',             auto: true,  probe: probarEscavador },
+  { chave: 'escavador',    nome: 'Escavador',      grupo: 'Processos',             auto: false, probe: probarEscavador,     link: 'https://www.escavador.com' },
   { chave: 'datajud',      nome: 'Datajud CNJ',    grupo: 'Processos',             auto: true,  probe: probarDatajud },
   { chave: 'cnpja',        nome: 'CNPJá',          grupo: 'Dados cadastrais (PJ)', auto: false, probe: probarCnpja },
   { chave: 'transparencia',nome: 'Transparência',  grupo: 'Listas negras',         auto: true,  probe: probarTransparencia },

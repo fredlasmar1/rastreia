@@ -481,7 +481,10 @@ async function consultarEscavador(doc, tipo, nome) {
   } catch (e) {
     const status = e.response?.status;
     const msg = e.response?.data?.error || e.response?.data?.message || e.message;
-    console.error(`[Escavador] FALHA doc=${doc} status=${status} msg=${msg}`);
+    // Registra no monitor de APIs (alimenta o overlay passivo do placar): assim
+    // um 402 do Escavador num dossiê real passa a refletir "sem crédito" no
+    // painel automaticamente, sem depender do botão "Testar agora".
+    logarFalhaAPI('Escavador', status, msg);
     return {
       erro: 'Escavador indisponível',
       status_http: status,
