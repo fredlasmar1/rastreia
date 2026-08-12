@@ -332,33 +332,148 @@ async function consultarCPF(cpf) {
 }
 
 // ─────────────────────────────────────────────
-// 3. PROCESSOS — Escavador (pago) + Datajud CNJ (grátis)
+// 3. PROCESSOS — Direct Data (pago) + Escavador (pago) + Datajud CNJ (grátis)
+// Direct Data: /api/ProcessosJudiciaisCompleta | R$ 3,30 | Env: DIRECTD_TOKEN
 // Escavador: api.escavador.com | Env: ESCAVADOR_API_KEY
 // Datajud: api-publica.datajud.cnj.jus.br | gratuito
+//
+// Ordem: Direct Data primeiro (mesma conta que já paga o resto do dossiê e traz
+// partes com CPF/CNPJ, polo, valor e status). Escavador vira 2ª opção e o Datajud
+// segue como rede de segurança grátis.
 // ─────────────────────────────────────────────
 
 async function consultarProcessos(documento, tipo, nome, uf) {
   const doc = limparDoc(documento);
+  const falhas = [];
+
+  if (process.env.DIRECTD_TOKEN) {
+    const dd = await consultarProcessosDirectData(doc, tipo, nome);
+    if (!dd.erro) return dd;
+    falhas.push({ fonte: 'Direct Data', status: dd.status_http, detalhes: dd.detalhes });
+  }
+
   let escavadorResult = null;
   if (process.env.ESCAVADOR_API_KEY) {
     escavadorResult = await consultarEscavador(doc, tipo, nome);
     if (!escavadorResult.erro) return escavadorResult;
+    falhas.push({ fonte: 'Escavador', status: escavadorResult.status_http, detalhes: escavadorResult.detalhes });
   }
-  // Escavador falhou ou nao configurado -> tenta Datajud, mas preserva diagnostico do Escavador
+
+  // Fontes pagas falharam ou nao configuradas -> Datajud, preservando o diagnostico.
   const datajud = await consultarDatajud(doc, tipo, nome, uf);
-  if (escavadorResult?.erro) {
-    datajud.escavador_falhou = true;
-    datajud.escavador_detalhes = escavadorResult.detalhes;
-    datajud.escavador_status_http = escavadorResult.status_http;
+  if (falhas.length) {
+    const resumoFalhas = falhas.map(f => `${f.fonte} (${f.status || 'erro'}): ${f.detalhes}`).join(' | ');
+    datajud.escavador_falhou = true; // flag historica: PDF/score leem "fonte principal indisponivel"
+    datajud.fontes_falharam = falhas;
+    datajud.escavador_detalhes = resumoFalhas;
+    datajud.escavador_status_http = falhas[0].status;
     if (datajud.total === 0) {
-      // Fonte principal (Escavador) falhou e o Datajud (cobertura parcial) não
-      // achou nada → NÃO dá para afirmar "nada consta". Marca como indisponível
-      // para o score e o PDF tratarem o risco judicial como INDETERMINADO.
+      // As fontes pagas falharam e o Datajud (cobertura parcial) não achou nada →
+      // NÃO dá para afirmar "nada consta". Marca como indisponível para o score e
+      // o PDF tratarem o risco judicial como INDETERMINADO.
       datajud.indisponivel = true;
-      datajud.nota = `Escavador indisponivel (${escavadorResult.status_http || 'erro'}): ${escavadorResult.detalhes}. Datajud consultado como fallback (${datajud.tribunais_consultados || ''}) — nenhum processo encontrado nas bases oficiais.`;
+      datajud.nota = `Fontes pagas indisponiveis — ${resumoFalhas}. Datajud consultado como fallback (${datajud.tribunais_consultados || ''}) — nenhum processo encontrado nas bases oficiais.`;
     }
   }
   return datajud;
+}
+
+// Numero CNJ vem so com digitos na Direct Data: 55929234520268090007 ->
+// 5592923-45.2026.8.09.0007
+function formatarNumeroCNJ(n) {
+  const d = String(n || '').replace(/\D/g, '');
+  if (d.length !== 20) return String(n || '');
+  return `${d.slice(0, 7)}-${d.slice(7, 9)}.${d.slice(9, 13)}.${d.slice(13, 14)}.${d.slice(14, 16)}.${d.slice(16)}`;
+}
+
+// "30/06/2026 01:22:53" -> "30/06/2026"
+function soData(s) {
+  return String(s || '').trim().split(' ')[0] || '';
+}
+
+async function consultarProcessosDirectData(doc, tipo, nome) {
+  const paramDoc = doc.length <= 11 ? { Cpf: doc } : { Cnpj: doc };
+  try {
+    const res = await axios.get('https://apiv3.directd.com.br/api/ProcessosJudiciaisCompleta', {
+      params: { ...paramDoc, Token: process.env.DIRECTD_TOKEN },
+      timeout: 45000
+    });
+    const meta = res.data?.metaDados || {};
+    if (meta.resultadoId && meta.resultadoId !== 1) {
+      throw Object.assign(new Error(meta.mensagem || 'Falha na consulta'), { response: { status: res.status, data: res.data } });
+    }
+    const brutos = res.data?.retorno?.processos || [];
+    console.log(`[DirectData/Processos] doc=${doc} processos=${brutos.length}`);
+
+    // O alvo tem que figurar como PARTE (a API traz o CPF/CNPJ de cada parte,
+    // entao o descarte de "aparece so como advogado" é exato, sem heuristica de nome).
+    const nomeLower = String(nome || '').toLowerCase().trim();
+    const ehParteAlvo = (p) => (p.partes || []).some(parte => {
+      const docParte = String(parte.documento || '').replace(/\D/g, '');
+      if (docParte && docParte === doc) return true;
+      if (!docParte && nomeLower) return String(parte.nomeCompleto || '').toLowerCase().includes(nomeLower);
+      return false;
+    });
+    const comoParte = brutos.filter(ehParteAlvo);
+    const processosFinal = comoParte.length ? comoParte : brutos;
+
+    return {
+      total: processosFinal.length,
+      total_geral: brutos.length,
+      excluidos_advogado: brutos.length - comoParte.length,
+      aviso: (brutos.length > 0 && comoParte.length === 0)
+        ? `${brutos.length} processo(s) retornado(s) sem o documento do alvo entre as partes — revisar manualmente o envolvimento.`
+        : null,
+      processos: processosFinal.slice(0, 30).map(p => {
+        const partes = p.partes || [];
+        const nomesPolo = (polo) => partes
+          .filter(x => String(x.polo || '').toLowerCase() === polo)
+          .map(x => x.nomeCompleto)
+          .filter(Boolean)
+          .join(', ');
+        const st = p.detalhesStatusProcesso || {};
+        const stTxt = String(st.statusDetalhes || '').toLowerCase();
+        const baixado = !!st.dataArquivamento || !!st.dataTransitoJulgado
+          || /arquiv|baix|extint|transitad|encerrad/.test(stTxt);
+        const assuntoPrincipal = (p.assuntos || []).find(a => a.assuntoPrincipal) || (p.assuntos || [])[0];
+        return {
+          numero: formatarNumeroCNJ(p.numeroProcesso),
+          tribunal: p.orgaoJulgador?.tribunal || '',
+          orgao: p.orgaoJulgador?.orgaoResponsavel || '',
+          comarca: p.orgaoJulgador?.unidadeOrigem || p.orgaoJulgador?.comarca || '',
+          classe: p.classificacao?.descricao || '',
+          assunto: assuntoPrincipal?.assunto || '',
+          area: p.areaDireito || '',
+          polo_ativo: nomesPolo('ativo'),
+          polo_passivo: nomesPolo('passivo'),
+          data_inicio: soData(p.dataDistribuicao || p.dataAutuacao),
+          ultima_movimentacao: '',
+          valor_causa: p.valorProcesso || null,
+          instancia: p.instancia || null,
+          segredo_justica: !!p.segredoJustica,
+          status: baixado ? 'Baixado/Arquivado' : 'Ativo',
+          status_detalhado: st.statusDetalhes || ''
+        };
+      }),
+      fonte: 'Direct Data (Processos Judiciais)',
+      consultado_em: new Date().toISOString()
+    };
+  } catch (e) {
+    const status = e.response?.status;
+    const msg = e.response?.data?.metaDados?.mensagem
+      || e.response?.data?.mensagem
+      || e.response?.data?.message
+      || e.message;
+    const c = logarFalhaAPI('ProcessosJudiciais', status, msg);
+    return {
+      erro: 'Direct Data Processos indisponível',
+      status_http: status,
+      detalhes: msg,
+      falha_categoria: c.categoria,
+      processos: [],
+      fonte: 'Direct Data Processos (falha)'
+    };
+  }
 }
 
 // Mapa UF -> TRT (Justiça do Trabalho regional). 24 TRTs no total.

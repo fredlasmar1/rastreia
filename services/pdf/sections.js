@@ -177,7 +177,7 @@ function secaoProcessos(doc, y, dados, pedido) {
   if (totalP === 0 && processos.escavador_falhou) {
     doc.rect(MARGEM, y, LARGURA, 30).fill('#fef3c7');
     doc.fillColor('#92400e').fontSize(9).font('Helvetica-Bold').text('Consulta de processos indisponível.', MARGEM + 8, y + 4);
-    doc.fillColor('#92400e').fontSize(7).font('Helvetica').text(`Escavador retornou ${processos.escavador_status_http || 'erro'}: ${processos.escavador_detalhes || 'falha na autenticação/token'}. Datajud (TJGO/TRF1/STJ/TST) também vazio. Recomenda-se reexecutar a consulta após corrigir o token do Escavador.`, MARGEM + 8, y + 16, { width: LARGURA - 16 });
+    doc.fillColor('#92400e').fontSize(7).font('Helvetica').text(`Fonte principal indisponível — ${processos.escavador_detalhes || 'falha na autenticação/token'} (HTTP ${processos.escavador_status_http || 'erro'}). Datajud (TJGO/TRF1/STJ/TST) também vazio. Recomenda-se reexecutar a consulta após restabelecer a fonte.`, MARGEM + 8, y + 16, { width: LARGURA - 16 });
     y += 40;
   } else if (totalP === 0) {
     doc.rect(MARGEM, y, LARGURA, 24).fill('#dcfce7');

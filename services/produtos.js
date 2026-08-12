@@ -515,8 +515,8 @@ function calcularScore(tipo, dados) {
   // ("BAIXO RISCO / prosseguir") mesmo sem ter checado processos de verdade.
   const judicialIndeterminado = !!(processos.indisponivel || (processos.escavador_falhou && totalProcessos === 0));
   if (judicialIndeterminado) {
-    aplicar('Processos não verificados', -15, 'Fonte principal (Escavador) indisponível — risco judicial indeterminado');
-    alertar('Processos judiciais NÃO verificados (fonte principal indisponível) — risco judicial indeterminado; reconsultar após recarregar o Escavador', 'atencao');
+    aplicar('Processos não verificados', -15, 'Fonte principal de processos indisponível — risco judicial indeterminado');
+    alertar('Processos judiciais NÃO verificados (fonte principal indisponível) — risco judicial indeterminado; reexecutar a consulta após restabelecer a fonte', 'atencao');
   }
 
   // ============================================================

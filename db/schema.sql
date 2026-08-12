@@ -205,7 +205,8 @@ INSERT INTO api_custos (chave, rotulo, valor_brl, fonte, confianca) VALUES
   ('transparencia',          'Portal da Transparencia (CGU)',             0.0000, 'API publica gratuita',                                  'oficial'),
   ('infosimples_detran_go',  'InfoSimples DETRAN-GO',                     0.2600, 'Tabela publica InfoSimples',                            'oficial'),
   ('onr_matricula',          'ONR — Matricula de imovel',                 0.0000, 'Depende do cartorio, variavel',                         'estimado'),
-  ('directd_boa_vista',      'DirectData — Boa Vista Acerta Completo PF (2a opiniao)', 14.0300, 'Cardapio DirectData V4 2026',           'oficial')
+  ('directd_boa_vista',      'DirectData — Boa Vista Acerta Completo PF (2a opiniao)', 14.0300, 'Cardapio DirectData V4 2026',           'oficial'),
+  ('directd_processos',      'DirectData — Processos Judiciais Completa (PF/PJ)', 3.3000, 'Cardapio DirectData V4 2026 (Processos)',    'oficial')
 ON CONFLICT (chave) DO UPDATE SET
   rotulo = EXCLUDED.rotulo,
   valor_brl = EXCLUDED.valor_brl,

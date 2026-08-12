@@ -56,8 +56,9 @@ function chavesPorFonte(fonte, dados) {
       else if (dados?.nome) c.push('directd_pf_plus');
       break;
     case 'processos':
-      // Escavador é a fonte primária; Datajud só se Escavador falhou
-      if (dados?.fonte?.toLowerCase().includes('escavador')) c.push('escavador_processos');
+      // Direct Data é a fonte primária; Escavador é a 2ª opção; Datajud (grátis) o fallback
+      if (dados?.fonte?.toLowerCase().includes('direct data')) c.push('directd_processos');
+      else if (dados?.fonte?.toLowerCase().includes('escavador')) c.push('escavador_processos');
       else if (dados?.fonte?.toLowerCase().includes('datajud')) c.push('datajud');
       break;
     case 'score_credito':
@@ -115,18 +116,18 @@ async function calcularCustoPedido(rows) {
 // Usado para ESTIMATIVA antes da consulta rodar (exibido no /novo-pedido.html).
 // Os valores reais são calculados em calcularCustoPedido() após a consulta.
 const APIS_POR_PRODUTO = {
-  dossie_pf: ['directd_pf_plus', 'escavador_processos', 'directd_score_quod', 'directd_negativacoes', 'directd_perfil_economico', 'transparencia'],
+  dossie_pf: ['directd_pf_plus', 'directd_processos', 'directd_score_quod', 'directd_negativacoes', 'directd_perfil_economico', 'transparencia'],
   // Análise de Inquilino: PF enxuto p/ locação (cadastro + processos + score + negativações + renda)
-  analise_inquilino: ['directd_pf_plus', 'escavador_processos', 'directd_score_quod', 'directd_negativacoes', 'directd_perfil_economico'],
-  dossie_pj: ['cnpja', 'escavador_processos', 'directd_score_quod', 'directd_negativacoes', 'directd_vinculos', 'transparencia'],
-  due_diligence: ['cnpja', 'escavador_processos', 'directd_negativacoes', 'directd_perfil_economico', 'directd_vinculos', 'transparencia'],
+  analise_inquilino: ['directd_pf_plus', 'directd_processos', 'directd_score_quod', 'directd_negativacoes', 'directd_perfil_economico'],
+  dossie_pj: ['cnpja', 'directd_processos', 'directd_score_quod', 'directd_negativacoes', 'directd_vinculos', 'transparencia'],
+  due_diligence: ['cnpja', 'directd_processos', 'directd_negativacoes', 'directd_perfil_economico', 'directd_vinculos', 'transparencia'],
   // Análise de Devedor consulta patrimônio por CPF (Histórico de Veículos R$0,36 +
   // DETRAN-GO R$0,26), NÃO por placa (directd_veiculos R$5,40).
-  analise_devedor: ['directd_pf_plus', 'escavador_processos', 'directd_score_quod', 'directd_negativacoes', 'directd_perfil_economico', 'directd_vinculos', 'directd_historico_veiculos', 'infosimples_detran_go'],
-  investigacao_patrimonial: ['directd_pf_plus', 'escavador_processos', 'directd_vinculos', 'directd_historico_veiculos', 'infosimples_detran_go'],
+  analise_devedor: ['directd_pf_plus', 'directd_processos', 'directd_score_quod', 'directd_negativacoes', 'directd_perfil_economico', 'directd_vinculos', 'directd_historico_veiculos', 'infosimples_detran_go'],
+  investigacao_patrimonial: ['directd_pf_plus', 'directd_processos', 'directd_vinculos', 'directd_historico_veiculos', 'infosimples_detran_go'],
   due_diligence_imobiliaria: [
-    'directd_pf_plus', 'escavador_processos', 'directd_score_quod', 'directd_negativacoes', // comprador
-    'directd_pf_plus', 'escavador_processos', 'directd_negativacoes', 'directd_veiculos', 'directd_vinculos', // vendedor
+    'directd_pf_plus', 'directd_processos', 'directd_score_quod', 'directd_negativacoes', // comprador
+    'directd_pf_plus', 'directd_processos', 'directd_negativacoes', 'directd_veiculos', 'directd_vinculos', // vendedor
     'onr_matricula', // imóvel
     'claude_analise_imovel' // análise IA matrícula+escritura via Claude Sonnet 4.5
   ],
