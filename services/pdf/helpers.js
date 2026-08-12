@@ -204,6 +204,22 @@ function faixaRendaQualitativa(valorAnual, opts) {
   return 'Faixa alta (acima de R$ 20 mil/mês)';
 }
 
+// As fontes divergem no formato da data: Escavador/Datajud mandam ISO
+// (2026-06-30) e a Direct Data manda BR (30/06/2026). new Date() lê a BR como
+// mm/dd — "06/11/2023" virava 11 de junho e o resumo anunciava uma
+// movimentação de 1158 dias atrás num processo aberto neste mês.
+function parseDataProcesso(valor) {
+  const s = String(valor || '').trim();
+  if (!s) return null;
+  const br = s.match(/^(\d{2})\/(\d{2})\/(\d{4})/);
+  if (br) {
+    const d = new Date(Number(br[3]), Number(br[2]) - 1, Number(br[1]));
+    return isNaN(d) ? null : d;
+  }
+  const d = new Date(s);
+  return isNaN(d) ? null : d;
+}
+
 function construirResumoJudicial(lista, cpf, nome) {
   if (!lista || !lista.length) return '';
   const ativos = lista.filter(p => String(p.status || '').toLowerCase() === 'ativo');
@@ -216,11 +232,8 @@ function construirResumoJudicial(lista, cpf, nome) {
     else if (isAlvoNoPolo(p.polo_passivo, cpf, nome)) reu++;
     if (p.classe) classes.add(String(p.classe).trim());
     valorAtivos += parseValorCausa(p.valor_causa);
-    const dataRef = p.ultima_movimentacao || p.data_inicio;
-    if (dataRef) {
-      const d = new Date(dataRef);
-      if (!isNaN(d) && (!maisRecente || d > maisRecente)) maisRecente = d;
-    }
+    const d = parseDataProcesso(p.ultima_movimentacao || p.data_inicio);
+    if (d && (!maisRecente || d > maisRecente)) maisRecente = d;
   });
   const partes = [];
   if (ativos.length) {
