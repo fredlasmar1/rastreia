@@ -9,7 +9,7 @@ const PRODUTOS = {
 
   dossie_pf: {
     nome: 'Dossiê Pessoa Física',
-    preco: 69,
+    preco: 59.90,
     prazo_horas: 2,
     icone: '👤',
     publico_alvo: [
@@ -42,7 +42,7 @@ const PRODUTOS = {
   // Reusa o pipeline e o PDF do dossie_pf (renderers[tipo] || dossie_pf).
   analise_inquilino: {
     nome: 'Análise de Inquilino',
-    preco: 49,
+    preco: 47,
     prazo_horas: 2,
     icone: '🔑',
     publico_alvo: [
@@ -70,7 +70,7 @@ const PRODUTOS = {
 
   dossie_pj: {
     nome: 'Dossiê Pessoa Jurídica',
-    preco: 99,
+    preco: 89.90,
     prazo_horas: 2,
     icone: '🏢',
     publico_alvo: [

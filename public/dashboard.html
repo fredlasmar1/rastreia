@@ -167,7 +167,7 @@
               <td>${esc(p.alvo_nome)}</td>
               <td><code>${esc(p.alvo_documento)}</code></td>
               <td>${esc(p.cliente_nome)}</td>
-              <td><strong>R$ ${Number(p.valor).toLocaleString('pt-BR')}</strong></td>
+              <td><strong>R$ ${Number(p.valor).toLocaleString('pt-BR', { minimumFractionDigits: Number(p.valor) % 1 ? 2 : 0, maximumFractionDigits: 2 })}</strong></td>
               <td><span class="badge ${BADGES[p.status] || ''}">${STATUS_LABEL[p.status] || esc(p.status)}</span></td>
               <td>${new Date(p.criado_em).toLocaleDateString('pt-BR')}</td>
               <td>
@@ -247,9 +247,9 @@
   const SERVICOS = [
     { nome: 'Nome Limpo ou Sujo', tipo: 'consulta_restricoes', preco: 19.90, precoLabel: 'R$ 19,90', prazo: 'minutos', icone: '🚦', url: '/restricoes.html', desc: 'Negativações + score' },
     { nome: 'Consulta Veicular', tipo: 'consulta_veicular', custoTipo: 'consulta_veicular_simples', preco: 19.90, precoLabel: 'a partir de R$ 19,90', prazo: '30 min', icone: '🚗', url: '/veicular.html', desc: 'Gravame, restrições, FIPE' },
-    { nome: 'Análise de Inquilino', tipo: 'analise_inquilino', preco: 49, precoLabel: 'R$ 49', prazo: '2h', icone: '🔑', url: '/novo-pedido.html?tipo=analise_inquilino', desc: 'Locação: renda + limpo/sujo + despejo' },
-    { nome: 'Dossiê Pessoa Física', tipo: 'dossie_pf', preco: 69, precoLabel: 'R$ 69', prazo: '2h', icone: '👤', url: '/novo-pedido.html?tipo=dossie_pf', desc: 'Limpo/sujo + score + processos' },
-    { nome: 'Dossiê Pessoa Jurídica', tipo: 'dossie_pj', preco: 99, precoLabel: 'R$ 99', prazo: '2h', icone: '🏢', url: '/novo-pedido.html?tipo=dossie_pj', desc: 'Empresa + sócios + risco' },
+    { nome: 'Análise de Inquilino', tipo: 'analise_inquilino', preco: 47, precoLabel: 'R$ 47', prazo: '2h', icone: '🔑', url: '/novo-pedido.html?tipo=analise_inquilino', desc: 'Locação: renda + limpo/sujo + despejo' },
+    { nome: 'Dossiê Pessoa Física', tipo: 'dossie_pf', preco: 59.90, precoLabel: 'R$ 59,90', prazo: '2h', icone: '👤', url: '/novo-pedido.html?tipo=dossie_pf', desc: 'Limpo/sujo + score + processos' },
+    { nome: 'Dossiê Pessoa Jurídica', tipo: 'dossie_pj', preco: 89.90, precoLabel: 'R$ 89,90', prazo: '2h', icone: '🏢', url: '/novo-pedido.html?tipo=dossie_pj', desc: 'Empresa + sócios + risco' },
     { nome: 'Análise de Devedor', tipo: 'analise_devedor', preco: 99, precoLabel: 'R$ 99', prazo: '2h', icone: '⚖️', url: '/novo-pedido.html?tipo=analise_devedor', desc: 'Patrimônio + recuperabilidade' },
     { nome: 'Investigação Patrimonial', tipo: 'investigacao_patrimonial', preco: 149, precoLabel: 'R$ 149', prazo: '4h', icone: '🏦', url: '/novo-pedido.html?tipo=investigacao_patrimonial', desc: 'Bens, empresas, interpostas' },
     { nome: 'Due Diligence Empresarial', tipo: 'due_diligence', preco: 497, precoLabel: 'R$ 497', prazo: '24h', icone: '🔎', url: '/novo-pedido.html?tipo=due_diligence', desc: 'Empresa + sócios + CNDs + parecer' },

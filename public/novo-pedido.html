@@ -343,13 +343,15 @@
     }
   });
 
+  // 59.9 → "59,90"; 497 → "497"
+  const brl = (v) => Number(v).toLocaleString('pt-BR', { minimumFractionDigits: Number(v) % 1 ? 2 : 0, maximumFractionDigits: 2 });
   const PRODUTOS = {
-    dossie_pf: { nome: 'Dossiê Pessoa Física', preco: 69, prazo: '2 horas', icone: '👤',
+    dossie_pf: { nome: 'Dossiê Pessoa Física', preco: 59.90, prazo: '2 horas', icone: '👤',
       argumento: 'Antes de assinar qualquer contrato com uma pessoa física, você precisa saber: ela tem processos como réu? Nome sujo? Patrimônio que garanta a dívida? Em 2 horas você tem a resposta.',
       dados: ['Dados pessoais completos (nome, CPF, data nasc., filiação)', 'Endereços e telefones atuais com flag WhatsApp', 'Classe social e renda estimada', 'Processos judiciais como réu (trabalhista, cível, criminal)', 'Negativações e protestos', 'Listas negras federais (CEIS/CNEP)', 'Score de risco + recomendação do analista'],
       publico: ['Empresário que vai vender a prazo para PF', 'Proprietário que vai alugar imóvel', 'Quem vai firmar sociedade', 'Quem vai emprestar dinheiro']
     },
-    dossie_pj: { nome: 'Dossiê Pessoa Jurídica', preco: 99, prazo: '2 horas', icone: '🏢',
+    dossie_pj: { nome: 'Dossiê Pessoa Jurídica', preco: 89.90, prazo: '2 horas', icone: '🏢',
       argumento: 'CNPJ ativo não significa empresa saudável. Antes de vender fiado ou assinar contrato, descubra: a empresa tem dívidas trabalhistas, execuções fiscais, sócios problemáticos?',
       dados: ['Dados completos da empresa (situação RF, porte, abertura, regime tributário)', 'Quadro societário com histórico de alterações', 'Simples Nacional e regime tributário', 'Processos judiciais: trabalhistas, cíveis, execuções fiscais', 'Listas negras federais CEIS e CNEP', 'Situação fiscal e protestos', 'Score de risco empresarial + recomendação'],
       publico: ['Fornecedor que vai conceder crédito a cliente PJ', 'Quem vai fechar contrato de prestação de serviços', 'Empresa buscando parceiro ou representante', 'Quem vai aceitar boleto de empresa desconhecida']
@@ -379,15 +381,15 @@
       dados: ['Identificação completa (marca, modelo, ano, chassi, renavam)', 'Situação atual do veículo no DETRAN', 'Restrições administrativas e judiciais', 'Alienação fiduciária e penhoras', 'Valor FIPE atualizado', 'Município e UF de registro', 'Histórico de roubo/furto'],
       publico: ['Comprador de veículo usado', 'Quem vai receber veículo como pagamento', 'Locadoras e revendas', 'Credor pesquisando veículo por placa', 'Leiloéiro e mecânica']
     },
-    analise_inquilino: { nome: 'Análise de Inquilino', preco: 49, prazo: '2 horas', icone: '🔑',
+    analise_inquilino: { nome: 'Análise de Inquilino', preco: 47, prazo: '2 horas', icone: '🔑',
       argumento: 'Antes de entregar as chaves, saiba se o candidato tem renda compatível com o aluguel, nome limpo e histórico de despejo ou processos. Em 2 horas você decide com segurança.',
       dados: ['Identificação e situação na Receita Federal', 'Endereços e telefones atuais', 'Faixa de renda e capacidade de pagar o aluguel', 'Nome limpo ou sujo (negativações, protestos, score)', 'Processos: ações de despejo, execuções, réu', 'Score de risco + recomendação: aprovar / pedir fiador / recusar'],
       publico: ['Imobiliária analisando candidato a locação', 'Proprietário que aluga direto', 'Administradora de imóveis', 'Fiador avaliando o risco que vai assumir']
     }
   };
   const PRODUTOS_ORIG = {
-    dossie_pf: { nome: 'Dossiê Pessoa Física', preco: 69, prazo: '2 horas' },
-    dossie_pj: { nome: 'Dossiê Pessoa Jurídica', preco: 99, prazo: '2 horas' },
+    dossie_pf: { nome: 'Dossiê Pessoa Física', preco: 59.90, prazo: '2 horas' },
+    dossie_pj: { nome: 'Dossiê Pessoa Jurídica', preco: 89.90, prazo: '2 horas' },
     due_diligence: { nome: 'Due Diligence Empresarial', preco: 497, prazo: '24 horas' },
     analise_devedor: { nome: 'Análise de Devedor', preco: 99, prazo: '2 horas' },
     investigacao_patrimonial: { nome: 'Investigação Patrimonial', preco: 149, prazo: '4 horas' }
@@ -465,7 +467,9 @@
   // Renderizar cards de produto dinamicamente
   function renderProdutos() {
     const grid = document.getElementById('produtos-grid');
-    grid.innerHTML = Object.entries(PRODUTOS).map(([tipo, p]) => {
+    // A linha veicular antiga (Básico/Completo/Premium) saiu da venda em 08/10/2026:
+    // veículo se vende pelos pacotes de /veicular.html (19,90 / 34,90 / 64,90).
+    grid.innerHTML = Object.entries(PRODUTOS).filter(([tipo]) => tipo !== 'consulta_veicular').map(([tipo, p]) => {
       const est = CUSTOS_ESTIMADOS[tipo];
       const custoBadge = (MOSTRAR_CUSTO && est) ? (() => {
         const margem = p.preco > 0 ? ((p.preco - est.total_brl) / p.preco * 100) : 0;
@@ -478,7 +482,7 @@
       <div class="produto-card" id="card-${tipo}" onclick="selecionarProduto('${tipo}')">
         <div class="produto-icon">${p.icone}</div>
         <div class="produto-nome">${p.nome}</div>
-        <div class="produto-preco">R$ ${p.preco.toLocaleString('pt-BR')}</div>
+        <div class="produto-preco">R$ ${brl(p.preco)}</div>
         <div class="produto-prazo">⏱ Entrega em ${p.prazo}</div>
         ${custoBadge}
       </div>`;
@@ -531,9 +535,9 @@
     const p = PRODUTOS[tipoSelecionado]; if (!p) return;
     const total = (Number(p.preco) || 0) + (addonBV ? 29 : 0);
     const el = document.getElementById('r-valor');
-    if (el) el.textContent = 'R$ ' + total.toLocaleString('pt-BR');
+    if (el) el.textContent = 'R$ ' + brl(total);
     const dn = document.getElementById('detalhe-nome');
-    if (dn) dn.textContent = p.icone + ' ' + p.nome + ' — R$ ' + total.toLocaleString('pt-BR') + (addonBV ? ' (com dupla-checagem)' : '');
+    if (dn) dn.textContent = p.icone + ' ' + p.nome + ' — R$ ' + brl(total) + (addonBV ? ' (com dupla-checagem)' : '');
   }
   function toggleAddonBV() {
     const chk = document.getElementById('addon-bv');
@@ -549,7 +553,7 @@
     const p = PRODUTOS[tipo];
 
     // Mostrar detalhe do produto
-    document.getElementById('detalhe-nome').textContent = p.icone + ' ' + p.nome + ' — R$ ' + p.preco.toLocaleString('pt-BR');
+    document.getElementById('detalhe-nome').textContent = p.icone + ' ' + p.nome + ' — R$ ' + brl(p.preco);
 
     // Custo estimado (só admin/operador)
     const custoBox = document.getElementById('detalhe-custo');
@@ -598,7 +602,7 @@
     if (isVeicular && !tiersVeicularCarregados) carregarTiersVeicular();
 
     document.getElementById('r-produto').textContent = p.nome;
-    document.getElementById('r-valor').textContent = 'R$ ' + p.preco.toLocaleString('pt-BR');
+    document.getElementById('r-valor').textContent = 'R$ ' + brl(p.preco);
     document.getElementById('r-prazo').textContent = p.prazo;
 
     // Add-on Boa Vista: reseta e mostra só p/ dossiês (não veicular/restrições)

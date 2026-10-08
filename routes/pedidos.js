@@ -49,9 +49,9 @@ const uploadDocumentos = multer({
 });
 
 const PRECOS = {
-  dossie_pf: 69,
-  analise_inquilino: 49,
-  dossie_pj: 99,
+  dossie_pf: 59.90,
+  analise_inquilino: 47,
+  dossie_pj: 89.90,
   due_diligence: 497,
   due_diligence_imobiliaria: 797,
   analise_devedor: 99,
