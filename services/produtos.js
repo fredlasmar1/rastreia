@@ -9,7 +9,7 @@ const PRODUTOS = {
 
   dossie_pf: {
     nome: 'Dossiê Pessoa Física',
-    preco: 69,
+    preco: 97,
     prazo_horas: 2,
     icone: '👤',
     publico_alvo: [
@@ -42,7 +42,7 @@ const PRODUTOS = {
   // Reusa o pipeline e o PDF do dossie_pf (renderers[tipo] || dossie_pf).
   analise_inquilino: {
     nome: 'Análise de Inquilino',
-    preco: 49,
+    preco: 89.90,
     prazo_horas: 2,
     icone: '🔑',
     publico_alvo: [
@@ -70,7 +70,7 @@ const PRODUTOS = {
 
   dossie_pj: {
     nome: 'Dossiê Pessoa Jurídica',
-    preco: 99,
+    preco: 119,
     prazo_horas: 2,
     icone: '🏢',
     publico_alvo: [
@@ -135,7 +135,7 @@ const PRODUTOS = {
 
   analise_devedor: {
     nome: 'Análise de Devedor',
-    preco: 99,
+    preco: 109,
     prazo_horas: 2,
     icone: '⚖️',
     publico_alvo: [
@@ -223,7 +223,7 @@ const PRODUTOS = {
 
   consulta_restricoes: {
     nome: 'Consulta de Restrições no CPF',
-    preco: 19.90,
+    preco: 24.90,
     prazo_horas: 0.25,
     icone: '🚦',
     publico_alvo: [
@@ -236,7 +236,7 @@ const PRODUTOS = {
     dados_entregues: [
       { secao: 'IDENTIFICAÇÃO', campos: ['Nome/Razão Social', 'CPF/CNPJ', 'Situação na Receita Federal'] },
       { secao: 'RESTRIÇÕES', campos: ['Score QUOD (0-1000) com faixa', 'Protestos em cartório', 'Negativações (SCPC/Serasa via Direct Data)', 'Cheques sem fundo (quando disponível)'] },
-      { secao: 'PARECER', campos: ['Status: SEM RESTRIÇÕES / COM RESTRIÇÕES', 'Total de pendências em R$', 'Resumo dos cartórios e credores'] },
+      { secao: 'PARECER', campos: ['Status: SEM RESTRIÇÕES / COM RESTRIÇÕES', 'Total de pendências em R$', 'Resumo dos cartórios'] },
     ],
     fatores_score: [],
   },
@@ -262,7 +262,7 @@ const PRODUTOS = {
 
   consulta_veicular_mediana: {
     nome: 'Consulta Veicular Mediana',
-    preco: 29.90,
+    preco: 64.90,
     prazo_horas: 0.25,
     icone: '🚗',
     sem_alvo_documento: true,
@@ -284,7 +284,7 @@ const PRODUTOS = {
 
   consulta_veicular_completa: {
     nome: 'Consulta Veicular Completa',
-    preco: 39.90,
+    preco: 129,
     prazo_horas: 0.25,
     icone: '🚗',
     sem_alvo_documento: true,
@@ -312,7 +312,7 @@ const PRODUTOS = {
     // Tiers comerciais (catálogo Credify). Admin pode ajustar o preço final por pedido.
     // O campo `preco` acima continua sendo o piso do Completo (tier padrão).
     tiers: {
-      basico:   { preco: 47,  servicos: 5,  descricao: 'Checagem rápida pré-compra' },
+      basico:   { preco: 57,  servicos: 5,  descricao: 'Checagem rápida pré-compra' },
       completo: { preco: 97,  servicos: 9,  descricao: 'Dossiê completo com histórico', padrao: true },
       premium:  { preco: 147, servicos: 11, descricao: 'Completo + leilão + chassi decodificado' }
     },

@@ -197,7 +197,7 @@ INSERT INTO api_custos (chave, rotulo, valor_brl, fonte, confianca) VALUES
   ('directd_perfil_economico','DirectData — Nivel Socioeconomico e Renda', 0.3600, 'Cardapio DirectData V4.3 (Credito)',                   'oficial'),
   ('directd_vinculos',       'DirectData — Vinculos Societarios',         1.8400, 'Cardapio DirectData V4.3 (Cadastral)',                  'oficial'),
   ('directd_veiculos',       'DirectData — Consulta Veicular (placa)',    5.4000, 'Cardapio DirectData V4.3 (Veicular)',                   'oficial'),
-  ('credify_historico_proprietario','Credify — Historico de Proprietarios (por placa)', 0.9000, 'Credify (credifyapis.readme.io) — valor referencia, acertar via contato comercial', 'estimado'),
+  ('credify_historico_proprietario','Credify — Historico de Proprietarios (por placa)', 8.0000, 'Catalogo Credify (services/credify/catalogo.js HistoricoProprietarios)', 'estimado'),
   ('directd_historico_veiculos','DirectData — Historico de Veiculos (PF/PJ)', 0.3600, 'Cardapio DirectData V4.3 (Veicular)',                  'oficial'),
   ('directd_protestos',      'DirectData — Protestos Nacional',           0.7200, 'Cardapio DirectData V4.3 (Credito)',                    'oficial'),
   ('directd_obito',          'DirectData — Obito (PF)',                   0.3600, 'Cardapio DirectData V4.3 (Cadastral)',                  'oficial'),
@@ -206,7 +206,16 @@ INSERT INTO api_custos (chave, rotulo, valor_brl, fonte, confianca) VALUES
   ('infosimples_detran_go',  'InfoSimples DETRAN-GO',                     0.2600, 'Tabela publica InfoSimples',                            'oficial'),
   ('onr_matricula',          'ONR — Matricula de imovel',                 0.0000, 'Depende do cartorio, variavel',                         'estimado'),
   ('directd_boa_vista',      'DirectData — Boa Vista Acerta Completo PF (2a opiniao)', 14.0300, 'Cardapio DirectData V4 2026',           'oficial'),
-  ('directd_processos',      'DirectData — Processos Judiciais Completa (PF/PJ)', 3.3000, 'Cardapio DirectData V4 2026 (Processos)',    'oficial')
+  ('directd_processos',      'DirectData — Processos Judiciais Completa (PF/PJ)', 3.3000, 'Cardapio DirectData V4 2026 (Processos)',    'oficial'),
+  -- Tabela cheia (08/10/2026): itens que o pipeline chama e não tinham custo
+  ('directd_boa_vista_pj',   'DirectData — Boa Vista Define Limite Positivo PJ', 21.0000, 'Extrato DirectData (cobrado R$21,00)',        'oficial'),
+  ('directd_aml',            'DirectData — AML (Vinculos Societarios)',  0.7200, 'Extrato DirectData (cobrado R$0,72)',                    'oficial'),
+  ('directd_qsa_pj',         'DirectData — Receita Federal PJ com QSA',  0.3600, 'Estimado = Cadastro PJ Plus',                            'estimado'),
+  ('infosimples_sigef',      'InfoSimples — INCRA/SIGEF imoveis rurais', 0.2600, 'Estimado = tabela InfoSimples DETRAN-GO',                'estimado'),
+  ('infosimples_certidao',   'InfoSimples — Certidao (PGFN/CNDT/FGTS/INPI/CEIS/CEPIM)', 0.8000, 'Estimativa custos_apis.js — confirmar na InfoSimples', 'estimado'),
+  ('credify_pacote_simples', 'Credify — Pacote Veicular Simples',        3.9000, 'Catalogo Credify (1,17 + 2,09 + 0,64)',                  'estimado'),
+  ('credify_pacote_mediana', 'Credify — Pacote Veicular Mediana',       15.4200, 'Catalogo Credify (simples + Renajud + HistProp + Sinistro)', 'estimado'),
+  ('credify_pacote_completa','Credify — Pacote Veicular Completa',      31.2700, 'Catalogo Credify (VeiculoTotal)',                        'estimado')
 ON CONFLICT (chave) DO UPDATE SET
   rotulo = EXCLUDED.rotulo,
   valor_brl = EXCLUDED.valor_brl,

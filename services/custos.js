@@ -49,6 +49,7 @@ function chavesPorFonte(fonte, dados) {
   const c = [];
   // Remove sufixo _N (ex: receita_federal_3 → receita_federal). Funciona para qualquer N.
   const fonteCanon = String(fonte || '').replace(/_(\d+)$/, '');
+  const ok = dados && dados.disponivel !== false && !dados.erro;
   switch (fonteCanon) {
     case 'receita_federal':
       // PJ usa CNPJa (grátis), PF usa DirectData Plus
@@ -66,18 +67,48 @@ function chavesPorFonte(fonte, dados) {
       break;
     case 'negativacoes':
       if (dados?.status !== undefined) c.push('directd_negativacoes');
+      // A Boa Vista (PF/PJ) é decidida em calcularCustoPedido, que sabe o tipo do alvo.
+      break;
+    case 'protestos':
+      if (ok) c.push('directd_protestos');
       break;
     case 'perfil_economico':
-      if (dados && !dados.erro) c.push('directd_perfil_economico');
+      if (ok) c.push('directd_perfil_economico');
       break;
     case 'vinculos':
-      if (dados?.total > 0 || dados?.socios || dados?.empresas) c.push('directd_vinculos');
+      // Quando VinculosSocietarios falha, os dados vêm do AML — mas a chamada foi feita.
+      if (dados) c.push('directd_vinculos');
+      break;
+    case 'aml':
+      if (dados) c.push('directd_aml');
       break;
     case 'veiculos':
-      if (dados?.total > 0 || dados?.veiculos) c.push('directd_veiculos');
+      // consultarVeiculos = InfoSimples DETRAN-GO (não é a Consulta Veicular por placa)
+      if (dados) c.push('infosimples_detran_go');
+      break;
+    case 'historico_veiculos_proprietario':
+      if (dados) c.push('directd_historico_veiculos');
+      break;
+    case 'imoveis_rurais':
+      if (ok) c.push('infosimples_sigef');
       break;
     case 'veiculo_placa':
       if (dados && dados.disponivel !== false) c.push('directd_veiculos');
+      break;
+    case 'proprietarios_placa':
+      // Credify roda em paralelo mesmo no tier Básico (o resultado vem null, mas é pago)
+      c.push('credify_historico_proprietario');
+      break;
+    case 'pgfn': case 'cndt': case 'fgts': case 'inpi': case 'inpi_patentes': case 'ceis': case 'cepim':
+      if (dados) c.push('infosimples_certidao');
+      break;
+    case 'socios_enriquecidos':
+      if (Array.isArray(dados) && dados.length) {
+        c.push('directd_qsa_pj');
+        for (const s of dados) {
+          if (s?.tem_cpf) c.push('directd_pf_plus', 'directd_score_quod', 'directd_processos');
+        }
+      }
       break;
     case 'transparencia':
       if (dados && dados.disponivel !== false) c.push('transparencia');
@@ -88,6 +119,11 @@ function chavesPorFonte(fonte, dados) {
       if (dados?.concluida) c.push('claude_analise_imovel');
       break;
   }
+  // Pacotes Credify (consulta_veicular_simples/mediana/completa): a linha `pacote` diz qual foi.
+  if (fonteCanon === 'pacote' && typeof dados === 'string') {
+    const k = { simples: 'credify_pacote_simples', mediana: 'credify_pacote_mediana', completa: 'credify_pacote_completa' }[dados];
+    if (k) c.push(k);
+  }
   return c;
 }
 
@@ -97,13 +133,31 @@ async function calcularCustoPedido(rows) {
   const tabela = await mapaCustos();
   const breakdown = [];
   let total = 0;
-  for (const row of rows) {
-    const dados = typeof row.dados === 'string' ? JSON.parse(row.dados) : row.dados;
-    const chaves = chavesPorFonte(row.fonte, dados);
-    for (const chave of chaves) {
-      const valor = tabela[chave] ?? 0;
-      breakdown.push({ fonte: row.fonte, api: chave, valor_brl: valor });
-      total += valor;
+  const parsed = rows.map(r => ({ fonte: r.fonte, dados: typeof r.dados === 'string' ? JSON.parse(r.dados) : r.dados }));
+  const sufixo = (f) => (String(f).match(/_(\d+)$/) || [, ''])[1];
+  // Tipo de cada alvo (PF/PJ) pela linha receita_federal do mesmo sufixo
+  const ehPJ = {};
+  for (const { fonte, dados } of parsed) {
+    if (String(fonte).replace(/_(\d+)$/, '') === 'receita_federal') {
+      ehPJ[sufixo(fonte)] = !!(dados?.tipo === 'PJ' || dados?.razao_social);
+    }
+  }
+  const add = (fonte, chave) => {
+    const valor = tabela[chave] ?? 0;
+    breakdown.push({ fonte, api: chave, valor_brl: valor });
+    total += valor;
+  };
+  // Boa Vista: uma cobrança por alvo (negativações e o add-on usam a mesma chamada em cache)
+  const bvContada = new Set();
+  for (const { fonte, dados } of parsed) {
+    for (const chave of chavesPorFonte(fonte, dados)) add(fonte, chave);
+    const canon = String(fonte).replace(/_(\d+)$/, '');
+    const s = sufixo(fonte);
+    const chamouBV = (canon === 'negativacoes' && (dados?.boa_vista_consultada || /boa vista/i.test(dados?.fonte || '')))
+      || (canon === 'boa_vista' && dados && dados.disponivel !== false);
+    if (chamouBV && !bvContada.has(s)) {
+      bvContada.add(s);
+      add(fonte, ehPJ[s] ? 'directd_boa_vista_pj' : 'directd_boa_vista');
     }
   }
   return {
@@ -115,24 +169,30 @@ async function calcularCustoPedido(rows) {
 // Mapa: tipo de produto → APIs que serão consumidas em um cenário típico.
 // Usado para ESTIMATIVA antes da consulta rodar (exibido no /novo-pedido.html).
 // Os valores reais são calculados em calcularCustoPedido() após a consulta.
+// TABELA CHEIA: tudo o que o pipeline pode chamar num pedido normal, inclusive
+// a Boa Vista (disparada quando há pendência). Fallbacks (Escavador, cpfcnpj) ficam fora.
+const BASE_PF = ['directd_pf_plus', 'directd_processos', 'directd_score_quod', 'directd_negativacoes', 'directd_boa_vista', 'directd_perfil_economico'];
+const BASE_PJ = ['cnpja', 'directd_processos', 'directd_score_quod', 'directd_negativacoes', 'directd_boa_vista_pj', 'transparencia'];
+const PATRIMONIAL = ['directd_vinculos', 'directd_aml', 'infosimples_detran_go', 'directd_historico_veiculos', 'infosimples_sigef'];
+const SOCIO = ['directd_pf_plus', 'directd_score_quod', 'directd_processos']; // por sócio com CPF
 const APIS_POR_PRODUTO = {
-  dossie_pf: ['directd_pf_plus', 'directd_processos', 'directd_score_quod', 'directd_negativacoes', 'directd_perfil_economico', 'transparencia'],
-  // Análise de Inquilino: PF enxuto p/ locação (cadastro + processos + score + negativações + renda)
-  analise_inquilino: ['directd_pf_plus', 'directd_processos', 'directd_score_quod', 'directd_negativacoes', 'directd_perfil_economico'],
-  dossie_pj: ['cnpja', 'directd_processos', 'directd_score_quod', 'directd_negativacoes', 'directd_vinculos', 'transparencia'],
-  due_diligence: ['cnpja', 'directd_processos', 'directd_negativacoes', 'directd_perfil_economico', 'directd_vinculos', 'transparencia'],
-  // Análise de Devedor consulta patrimônio por CPF (Histórico de Veículos R$0,36 +
-  // DETRAN-GO R$0,26), NÃO por placa (directd_veiculos R$5,40).
-  analise_devedor: ['directd_pf_plus', 'directd_processos', 'directd_score_quod', 'directd_negativacoes', 'directd_perfil_economico', 'directd_vinculos', 'directd_historico_veiculos', 'infosimples_detran_go'],
-  investigacao_patrimonial: ['directd_pf_plus', 'directd_processos', 'directd_vinculos', 'directd_historico_veiculos', 'infosimples_detran_go'],
-  due_diligence_imobiliaria: [
-    'directd_pf_plus', 'directd_processos', 'directd_score_quod', 'directd_negativacoes', // comprador
-    'directd_pf_plus', 'directd_processos', 'directd_negativacoes', 'directd_veiculos', 'directd_vinculos', // vendedor
-    'onr_matricula', // imóvel
-    'claude_analise_imovel' // análise IA matrícula+escritura via Claude Sonnet 4.5
-  ],
-  consulta_restricoes: ['directd_pf_plus', 'directd_negativacoes', 'directd_score_quod'],
-  consulta_veicular: ['directd_veiculos']
+  // Nome Limpo ou Sujo: sem a Boa Vista (sem lista nominal de credores)
+  consulta_restricoes: ['directd_pf_plus', 'directd_score_quod', 'directd_negativacoes', 'directd_protestos'],
+  analise_inquilino: BASE_PF,
+  dossie_pf: BASE_PF,
+  dossie_pj: BASE_PJ,
+  analise_devedor: [...BASE_PF, ...PATRIMONIAL],
+  investigacao_patrimonial: [...BASE_PF, ...PATRIMONIAL],
+  // Due Diligence Empresarial: base PJ + vínculos/AML + 7 certidões InfoSimples + QSA + 2 sócios
+  due_diligence: [...BASE_PJ, 'directd_vinculos', 'directd_aml',
+    ...Array(7).fill('infosimples_certidao'), 'directd_qsa_pj', ...SOCIO, ...SOCIO],
+  // Due Diligence Imobiliária: comprador + vendedor, cada um com o conjunto patrimonial, + IA
+  due_diligence_imobiliaria: [...BASE_PF, ...PATRIMONIAL, ...BASE_PF, ...PATRIMONIAL, 'claude_analise_imovel'],
+  // Veicular legado (tiers): placa + Credify histórico (pago mesmo no Básico) + histórico por CPF
+  consulta_veicular: ['directd_veiculos', 'credify_historico_proprietario', 'directd_historico_veiculos'],
+  consulta_veicular_simples: ['credify_pacote_simples'],
+  consulta_veicular_mediana: ['credify_pacote_mediana'],
+  consulta_veicular_completa: ['credify_pacote_completa']
 };
 
 async function estimarCustoProduto(tipo) {

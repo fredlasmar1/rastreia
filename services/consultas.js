@@ -929,7 +929,7 @@ async function consultarBoaVista(documento) {
   }
 }
 
-async function consultarNegativacoes(documento) {
+async function consultarNegativacoes(documento, { detalharCredores = true } = {}) {
   if (!process.env.DIRECTD_TOKEN) {
     return { disponivel: false, fonte: 'Direct Data Negativacoes' };
   }
@@ -971,7 +971,11 @@ async function consultarNegativacoes(documento) {
     let itensNeg = [];
     const totalPendencia = Number(pf.totalPendencia || 0);
     const temProtesto = (pf.protestos || []).length > 0;
-    if (totalPendencia > 0 || temProtesto) {
+    // A Boa Vista custa R$14,03 (CPF) / R$21,00 (CNPJ). O Nome Limpo ou Sujo
+    // (consulta_restricoes) sai sem ela: mostra o total e os cartórios, sem a
+    // lista nominal de credores. Os demais produtos detalham.
+    const boaVistaConsultada = detalharCredores && (totalPendencia > 0 || temProtesto);
+    if (boaVistaConsultada) {
       itensNeg = await consultarApontamentosBoaVista(doc);
     }
 
@@ -980,6 +984,9 @@ async function consultarNegativacoes(documento) {
       total_pendencias: totalPendencia,
       protestos: todosCartorios,
       pendencias: itensNeg,
+      // Marca para o custo real (services/custos.js): a chamada é paga mesmo
+      // quando volta sem ocorrências.
+      boa_vista_consultada: boaVistaConsultada,
       acoes_judiciais: pf.acoesJudiciais || pf.acoes || [],
       cheques_sem_fundo: (pf.chequesSemFundo || pf.cheques || pf.ccf || pf.chequesSemFundoCcf || []).map(c => ({
         banco: c.banco || c.codigoBanco || c.nomeBanco || '',
@@ -2368,7 +2375,7 @@ async function executarConsultaCompleta(pedido) {
     const [cadastral, score_credito, negativacoes, protestos] = await Promise.all([
       tipoAlvoCR === 'PJ' ? consultarCNPJ(alvo_documento) : consultarCPF(alvo_documento),
       consultarScore(alvo_documento),
-      consultarNegativacoes(alvo_documento),
+      consultarNegativacoes(alvo_documento, { detalharCredores: false }),
       consultarProtestos(alvo_documento)
     ]);
     return {

@@ -105,7 +105,7 @@ function calcularCustoBruto(servicosSelecionados) {
 
 /**
  * Tiers comerciais da Consulta Veicular.
- * Básico (R$ 47) — checagem rápida pré-compra.
+ * Básico (R$ 57) — checagem rápida pré-compra.
  * Completo (R$ 97) — dossiê completo com histórico.
  * Premium (R$ 147) — completo + leilão (único que detecta sinistro grave/salvado).
  *
@@ -116,7 +116,7 @@ const TIERS_VEICULAR = {
   basico: {
     nome: 'Básico',
     slug: 'basico',
-    preco_sugerido: 47.00,
+    preco_sugerido: 57.00,
     descricao: 'Checagem essencial pré-compra: proprietário, financiamento, multas, bloqueio judicial e FIPE.',
     publico: 'Comprador pessoal fazendo primeira olhada no carro usado',
     servicos: [
