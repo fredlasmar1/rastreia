@@ -344,12 +344,12 @@
   });
 
   const PRODUTOS = {
-    dossie_pf: { nome: 'Dossiê Pessoa Física', preco: 97, prazo: '2 horas', icone: '👤',
+    dossie_pf: { nome: 'Dossiê Pessoa Física', preco: 69, prazo: '2 horas', icone: '👤',
       argumento: 'Antes de assinar qualquer contrato com uma pessoa física, você precisa saber: ela tem processos como réu? Nome sujo? Patrimônio que garanta a dívida? Em 2 horas você tem a resposta.',
       dados: ['Dados pessoais completos (nome, CPF, data nasc., filiação)', 'Endereços e telefones atuais com flag WhatsApp', 'Classe social e renda estimada', 'Processos judiciais como réu (trabalhista, cível, criminal)', 'Negativações e protestos', 'Listas negras federais (CEIS/CNEP)', 'Score de risco + recomendação do analista'],
       publico: ['Empresário que vai vender a prazo para PF', 'Proprietário que vai alugar imóvel', 'Quem vai firmar sociedade', 'Quem vai emprestar dinheiro']
     },
-    dossie_pj: { nome: 'Dossiê Pessoa Jurídica', preco: 119, prazo: '2 horas', icone: '🏢',
+    dossie_pj: { nome: 'Dossiê Pessoa Jurídica', preco: 99, prazo: '2 horas', icone: '🏢',
       argumento: 'CNPJ ativo não significa empresa saudável. Antes de vender fiado ou assinar contrato, descubra: a empresa tem dívidas trabalhistas, execuções fiscais, sócios problemáticos?',
       dados: ['Dados completos da empresa (situação RF, porte, abertura, regime tributário)', 'Quadro societário com histórico de alterações', 'Simples Nacional e regime tributário', 'Processos judiciais: trabalhistas, cíveis, execuções fiscais', 'Listas negras federais CEIS e CNEP', 'Situação fiscal e protestos', 'Score de risco empresarial + recomendação'],
       publico: ['Fornecedor que vai conceder crédito a cliente PJ', 'Quem vai fechar contrato de prestação de serviços', 'Empresa buscando parceiro ou representante', 'Quem vai aceitar boleto de empresa desconhecida']
@@ -359,7 +359,7 @@
       dados: ['Tudo do Dossiê PJ + análise aprofundada', 'Dossiê PF de cada sócio individualmente', 'Passivo judicial detalhado com valor de causa', 'Certidões (Federal, Estadual, Municipal, Trabalhista)', 'Patrimônio da empresa (imóveis, veículos, marcas)', 'Histórico completo de alterações societárias', 'Análise de risco por categoria (trabalhista, fiscal, societário)', 'Parecer técnico com recomendação: PROSSEGUIR / COM RESSALVAS / NÃO PROSSEGUIR'],
       publico: ['Quem vai comprar uma empresa ou ponto comercial', 'Investidor que vai aportar capital', 'Quem vai virar sócio de empresa existente', 'Advogado fazendo due diligence para cliente']
     },
-    analise_devedor: { nome: 'Análise de Devedor', preco: 109, prazo: '2 horas', icone: '⚖️',
+    analise_devedor: { nome: 'Análise de Devedor', preco: 99, prazo: '2 horas', icone: '⚖️',
       argumento: 'Antes de gastar com advogado e processo, descubra se o devedor tem patrimônio para pagar. Cobrar devedor "laranja" é jogar dinheiro fora.',
       dados: ['Identificação e endereços atuais para citação', 'Telefones ativos para contato de cobrança', 'Patrimônio identificado: imóveis, veículos, empresas', 'Histórico como devedor: execuções, protestos, negativações', 'Capacidade de pagamento estimada', 'Estratégia de cobrança recomendada', 'Score de recuperabilidade: RECUPERÁVEL / PARCIAL / IRRECUPERÁVEL'],
       publico: ['Empresa com cliente inadimplente', 'Escritório de advocacia antes de aceitar causa de êxito', 'Credor com título vencido avaliando ajuizar execução', 'Recobro analisando viabilidade de carteira']
@@ -379,17 +379,17 @@
       dados: ['Identificação completa (marca, modelo, ano, chassi, renavam)', 'Situação atual do veículo no DETRAN', 'Restrições administrativas e judiciais', 'Alienação fiduciária e penhoras', 'Valor FIPE atualizado', 'Município e UF de registro', 'Histórico de roubo/furto'],
       publico: ['Comprador de veículo usado', 'Quem vai receber veículo como pagamento', 'Locadoras e revendas', 'Credor pesquisando veículo por placa', 'Leiloéiro e mecânica']
     },
-    analise_inquilino: { nome: 'Análise de Inquilino', preco: 89.90, prazo: '2 horas', icone: '🔑',
+    analise_inquilino: { nome: 'Análise de Inquilino', preco: 49, prazo: '2 horas', icone: '🔑',
       argumento: 'Antes de entregar as chaves, saiba se o candidato tem renda compatível com o aluguel, nome limpo e histórico de despejo ou processos. Em 2 horas você decide com segurança.',
       dados: ['Identificação e situação na Receita Federal', 'Endereços e telefones atuais', 'Faixa de renda e capacidade de pagar o aluguel', 'Nome limpo ou sujo (negativações, protestos, score)', 'Processos: ações de despejo, execuções, réu', 'Score de risco + recomendação: aprovar / pedir fiador / recusar'],
       publico: ['Imobiliária analisando candidato a locação', 'Proprietário que aluga direto', 'Administradora de imóveis', 'Fiador avaliando o risco que vai assumir']
     }
   };
   const PRODUTOS_ORIG = {
-    dossie_pf: { nome: 'Dossiê Pessoa Física', preco: 97, prazo: '2 horas' },
-    dossie_pj: { nome: 'Dossiê Pessoa Jurídica', preco: 119, prazo: '2 horas' },
+    dossie_pf: { nome: 'Dossiê Pessoa Física', preco: 69, prazo: '2 horas' },
+    dossie_pj: { nome: 'Dossiê Pessoa Jurídica', preco: 99, prazo: '2 horas' },
     due_diligence: { nome: 'Due Diligence Empresarial', preco: 497, prazo: '24 horas' },
-    analise_devedor: { nome: 'Análise de Devedor', preco: 109, prazo: '2 horas' },
+    analise_devedor: { nome: 'Análise de Devedor', preco: 99, prazo: '2 horas' },
     investigacao_patrimonial: { nome: 'Investigação Patrimonial', preco: 149, prazo: '4 horas' }
   };
 
@@ -1006,7 +1006,7 @@
     // Fallback (operador sem acesso ao endpoint admin): usa os metadados de produtos.js via /api/produtos
     TIERS_VEICULAR_DATA = {
       tiers: [
-        { slug:'basico',   nome:'Básico',   preco_sugerido:57,  descricao:'Checagem essencial pré-compra',       qtd_servicos:5  },
+        { slug:'basico',   nome:'Básico',   preco_sugerido:47,  descricao:'Checagem essencial pré-compra',       qtd_servicos:5  },
         { slug:'completo', nome:'Completo', preco_sugerido:97,  descricao:'Dossiê completo com histórico',         qtd_servicos:9  },
         { slug:'premium',  nome:'Premium',  preco_sugerido:147, descricao:'Completo + leilão + chassi profundo',  qtd_servicos:11 }
       ],
