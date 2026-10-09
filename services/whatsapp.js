@@ -17,7 +17,7 @@ async function enviarMensagem(numero, mensagem) {
 
 async function notificarClienteConcluido(pedido, urlRelatorio) {
   if (!pedido.cliente_whatsapp) return;
-  const msg = `✅ *RASTREIA - Dossiê Concluído*\n\nOlá, ${pedido.cliente_nome}!\n\nSeu relatório está pronto.\n📄 Protocolo: #${pedido.numero}\n📋 Consulta: ${pedido.alvo_nome}\n\n🔗 Acesse aqui: ${process.env.BASE_URL}${urlRelatorio}\n\n_Recobro Recuperação de Crédito | Anápolis-GO_`;
+  const msg = `✅ *RASTREIA - Dossiê Concluído*\n\nOlá, ${pedido.cliente_nome}!\n\nSeu relatório está pronto.\n📄 Protocolo: #${pedido.numero}\n📋 Consulta: ${pedido.alvo_nome}\n\n🔗 Acesse aqui: ${process.env.BASE_URL}${require('./link_relatorio').assinar(urlRelatorio, require('./link_relatorio').VALIDADE.WHATSAPP)}\n\n_Recobro Recuperação de Crédito | Anápolis-GO_`;
   await enviarMensagem(pedido.cliente_whatsapp, msg);
 }
 

@@ -11,6 +11,7 @@ const { gerarDossie } = require('../services/pdf');
 const { notificarClienteConcluido, notificarOperadorNovoPedido } = require('../services/whatsapp');
 const { criarPreferenceParaPedido, configurado: mpConfigurado } = require('../services/mercadopago');
 const { PRODUTOS, sugerirProximoDegrau } = require('../services/produtos');
+const { assinar, assinarPedido, VALIDADE } = require('../services/link_relatorio');
 const credifyCatalogo = require('../services/credify/catalogo');
 const analiseIA = require('../services/analise_documentos_ia');
 const pedidoAlvos = require('../services/pedido_alvos');
@@ -103,7 +104,7 @@ router.get('/publico/:token', async (req, res) => {
       [req.params.token]
     );
     if (result.rows.length === 0) return res.status(404).json({ erro: 'Pedido não encontrado' });
-    res.json(result.rows[0]);
+    res.json(assinarPedido(result.rows[0], VALIDADE.PUBLICO));
   } catch (e) {
     res.status(500).json({ erro: 'Erro ao buscar pedido' });
   }
@@ -164,7 +165,7 @@ router.get('/', autenticar, async (req, res) => {
     const countSql = `SELECT COUNT(*) FROM pedidos${countWhere.length ? ' WHERE ' + countWhere.join(' AND ') : ''}`;
     const count = await pool.query(countSql, countParams);
 
-    res.json({ pedidos: result.rows, total: parseInt(count.rows[0].count), page: safePage });
+    res.json({ pedidos: assinarPedido(result.rows), total: parseInt(count.rows[0].count), page: safePage });
   } catch (e) {
     res.status(500).json({ erro: 'Erro ao listar pedidos' });
   }
@@ -436,7 +437,7 @@ router.get('/:id', autenticar, async (req, res) => {
     );
     if (result.rows.length === 0) return res.status(404).json({ erro: 'Pedido não encontrado' });
     const dados = await pool.query('SELECT * FROM dados_consulta WHERE pedido_id = $1', [req.params.id]);
-    res.json({ ...result.rows[0], dados: dados.rows });
+    res.json({ ...assinarPedido(result.rows[0]), dados: dados.rows });
   } catch (e) {
     res.status(500).json({ erro: 'Erro ao buscar pedido' });
   }
@@ -827,7 +828,7 @@ router.post('/:id/concluir', autenticar, async (req, res) => {
 
     await notificarClienteConcluido(pedido, url);
 
-    res.json({ ok: true, url });
+    res.json({ ok: true, url: assinar(url) });
   } catch (e) {
     console.error('Erro ao concluir pedido:', e);
     res.status(500).json({ erro: 'Erro ao concluir pedido' });

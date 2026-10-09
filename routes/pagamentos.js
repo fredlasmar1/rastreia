@@ -95,7 +95,7 @@ async function statusPagamento(req, res) {
       [req.params.id]
     );
     if (!r.rows.length) return res.status(404).json({ erro: 'Pedido não encontrado' });
-    res.json(r.rows[0]);
+    res.json(require('../services/link_relatorio').assinarPedido(r.rows[0]));
   } catch (e) {
     console.error('[pagamentos] status erro:', e);
     res.status(500).json({ erro: 'Erro ao consultar status' });

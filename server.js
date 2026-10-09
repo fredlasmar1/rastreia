@@ -55,6 +55,58 @@ if (missing.length > 0) {
 const allowedOrigins = process.env.CORS_ORIGINS ? process.env.CORS_ORIGINS.split(',') : [];
 app.use(cors(allowedOrigins.length > 0 ? { origin: allowedOrigins } : undefined));
 app.use(express.json());
+// Servir PDF — regenera se arquivo não existir (Railway ephemeral storage)
+// BUG #2: tenta primeiro RELATORIOS_DIR (Railway Volume) e cai no caminho antigo
+// public/relatorios para compat com PDFs gerados antes da migração para volume.
+const storagePaths = require('./services/storage_paths');
+// Fica ANTES do express.static: senão public/relatorios/*.pdf abriria sem checagem.
+// Abre com link assinado (services/link_relatorio.js) ou com JWT de operador.
+const linkRelatorio = require('./services/link_relatorio');
+const jwtRel = require('jsonwebtoken');
+function podeVerRelatorio(req, fname) {
+  if (linkRelatorio.verificar(fname, req.query.exp, req.query.sig)) return true;
+  const token = (req.headers.authorization || '').replace('Bearer ', '');
+  if (token) { try { jwtRel.verify(token, process.env.JWT_SECRET); return true; } catch (_) {} }
+  return false;
+}
+app.get('/relatorios/:filename', async (req, res) => {
+  // Bloquear path traversal (../../ etc)
+  const fname = path.basename(req.params.filename);
+  if (!podeVerRelatorio(req, fname)) {
+    return res.status(403).type('html').send('<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Link expirado</title><div style="font:16px system-ui;max-width:480px;margin:15vh auto;padding:0 16px;color:#14213d"><h2>Este link do relatório expirou ou não é válido</h2><p>Por segurança, o relatório só abre por um link recente. Entre no painel do Rastreia ou peça um novo link para quem enviou o relatório.</p></div>');
+  }
+  res.set('Cache-Control', 'private, no-store');
+  const candidatos = [
+    path.join(storagePaths.RELATORIOS_DIR, fname),
+    path.join(__dirname, 'public', 'relatorios', fname)
+  ];
+  for (const candidato of candidatos) {
+    if (fs.existsSync(candidato)) return res.sendFile(candidato);
+  }
+  // Arquivo não existe (apagado no deploy). Tentar regenerar.
+  try {
+    const { pool } = require('./db');
+    const { gerarDossie } = require('./services/pdf');
+    // Extrair ID do pedido pelo relatorio_url salvo no banco
+    const relUrl = `/relatorios/${req.params.filename}`;
+    const pedidoResult = await pool.query(
+      "SELECT * FROM pedidos WHERE relatorio_url = $1 AND deletado_em IS NULL",
+      [relUrl]
+    );
+    if (pedidoResult.rows.length === 0) return res.status(404).send('Pedido nao encontrado. Gere o relatorio novamente.');
+    const pedido = pedidoResult.rows[0];
+    const dadosResult = await pool.query('SELECT * FROM dados_consulta WHERE pedido_id = $1', [pedido.id]);
+    const { filepath } = await gerarDossie(pedido, dadosResult.rows);
+    res.sendFile(filepath);
+  } catch (e) {
+    console.error('[PDF Regen] Erro:', e.message);
+    res.status(404).send('PDF nao disponivel. Gere novamente pelo painel.');
+  }
+});
+
+// Qualquer outro caminho em /relatorios (subpastas etc.) não cai no static
+app.use('/relatorios', (req, res) => res.status(404).send('Não encontrado'));
+
 app.use(express.static(path.join(__dirname, 'public')));
 
 // Rate limiting geral
@@ -338,41 +390,6 @@ app.use('/api/_debug', require('./routes/_debug'));
 // Caminho novo + caminho legado (compat com integrações antigas no painel MP).
 app.post('/api/mercadopago/webhook', express.json(), pagamentosRouter.webhookMP);
 app.post('/webhook/mp', express.json(), pagamentosRouter.webhookMP);
-
-// Servir PDF — regenera se arquivo não existir (Railway ephemeral storage)
-// BUG #2: tenta primeiro RELATORIOS_DIR (Railway Volume) e cai no caminho antigo
-// public/relatorios para compat com PDFs gerados antes da migração para volume.
-const storagePaths = require('./services/storage_paths');
-app.get('/relatorios/:filename', async (req, res) => {
-  // Bloquear path traversal (../../ etc)
-  const fname = path.basename(req.params.filename);
-  const candidatos = [
-    path.join(storagePaths.RELATORIOS_DIR, fname),
-    path.join(__dirname, 'public', 'relatorios', fname)
-  ];
-  for (const candidato of candidatos) {
-    if (fs.existsSync(candidato)) return res.sendFile(candidato);
-  }
-  // Arquivo não existe (apagado no deploy). Tentar regenerar.
-  try {
-    const { pool } = require('./db');
-    const { gerarDossie } = require('./services/pdf');
-    // Extrair ID do pedido pelo relatorio_url salvo no banco
-    const relUrl = `/relatorios/${req.params.filename}`;
-    const pedidoResult = await pool.query(
-      "SELECT * FROM pedidos WHERE relatorio_url = $1 AND deletado_em IS NULL",
-      [relUrl]
-    );
-    if (pedidoResult.rows.length === 0) return res.status(404).send('Pedido nao encontrado. Gere o relatorio novamente.');
-    const pedido = pedidoResult.rows[0];
-    const dadosResult = await pool.query('SELECT * FROM dados_consulta WHERE pedido_id = $1', [pedido.id]);
-    const { filepath } = await gerarDossie(pedido, dadosResult.rows);
-    res.sendFile(filepath);
-  } catch (e) {
-    console.error('[PDF Regen] Erro:', e.message);
-    res.status(404).send('PDF nao disponivel. Gere novamente pelo painel.');
-  }
-});
 
 // Servir frontend para todas as rotas não-API
 app.get('*', (req, res) => {
