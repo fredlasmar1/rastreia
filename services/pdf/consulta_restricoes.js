@@ -148,6 +148,17 @@ function blocoProtestos(doc, y, dados) {
 
   y = secao(doc, 'PROTESTOS EM CARTÓRIO', y);
 
+  if (!protestosBruto.length && Number(protestosFonte.total) > 0) {
+    // IEPTB acusou protesto mas não detalha cartório
+    y = verificarPagina(doc, y, 30);
+    doc.rect(MARGEM, y, LARGURA, 26).fill('#fee2e2');
+    doc.fillColor('#7f1d1d').fontSize(9).font('Helvetica-Bold')
+      .text(`Constam ${protestosFonte.total} protesto(s) na base nacional (IEPTB) — R$ ${Number(protestosFonte.valor_total || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`, MARGEM + 8, y + 4);
+    doc.fillColor('#7f1d1d').fontSize(8).font('Helvetica')
+      .text(`${protestosFonte.cartorios_distintos || 0} cartório(s) em ${protestosFonte.cidades_distintas || 0} cidade(s)`, MARGEM + 8, y + 15);
+    return y + 34;
+  }
+
   if (!protestosBruto.length) {
     y = verificarPagina(doc, y, 22);
     doc.rect(MARGEM, y, LARGURA, 18).fill('#dcfce7');

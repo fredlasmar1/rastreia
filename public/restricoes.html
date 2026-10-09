@@ -331,7 +331,9 @@
             ${p.cidade ? `<div class="meta">${esc(p.cidade)}</div>` : ''}
           </div>`;
         }).join('')
-      : '<div class="nada-consta">NADA CONSTA — nenhum protesto encontrado.</div>';
+      : (Number(protestosFonte.total) > 0
+        ? `<div class="lista-item"><div class="titulo">Constam ${protestosFonte.total} protesto(s) na base nacional (IEPTB) — R$ ${Number(protestosFonte.valor_total || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</div><div class="meta">${protestosFonte.cartorios_distintos || 0} cartório(s) em ${protestosFonte.cidades_distintas || 0} cidade(s)</div></div>`
+        : '<div class="nada-consta">NADA CONSTA — nenhum protesto encontrado.</div>');
 
     // Negativações
     const valorPend = Number(negativacoes.total_pendencias || 0);
@@ -363,7 +365,7 @@
     const neg = dados.negativacoes || {};
     const sc = dados.score_credito || {};
     const valorPend = Number(neg.total_pendencias || 0);
-    const totalProt = ((neg.protestos || []).length) + ((dados.protestos?.protestos || []).length);
+    const totalProt = Math.max((neg.protestos || []).length, Number(dados.protestos?.total || 0));
     const sQuod = Number(sc.score || 0);
     if (valorPend > 0) return true;
     if ((neg.status || '').toLowerCase().includes('pendenc')) return true;

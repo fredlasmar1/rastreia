@@ -243,7 +243,9 @@ async function consultarCPF(cpf) {
             renda_inconsistente: rendaInconsistente,
             renda_motivo_inconsistencia: rendaMotivoInconsistencia,
             faixa_salarial: r.rendaFaixaSalarial || '',
-            profissao: r.cbo || r.codigoCBO || '',
+            // cbo é o nome da ocupação; codigoCBO é número ("520100") e não serve de profissão
+            profissao: (r.cbo && !/^\d+$/.test(String(r.cbo).trim())) ? r.cbo : '',
+            codigo_cbo: r.codigoCBO || '',
             signo: r.signo || '',
             parentescos: parentescosArr.slice(0, 10).map(p => ({
               nome: p.nome || '', cpf: p.cpf || '', tipo: p.tipoVinculo || p.parentesco || p.tipo || ''
@@ -1032,24 +1034,24 @@ async function consultarProtestos(documento) {
   }
   try {
     const doc = limparDoc(documento);
-    const paramDoc = doc.length <= 11 ? { Cpf: doc } : { Cnpj: doc };
-    const res = await axios.get('https://apiv3.directd.com.br/api/Protestos', {
+    const paramDoc = doc.length <= 11 ? { CPF: doc } : { CNPJ: doc };
+    // /api/Protestos saiu da API (devolvia 503 e nunca foi cobrado). O atual é
+    // Protestos Nacional - IEPTB Básica: traz totais, sem o nome de cada cartório
+    // (a lista por cartório já vem do DetalhamentoNegativo).
+    const res = await axios.get('https://apiv3.directd.com.br/api/ProtestosBasica', {
       params: { ...paramDoc, Token: process.env.DIRECTD_TOKEN },
       timeout: 30000
     });
-    const r = res.data?.retorno || res.data || {};
+    const r = res.data?.retorno || {};
+    const docs = Array.isArray(r.documentos) ? r.documentos : [];
     return {
-      total: r.quantidade || r.total || 0,
-      protestos: (r.protestos || r.itens || []).map(p => ({
-        valor: Number(p.valor || p.valorTotal || 0),
-        data: p.data || p.dataProtesto || '',
-        cartorio: p.cartorio || p.nomeCartorio || p.nome || '',
-        cidade: p.cidade || p.municipio || '',
-        uf: p.uf || p.estado || '',
-        devedor: p.devedor || p.nomeDevedor || '',
-        documento: p.documento || p.numeroTitulo || ''
-      })),
-      fonte: 'Direct Data Protestos',
+      constam: !!r.constamProtestos,
+      total: Number(r.numeroTotalProtestos || 0),
+      valor_total: numeroAPI(r.valorTotalProtestos) || 0,
+      cartorios_distintos: docs.reduce((s, d) => s + Number(d.quantidadeCartoriosDistintos || 0), 0),
+      cidades_distintas: docs.reduce((s, d) => s + Number(d.quantidadeCidadesDistintas || 0), 0),
+      protestos: [],
+      fonte: 'Direct Data Protestos Nacional (IEPTB)',
       consultado_em: new Date().toISOString()
     };
   } catch (e) {
