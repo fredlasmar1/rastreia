@@ -363,6 +363,10 @@ ALTER TABLE clientes ADD COLUMN IF NOT EXISTS plano_valor_mensal NUMERIC(10,2) D
 ALTER TABLE clientes ADD COLUMN IF NOT EXISTS plano_cotas JSONB;
 -- Upgrade (09/10/2026): pedido criado a partir de outro, cobrando só a diferença
 ALTER TABLE pedidos ADD COLUMN IF NOT EXISTS upgrade_de UUID;
+-- Aprovação de Inquilino (09/10/2026): valores da locação para o veredito
+ALTER TABLE pedidos ADD COLUMN IF NOT EXISTS locacao_aluguel NUMERIC(12,2);
+ALTER TABLE pedidos ADD COLUMN IF NOT EXISTS locacao_encargos NUMERIC(12,2);
+ALTER TABLE pedidos ADD COLUMN IF NOT EXISTS renda_declarada NUMERIC(12,2);
 ALTER TABLE clientes ADD COLUMN IF NOT EXISTS plano_usadas JSONB DEFAULT '{}'::jsonb;
 
 -- Fase 2: liga o pedido ao cliente cadastrado (p/ cobrar do plano do mensalista)

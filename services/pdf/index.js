@@ -26,6 +26,7 @@ const renderers = {
   due_diligence_imobiliaria: require('./due_diligence_imobiliaria').render,
   investigacao_patrimonial: require('./investigacao_patrimonial').render,
   analise_devedor: require('./analise_devedor').render,
+  analise_inquilino: require('./analise_inquilino').render,
   consulta_veicular: require('./consulta_veicular').render,
   consulta_veicular_simples: require('./consulta_veicular_pacotes').render,
   consulta_veicular_mediana: require('./consulta_veicular_pacotes').render,

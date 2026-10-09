@@ -23,6 +23,7 @@
   <div id="conteudo">
     <div class="loading"><div class="spinner"></div>Carregando pedido...</div>
   </div>
+  <div class="card" id="locacao-box" hidden style="padding:18px;margin-top:16px"></div>
   <div class="card" style="padding:18px;margin-top:16px;border:1px solid #c7d2fe;background:#eef2ff;border-left:4px solid #1a3a8a" id="proximo-degrau" hidden></div>
 </div>
 
@@ -74,9 +75,37 @@
     if (!data || data.erro) { document.getElementById('conteudo').innerHTML = '<div class="alert alert-error">Pedido não encontrado</div>'; return; }
     pedidoAtual = data;
     renderizar(data);
+    renderLocacao(data);
     if ((data.dados || []).length) carregarProximoDegrau(data.id);
     if (usuario.perfil === 'admin' || usuario.perfil === 'operador') carregarCusto(data);
     if (usuario.perfil === 'admin') carregarCustoAdmin(data);
+  }
+
+  // Aprovação de Inquilino: aluguel/encargos/renda comprovada (o veredito do PDF depende deles)
+  function renderLocacao(p) {
+    const box = document.getElementById('locacao-box');
+    if (!box || p.tipo !== 'analise_inquilino') return;
+    const v = (x) => x ? String(Number(x).toFixed(2)).replace('.', ',') : '';
+    box.innerHTML = `
+      <div style="font-weight:700;margin-bottom:4px">Dados da locação</div>
+      <div style="font-size:13px;color:#6b7280;margin-bottom:10px">${p.locacao_aluguel ? 'Confira antes de gerar o PDF — o veredito compara aluguel + encargos com a renda.' : '<strong style="color:#b91c1c">Falta o valor do aluguel:</strong> sem ele o relatório não consegue dizer se pode alugar.'}</div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px">
+        <label style="font-size:12px">Aluguel (R$) *<input id="loc-aluguel" class="form-control" inputmode="decimal" value="${v(p.locacao_aluguel)}" style="width:100%"></label>
+        <label style="font-size:12px">Condomínio + IPTU (R$)<input id="loc-encargos" class="form-control" inputmode="decimal" value="${v(p.locacao_encargos)}" style="width:100%"></label>
+        <label style="font-size:12px">Renda comprovada (R$)<input id="loc-renda" class="form-control" inputmode="decimal" value="${v(p.renda_declarada)}" style="width:100%"></label>
+      </div>
+      <button class="btn btn-primary btn-sm" style="margin-top:10px" onclick="salvarLocacao('${p.id}')">Salvar dados da locação</button>
+      <span id="loc-msg" style="font-size:13px;margin-left:8px"></span>`;
+    box.hidden = false;
+  }
+  async function salvarLocacao(id) {
+    const num = (elId) => { const t = document.getElementById(elId).value.replace(/[^\d,.]/g, ''); const n = t.includes(',') ? Number(t.replace(/\./g, '').replace(',', '.')) : Number(t); return Number.isFinite(n) && n > 0 ? n : null; };
+    const body = { locacao_aluguel: num('loc-aluguel'), locacao_encargos: num('loc-encargos'), renda_declarada: num('loc-renda') };
+    const msg = document.getElementById('loc-msg');
+    const r = await fetch(`/api/pedidos/${id}/locacao`, { method: 'PATCH', headers: { Authorization: `Bearer ${localStorage.getItem('rastreia_token')}`, 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+    const j = await r.json();
+    msg.style.color = r.ok ? '#15803d' : '#b91c1c';
+    msg.textContent = r.ok ? 'Salvo. Gere o PDF de novo para atualizar o veredito.' : (j.erro || 'Não foi possível salvar');
   }
 
   async function fazerUpgrade(pedidoId, tipo, el) {

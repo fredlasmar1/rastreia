@@ -191,16 +191,18 @@ function formatarBRL(valor) {
 // Direct Data retorna estimativa estatística pouco confiável; exibir o
 // valor numérico no PDF passa falsa impressão de renda declarada.
 // opts.improvavel = true força a string "Estimativa pouco confiável".
-function faixaRendaQualitativa(valorAnual, opts) {
+// Recebe a renda MENSAL (renda_numerica da Direct Data é mensal). Antes os
+// limites eram anuais e R$ 3.747/mês saía como "até R$ 2 mil/mês".
+function faixaRendaQualitativa(valorMensal, opts) {
   const o = opts || {};
   if (o.improvavel) return 'Estimativa pouco confiável';
-  let n = valorAnual;
+  let n = valorMensal;
   if (typeof n !== 'number') n = parseValorCausa(n);
   if (!n || !Number.isFinite(n) || n <= 0) return 'Não disponível';
-  if (n <= 24000) return 'Faixa baixa (até R$ 2 mil/mês)';
-  if (n <= 60000) return 'Faixa média-baixa (R$ 2 a 5 mil/mês)';
-  if (n <= 120000) return 'Faixa média (R$ 5 a 10 mil/mês)';
-  if (n <= 240000) return 'Faixa média-alta (R$ 10 a 20 mil/mês)';
+  if (n <= 2000) return 'Faixa baixa (até R$ 2 mil/mês)';
+  if (n <= 5000) return 'Faixa média-baixa (R$ 2 a 5 mil/mês)';
+  if (n <= 10000) return 'Faixa média (R$ 5 a 10 mil/mês)';
+  if (n <= 20000) return 'Faixa média-alta (R$ 10 a 20 mil/mês)';
   return 'Faixa alta (acima de R$ 20 mil/mês)';
 }
 

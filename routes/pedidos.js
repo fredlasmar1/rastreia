@@ -185,8 +185,11 @@ router.post('/', autenticar, async (req, res) => {
       // Veicular: tier e add-ons
       tier_veicular, addons_veicular, valor_customizado,
       // Add-on opcional: 2a opinião de bureau (Boa Vista)
-      addon_boa_vista
+      addon_boa_vista,
+      // Aprovação de Inquilino: valores da locação
+      locacao_aluguel, locacao_encargos, renda_declarada
     } = req.body;
+    const numPos = (v) => { const n = Number(v); return Number.isFinite(n) && n > 0 ? Math.round(n * 100) / 100 : null; };
 
     const isVeicular = TIPOS_VEICULARES.has(tipo);
     const isVeicularLegado = tipo === 'consulta_veicular';
@@ -197,6 +200,9 @@ router.post('/', autenticar, async (req, res) => {
     // Linha veicular antiga (Básico/Completo/Premium + add-ons leilão/CNH) saiu
     // da venda em 08/10/2026: o Premium e os add-ons cobravam consultas que o
     // pipeline não executa. Veículo é vendido pelos pacotes de /veicular.html.
+    if (tipo === 'analise_inquilino' && !numPos(locacao_aluguel)) {
+      return res.status(400).json({ erro: 'Informe o valor do aluguel: é com ele que a Aprovação de Inquilino decide se pode alugar.' });
+    }
     if (isVeicularLegado) {
       return res.status(400).json({ erro: 'A Consulta Veicular agora é vendida pelos pacotes Simples (R$ 19,90), Mediana (R$ 34,90) e Completa (R$ 64,90), na tela Consulta Veicular.' });
     }
@@ -333,6 +339,13 @@ router.post('/', autenticar, async (req, res) => {
     const pedido = result.rows[0];
     await pool.query('INSERT INTO logs (pedido_id, usuario_id, acao, detalhes) VALUES ($1, $2, $3, $4)',
       [pedido.id, req.usuario.id, 'Pedido criado', `Finalidade: ${finalidade} | IP: ${ip}`]);
+    if (tipo === 'analise_inquilino') {
+      const upd = await pool.query(
+        'UPDATE pedidos SET locacao_aluguel = $1, locacao_encargos = $2, renda_declarada = $3 WHERE id = $4 RETURNING locacao_aluguel, locacao_encargos, renda_declarada',
+        [numPos(locacao_aluguel), numPos(locacao_encargos), numPos(renda_declarada), pedido.id]
+      );
+      Object.assign(pedido, upd.rows[0]);
+    }
 
     // V3: para due_diligence_imobiliaria, sincroniza pedido_alvos.
     // Se o operador informou CPF: cria alvo principal manual.
@@ -555,6 +568,27 @@ router.get('/:id/proximo-degrau', autenticar, async (req, res) => {
   } catch (e) {
     console.error('[proximo-degrau]', e.message);
     res.status(500).json({ erro: 'Erro ao montar o próximo degrau' });
+  }
+});
+
+// Valores da locação (Aprovação de Inquilino) — usado quando o pedido nasce
+// sem eles (ex.: upgrade do Nome Limpo) ou para corrigir antes do PDF.
+router.patch('/:id/locacao', autenticar, async (req, res) => {
+  try {
+    const n = (v) => { const x = Number(v); return Number.isFinite(x) && x > 0 ? Math.round(x * 100) / 100 : null; };
+    const { locacao_aluguel, locacao_encargos, renda_declarada } = req.body || {};
+    if (!n(locacao_aluguel)) return res.status(400).json({ erro: 'Informe o valor do aluguel.' });
+    const r = await pool.query(
+      `UPDATE pedidos SET locacao_aluguel = $1, locacao_encargos = $2, renda_declarada = $3, atualizado_em = NOW()
+        WHERE id = $4 AND tipo = 'analise_inquilino' AND deletado_em IS NULL
+        RETURNING id, locacao_aluguel, locacao_encargos, renda_declarada`,
+      [n(locacao_aluguel), n(locacao_encargos), n(renda_declarada), req.params.id]
+    );
+    if (!r.rows.length) return res.status(404).json({ erro: 'Pedido de Aprovação de Inquilino não encontrado' });
+    res.json(r.rows[0]);
+  } catch (e) {
+    console.error('[locacao]', e.message);
+    res.status(500).json({ erro: 'Erro ao salvar os dados da locação' });
   }
 });
 

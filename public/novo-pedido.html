@@ -67,6 +67,26 @@
     </div>
   </div>
 
+  <!-- Aprovação de Inquilino: valores da locação (o veredito compara com a renda) -->
+  <div class="pedido-section" id="secao-locacao" style="display:none">
+    <div class="section-title">Dados da locação</div>
+    <div class="form-grid">
+      <div class="form-group">
+        <label>Valor do aluguel (R$) *</label>
+        <input type="text" id="locacao_aluguel" inputmode="decimal" placeholder="Ex: 1.500,00">
+      </div>
+      <div class="form-group">
+        <label>Condomínio + IPTU por mês (R$)</label>
+        <input type="text" id="locacao_encargos" inputmode="decimal" placeholder="Ex: 350,00">
+      </div>
+      <div class="form-group full">
+        <label>Renda comprovada do inquilino (R$/mês, opcional)</label>
+        <input type="text" id="renda_declarada" inputmode="decimal" placeholder="Se ele apresentou holerite/extrato — senão usamos a renda estimada">
+      </div>
+    </div>
+    <div style="font-size:12px;color:#6b7280">O relatório diz se pode alugar: APROVAR, APROVAR COM GARANTIA (qual e quanto) ou RECUSAR, comparando aluguel + encargos com a renda (ideal até 30%), despejos e dívidas.</div>
+  </div>
+
   <!-- PASSO 2-V: Placa (Consulta Veicular) -->
   <div class="pedido-section" id="secao-placa" style="display:none">
     <div class="section-title">2. Placa do Veículo</div>
@@ -595,6 +615,8 @@
     document.getElementById('aviso-cpf-opcional').style.display = isImob ? 'block' : 'none';
     document.getElementById('label-alvo-doc').textContent = isImob ? 'CPF ou CNPJ (opcional se anexar documentos)' : 'CPF ou CNPJ *';
 
+    document.getElementById('secao-locacao').style.display = tipo === 'analise_inquilino' ? 'block' : 'none';
+
     // Mostrar/ocultar seção veicular
     const isVeicular = tipo === 'consulta_veicular';
     document.getElementById('secao-placa').style.display = isVeicular ? 'block' : 'none';
@@ -707,6 +729,13 @@
       payload.alvo_documento = alvo_documento || null;
       payload.alvo_tipo = alvo_tipo;
       if (isImobiliaria && temDocs) payload.tem_documentos = true;
+      if (tipo === 'analise_inquilino') {
+        const num = (id) => { const v = document.getElementById(id).value.replace(/[^\d,.]/g, ''); const n = v.includes(',') ? Number(v.replace(/\./g, '').replace(',', '.')) : Number(v); return Number.isFinite(n) && n > 0 ? n : null; };
+        payload.locacao_aluguel = num('locacao_aluguel');
+        payload.locacao_encargos = num('locacao_encargos');
+        payload.renda_declarada = num('renda_declarada');
+        if (!payload.locacao_aluguel) return alerta('Informe o valor do aluguel — é com ele que o relatório decide se pode alugar.', 'error');
+      }
     }
 
     // Campos de Due Diligence Imobiliária
