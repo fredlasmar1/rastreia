@@ -4,14 +4,41 @@ const router = express.Router();
 const { pool } = require('../db');
 const { autenticar, admin } = require('./auth');
 const { listarCustos, atualizarCusto, calcularCustoPedido, estimarCustoProduto, APIS_POR_PRODUTO } = require('../services/custos');
-const { calcularCustoBruto, calcularTodos } = require('../services/custos_apis');
 const credifyCatalogo = require('../services/credify/catalogo');
 
+// Custo / margem por produto — MESMA fonte do resto do sistema (tabela api_custos
+// + APIS_POR_PRODUTO em services/custos.js, custo cheio). O catálogo fixo antigo
+// (services/custos_apis.js) estava defasado: Score a 0,72 e Boa Vista a 3,50.
+const { PRODUTOS } = require('../services/produtos');
+async function custoMargemProduto(produtoKey) {
+  const est = await estimarCustoProduto(produtoKey);
+  if (!est) return null;
+  const rotulos = Object.fromEntries((await listarCustos()).map(c => [c.chave, c.rotulo]));
+  const precoVenda = Number(PRODUTOS[produtoKey]?.preco || 0);
+  const r2 = (n) => Math.round(n * 100) / 100;
+  const custoBruto = r2(Number(est.total_brl));
+  const margem = r2(precoVenda - custoBruto);
+  return {
+    produtoKey,
+    nome: PRODUTOS[produtoKey]?.nome || produtoKey,
+    precoVenda,
+    custoBruto,
+    margem,
+    margemPct: precoVenda > 0 ? r2(margem / precoVenda * 100) : 0,
+    detalhes: est.breakdown.map(d => ({
+      api: d.api,
+      rotulo: (rotulos[d.api] || d.api) + (d.qtd > 1 ? ` (×${d.qtd})` : ''),
+      preco: r2(Number(d.valor_brl))
+    }))
+  };
+}
+
 // GET /api/admin/custos/produtos  -> custo bruto / margem de TODOS os produtos
-// Referência interna de precificação (catálogo fixo em services/custos_apis.js)
-router.get('/produtos', autenticar, admin, (req, res) => {
+router.get('/produtos', autenticar, admin, async (req, res) => {
   try {
-    res.json({ produtos: calcularTodos() });
+    const out = [];
+    for (const k of Object.keys(APIS_POR_PRODUTO)) { const r = await custoMargemProduto(k); if (r) out.push(r); }
+    res.json({ produtos: out });
   } catch (e) {
     console.error('[custos] produtos:', e);
     res.status(500).json({ erro: 'Erro ao calcular custos por produto' });
@@ -19,9 +46,9 @@ router.get('/produtos', autenticar, admin, (req, res) => {
 });
 
 // GET /api/admin/custos/produtos/:produtoKey  -> custo bruto / margem de um produto
-router.get('/produtos/:produtoKey', autenticar, admin, (req, res) => {
+router.get('/produtos/:produtoKey', autenticar, admin, async (req, res) => {
   try {
-    const resultado = calcularCustoBruto(req.params.produtoKey);
+    const resultado = await custoMargemProduto(req.params.produtoKey);
     if (!resultado) return res.status(404).json({ erro: 'Produto desconhecido' });
     res.json(resultado);
   } catch (e) {

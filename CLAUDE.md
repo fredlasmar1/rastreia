@@ -68,15 +68,36 @@ rastreia/
 
 ---
 
-## OS 5 PRODUTOS
+## PRODUTOS — ESCADA (do mais barato ao mais completo)
 
-| Produto | Chave | Preço | Prazo | APIs usadas |
+Preços em `routes/pedidos.js` (PRECOS) e `services/produtos.js` (fonte da verdade
+dos dois têm de bater), espelhados em dashboard/novo-pedido/restricoes/veicular.html.
+Regra do dono (09/10/2026): preço atrativo, abaixo do mercado de Anápolis, com
+**margem mínima de 50% sobre o custo CHEIO** (pior caso, contando a Boa Vista).
+
+| Degrau | Produto | Chave | Preço | Custo cheio |
 |---|---|---|---|---|
-| Dossiê Pessoa Física | `dossie_pf` | R$197 | 2h | Direct Data, Escavador, Datajud |
-| Dossiê Pessoa Jurídica | `dossie_pj` | R$397 | 2h | CNPJá, Escavador, Datajud, Transparência |
-| Due Diligence Empresarial | `due_diligence` | R$997 | 24h | Todas |
-| Análise de Devedor | `analise_devedor` | R$250 | 2h | Direct Data, Escavador, Datajud |
-| Investigação Patrimonial | `investigacao_patrimonial` | R$497 | 4h | Direct Data, Escavador, ONR, Infosimples |
+| 1 | Nome Limpo ou Sujo (CPF/CNPJ) | `consulta_restricoes` | R$ 19,90 | R$ 5,44 (sem Boa Vista) |
+| 2 | Análise de Inquilino | `analise_inquilino` | R$ 47 | R$ 22,41 |
+| 3 | Dossiê Pessoa Física | `dossie_pf` | R$ 59,90 | R$ 22,41 |
+| 4 | Análise de Devedor | `analise_devedor` | R$ 99 | R$ 25,85 |
+| 5 | Investigação Patrimonial | `investigacao_patrimonial` | R$ 149 | R$ 25,85 |
+| PJ | Dossiê Pessoa Jurídica | `dossie_pj` | R$ 89,90 | R$ 28,66 |
+| PJ | Due Diligence Empresarial | `due_diligence` | R$ 497 | ≈ R$ 48,46 |
+| Imóvel | Due Diligence Imobiliária | `due_diligence_imobiliaria` | R$ 797 | ≈ R$ 52,50 |
+| Veículo | Simples / Mediana / Completa | `consulta_veicular_*` | 19,90 / 34,90 / 64,90 | 3,90 / 15,42 / 31,27 |
+
+- Todo relatório termina oferecendo o próximo degrau: `sugerirProximoDegrau` em
+  `services/produtos.js` → bloco no PDF (`services/pdf/chrome.js`) e cartão nas telas
+  (`GET /api/pedidos/:id/proximo-degrau`).
+- Custo: tabela `api_custos` + `APIS_POR_PRODUTO`/`chavesPorFonte` em `services/custos.js`
+  (única fonte; `services/custos_apis.js` é legado, não usar). Conferir preço unitário no
+  extrato da Direct Data (app.directd.com.br → Financeiro → Extrato).
+- `consulta_veicular` (Básico/Completo/Premium) saiu da venda: o servidor recusa pedido novo.
+- PDF só abre com link assinado (`services/link_relatorio.js`) ou JWT — nunca devolver
+  `relatorio_url` cru numa resposta.
+- API Direct Data: doc em https://apiv3.directd.com.br/swagger/v3-scalar/swagger.json;
+  números vêm com ponto decimal ("19699.97") — usar `numeroAPI()` em consultas.js.
 
 ---
 

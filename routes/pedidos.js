@@ -194,6 +194,12 @@ router.post('/', autenticar, async (req, res) => {
     if (!tipo || !cliente_nome) {
       return res.status(400).json({ erro: 'Campos obrigatórios: tipo, cliente_nome' });
     }
+    // Linha veicular antiga (Básico/Completo/Premium + add-ons leilão/CNH) saiu
+    // da venda em 08/10/2026: o Premium e os add-ons cobravam consultas que o
+    // pipeline não executa. Veículo é vendido pelos pacotes de /veicular.html.
+    if (isVeicularLegado) {
+      return res.status(400).json({ erro: 'A Consulta Veicular agora é vendida pelos pacotes Simples (R$ 19,90), Mediana (R$ 34,90) e Completa (R$ 64,90), na tela Consulta Veicular.' });
+    }
     if (cliente_nome.length > 255 || (alvo_nome && alvo_nome.length > 255)) {
       return res.status(400).json({ erro: 'Nome não pode ter mais de 255 caracteres' });
     }
