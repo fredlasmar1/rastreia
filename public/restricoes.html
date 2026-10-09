@@ -374,7 +374,9 @@
       if (!s) { el.hidden = true; return; }
       const brl = (v) => 'R$ ' + Number(v).toLocaleString('pt-BR', { minimumFractionDigits: Number(v) % 1 ? 2 : 0, maximumFractionDigits: 2 });
       const alvo = j.alvo || {};
-      const link = (t) => '/novo-pedido.html?' + new URLSearchParams({ tipo: t, doc: alvo.documento || '', nome: (alvo.nome && alvo.nome !== 'A identificar') ? alvo.nome : '' }).toString();
+      // CPF/nome vão pelo sessionStorage, não pela URL (histórico e logs do servidor)
+      try { sessionStorage.setItem('rastreia_prefill_alvo', JSON.stringify({ doc: alvo.documento || '', nome: (alvo.nome && alvo.nome !== 'A identificar') ? alvo.nome : '' })); } catch (_) {}
+      const link = (t) => '/novo-pedido.html?tipo=' + encodeURIComponent(t);
       const linkVeic = (t) => '/veicular.html';
       const href = (t) => t.startsWith('consulta_veicular') ? linkVeic(t) : link(t);
       el.innerHTML = `
