@@ -6,6 +6,17 @@ const monitorApi = require('./monitorApi');
 // ─────────────────────────────────────────────
 
 function limparDoc(doc) { return doc.replace(/\D/g, ''); }
+
+// Número vindo de API: a Direct Data manda renda como "19699.97" (ponto decimal).
+// Só trata o ponto como milhar quando há vírgula ("19.699,97"). Antes, todo ponto
+// era apagado e a renda saía 100x maior (R$ 1.969.997 numa faixa de 11-15 SM).
+function numeroAPI(v) {
+  if (v === null || v === undefined || v === '') return null;
+  if (typeof v === 'number') return isNaN(v) ? null : v;
+  const s = String(v).replace(/[^\d.,-]/g, '');
+  const n = s.includes(',') ? Number(s.replace(/\./g, '').replace(',', '.')) : Number(s);
+  return isNaN(n) ? null : n;
+}
 function formatarCPF(cpf) { return cpf.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, '$1.$2.$3-$4'); }
 function formatarCNPJ(cnpj) { return cnpj.replace(/(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})/, '$1.$2.$3/$4-$5'); }
 
@@ -196,10 +207,8 @@ async function consultarCPF(cpf) {
           let rendaInconsistente = false;
           let rendaMotivoInconsistencia = '';
           if (rendaRaw) {
-            const rendaNum = typeof rendaRaw === 'number'
-              ? rendaRaw
-              : Number(String(rendaRaw).replace(/\./g, '').replace(',', '.'));
-            if (!isNaN(rendaNum) && rendaNum > 0) {
+            const rendaNum = numeroAPI(rendaRaw);
+            if (rendaNum !== null && rendaNum > 0) {
               rendaNumerica = rendaNum;
               rendaFormatada = `R$ ${rendaNum.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`;
               // Sanity check: teto por CBO de baixa qualificação + cap absoluto
@@ -1069,12 +1078,22 @@ async function consultarPerfilEconomico(cpf) {
     const retorno = res.data?.retorno || {};
     const r = retorno.pessoaFisica || retorno || {};
     console.log('[NivelSocio] Keys:', Object.keys(r).join(', '));
+    // Campos reais do NivelSocioEconomico (log de 08/10/2026): cpf, rendaEstimada,
+    // rendaFaixaSalarial, rendaMinimaCBO, rendaMediaCBO, rendaMaximaCBO, rendaIBGE,
+    // codigoCBO, cbo, classeSocial, escolaridade, perfilDomiciliar.
+    const perfilDom = r.perfilDomiciliar;
     return {
-      nivel_socioeconomico: r.nivelSocioEconomico || r.nivel || r.nse || null,
-      renda_presumida: r.rendaPresumida || r.renda || null,
-      faixa_renda: r.faixaRenda || r.faixa || null,
+      nivel_socioeconomico: r.classeSocial || r.nivelSocioEconomico || r.nivel || r.nse || null,
+      renda_presumida: numeroAPI(r.rendaEstimada ?? r.rendaPresumida ?? r.renda),
+      faixa_renda: r.rendaFaixaSalarial || r.faixaRenda || r.faixa || null,
+      renda_minima_cbo: numeroAPI(r.rendaMinimaCBO),
+      renda_media_cbo: numeroAPI(r.rendaMediaCBO),
+      renda_maxima_cbo: numeroAPI(r.rendaMaximaCBO),
+      renda_ibge: numeroAPI(r.rendaIBGE),
       escolaridade: r.escolaridade || null,
-      ocupacao: r.ocupacao || r.profissao || null,
+      ocupacao: r.cbo || r.ocupacao || r.profissao || null,
+      codigo_cbo: r.codigoCBO || null,
+      perfil_domiciliar: perfilDom && typeof perfilDom === 'object' ? perfilDom : (perfilDom || null),
       poder_aquisitivo: r.poderAquisitivo || null,
       fonte: 'Direct Data (Nivel Socioeconomico)',
       consultado_em: new Date().toISOString()

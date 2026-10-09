@@ -558,16 +558,17 @@ function secaoPerfilFinanceiroPF(doc, y, dados) {
 
   y = secao(doc, 'PERFIL FINANCEIRO', y);
 
-  const renda = cadastral.renda_inconsistente
-    ? 0
-    : (parseFloat(String(cadastral.renda_estimada || '0').replace(/[^\d.,]/g, '').replace(',', '.')) || 0);
+  // renda_numerica já vem parseada; reparsear "R$ 19.699,97" dava 19,699.
+  const renda = cadastral.renda_inconsistente ? 0 : (Number(cadastral.renda_numerica) || 0);
   const pendencias = Number(negativacoes.total_pendencias || 0);
   const scoreQ = Number(scoreCredito.score || 0);
   const totalProcessos = processos.total || 0;
 
   if (perfilEco.nivel_socioeconomico) y = linha(doc, 'Nível Socioeconômico', perfilEco.nivel_socioeconomico, y, 12);
   if (perfilEco.poder_aquisitivo) y = linha(doc, 'Poder Aquisitivo', perfilEco.poder_aquisitivo, y, 12);
-  if (perfilEco.renda_presumida) y = linha(doc, 'Renda Presumida', `R$ ${Number(perfilEco.renda_presumida).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`, y, 12);
+  if (perfilEco.faixa_renda) y = linha(doc, 'Faixa Salarial', perfilEco.faixa_renda, y, 12);
+  if (perfilEco.renda_media_cbo) y = linha(doc, 'Renda Média da Profissão', `R$ ${Number(perfilEco.renda_media_cbo).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`, y, 12);
+  if (perfilEco.renda_presumida && !cadastral.renda_inconsistente) y = linha(doc, 'Renda Presumida', `R$ ${Number(perfilEco.renda_presumida).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`, y, 12);
   y += 2;
 
   let nivelEndividamento = 'Baixo';
