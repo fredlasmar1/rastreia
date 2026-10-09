@@ -150,10 +150,12 @@ async function calcularCustoPedido(rows) {
   // Boa Vista: uma cobrança por alvo (negativações e o add-on usam a mesma chamada em cache)
   const bvContada = new Set();
   for (const { fonte, dados } of parsed) {
-    for (const chave of chavesPorFonte(fonte, dados)) add(fonte, chave);
+    // Upgrade: fonte reaproveitada do pedido de origem já foi paga lá
+    const reaproveitado = !!(dados && dados.reaproveitado_de);
+    if (!reaproveitado) for (const chave of chavesPorFonte(fonte, dados)) add(fonte, chave);
     const canon = String(fonte).replace(/_(\d+)$/, '');
     const s = sufixo(fonte);
-    const chamouBV = (canon === 'negativacoes' && (dados?.boa_vista_consultada || /boa vista/i.test(dados?.fonte || '')))
+    const chamouBV = (canon === 'negativacoes' && (reaproveitado ? !!dados?.boa_vista_no_upgrade : (dados?.boa_vista_consultada || /boa vista/i.test(dados?.fonte || ''))))
       || (canon === 'boa_vista' && dados && dados.disponivel !== false);
     if (chamouBV && !bvContada.has(s)) {
       bvContada.add(s);

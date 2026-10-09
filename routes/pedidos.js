@@ -537,16 +537,85 @@ router.get('/:id/documentos', autenticar, async (req, res) => {
 // Próximo degrau da escada: oferta montada com o que a consulta encontrou
 router.get('/:id/proximo-degrau', autenticar, async (req, res) => {
   try {
-    const p = await pool.query('SELECT tipo, alvo_tipo, alvo_documento, alvo_nome FROM pedidos WHERE id = $1', [req.params.id]);
+    const p = await pool.query('SELECT tipo, alvo_tipo, alvo_documento, alvo_nome, status, valor FROM pedidos WHERE id = $1 AND deletado_em IS NULL', [req.params.id]);
     if (!p.rows.length) return res.status(404).json({ erro: 'Pedido não encontrado' });
     const rows = await pool.query('SELECT fonte, dados FROM dados_consulta WHERE pedido_id = $1', [req.params.id]);
     const dados = {};
     for (const r of rows.rows) dados[r.fonte] = typeof r.dados === 'string' ? JSON.parse(r.dados) : r.dados;
-    const { tipo, alvo_tipo, alvo_documento, alvo_nome } = p.rows[0];
-    res.json({ sugestao: sugerirProximoDegrau(tipo, dados, alvo_tipo), alvo: { documento: alvo_documento, nome: alvo_nome, tipo: alvo_tipo } });
+    const { tipo, alvo_tipo, alvo_documento, alvo_nome, status, valor } = p.rows[0];
+    const sugestao = sugerirProximoDegrau(tipo, dados, alvo_tipo);
+    // Upgrade só para pedido já pago: cobra a diferença sobre o valor pago
+    const pago = ['pago', 'em_andamento', 'concluido'].includes(status);
+    const dif = (t) => Math.round(((PRODUTOS[t]?.preco || 0) - Number(valor || 0)) * 100) / 100;
+    if (sugestao && pago) {
+      sugestao.upgrade = { diferenca: dif(sugestao.tipo) };
+      if (sugestao.alternativa) sugestao.alternativa.upgrade = { diferenca: dif(sugestao.alternativa.tipo) };
+    }
+    res.json({ sugestao, pode_upgrade: pago, alvo: { documento: alvo_documento, nome: alvo_nome, tipo: alvo_tipo } });
   } catch (e) {
     console.error('[proximo-degrau]', e.message);
     res.status(500).json({ erro: 'Erro ao montar o próximo degrau' });
+  }
+});
+
+// Upgrade pagando só a diferença: cria o pedido do próximo degrau para o mesmo
+// alvo, com valor = preço do destino − valor pago na origem. As consultas do
+// novo pedido reaproveitam o que a origem já consultou (services/consultas.js
+// carregarCacheUpgrade) — só o que falta vai para a API.
+router.post('/:id/upgrade', autenticar, async (req, res) => {
+  try {
+    const o = await pool.query('SELECT * FROM pedidos WHERE id = $1 AND deletado_em IS NULL', [req.params.id]);
+    if (!o.rows.length) return res.status(404).json({ erro: 'Pedido não encontrado' });
+    const origem = o.rows[0];
+    if (!['pago', 'em_andamento', 'concluido'].includes(origem.status)) {
+      return res.status(400).json({ erro: 'O upgrade com desconto vale para pedido já pago. Este ainda aguarda pagamento.' });
+    }
+    const rows = await pool.query('SELECT fonte, dados FROM dados_consulta WHERE pedido_id = $1', [origem.id]);
+    const dados = {};
+    for (const r of rows.rows) dados[r.fonte] = typeof r.dados === 'string' ? JSON.parse(r.dados) : r.dados;
+    const sug = sugerirProximoDegrau(origem.tipo, dados, origem.alvo_tipo);
+    if (!sug) return res.status(400).json({ erro: 'Este produto já é o topo da escada.' });
+    const permitidos = [sug.tipo, sug.alternativa?.tipo].filter(Boolean);
+    const destino = (req.body && req.body.tipo) || sug.tipo;
+    if (!permitidos.includes(destino)) return res.status(400).json({ erro: 'Upgrade não disponível para este produto.' });
+    const valor = Math.round(((PRODUTOS[destino]?.preco || 0) - Number(origem.valor || 0)) * 100) / 100;
+    if (!(valor > 0)) return res.status(400).json({ erro: 'Valor do upgrade inválido.' });
+
+    const prazo = new Date(Date.now() + (PRAZOS[destino] || 2) * 3600 * 1000);
+    const ip = req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.socket.remoteAddress || '';
+    const novo = await pool.query(
+      `INSERT INTO pedidos (
+         tipo, status, cliente_nome, cliente_email, cliente_whatsapp, cliente_id,
+         alvo_nome, alvo_documento, alvo_tipo, alvo_placa, valor, prazo_entrega, operador_id,
+         finalidade, ip_solicitante, aceite_termos, token_publico, upgrade_de
+       ) VALUES ($1, 'aguardando_pagamento', $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, true, $15, $16)
+       RETURNING *`,
+      [destino, origem.cliente_nome, origem.cliente_email, origem.cliente_whatsapp, origem.cliente_id,
+       origem.alvo_nome, origem.alvo_documento, origem.alvo_tipo, origem.alvo_placa, valor, prazo, req.usuario.id,
+       origem.finalidade, ip, crypto.randomBytes(32).toString('hex'), origem.id]
+    );
+    const pedido = novo.rows[0];
+    await pool.query('INSERT INTO logs (pedido_id, usuario_id, acao, detalhes) VALUES ($1, $2, $3, $4)',
+      [pedido.id, req.usuario.id, 'Pedido criado (upgrade)', `De #${origem.numero} (${origem.tipo}, R$ ${origem.valor}) para ${destino}: paga R$ ${valor}`]);
+    await pool.query('INSERT INTO logs (pedido_id, usuario_id, acao, detalhes) VALUES ($1, $2, $3, $4)',
+      [origem.id, req.usuario.id, 'Upgrade solicitado', `Novo pedido #${pedido.numero} (${destino})`]);
+
+    if (mpConfigurado()) {
+      try {
+        const mp = await criarPreferenceParaPedido(pedido, { nomeProduto: `Upgrade para ${PRODUTOS[destino]?.nome || destino}` });
+        if (mp.ok) {
+          await pool.query('UPDATE pedidos SET mp_preference_id = $1, mp_init_point = $2 WHERE id = $3', [mp.preference_id, mp.init_point, pedido.id]);
+          pedido.mp_preference_id = mp.preference_id;
+          pedido.mp_init_point = mp.init_point;
+        }
+      } catch (eMp) {
+        console.warn('[upgrade] erro MP (não bloqueia):', eMp.message);
+      }
+    }
+    res.json(pedido);
+  } catch (e) {
+    console.error('[upgrade]', e);
+    res.status(500).json({ erro: 'Erro ao criar o upgrade' });
   }
 });
 

@@ -2463,48 +2463,93 @@ async function executarConsultaCompleta(pedido) {
   }
 
   // Demais produtos: alvo único do pedido
+  const cache = await carregarCacheUpgrade(pedido);
   return executarConsultasParaAlvo(
     { nome: alvo_nome, documento: alvo_documento, tipo: alvo_tipo },
-    { precisaVinculos, precisaVeiculos, tipo, addonBoaVista }
+    { precisaVinculos, precisaVeiculos, tipo, addonBoaVista, cache }
   );
+}
+
+// Upgrade: dados do pedido de origem (mesmo documento, coletados há até 7 dias)
+async function carregarCacheUpgrade(pedido) {
+  if (!pedido.upgrade_de) return null;
+  try {
+    const { pool } = require('../db');
+    const r = await pool.query(
+      `SELECT dc.fonte, dc.dados
+         FROM dados_consulta dc
+         JOIN pedidos o ON o.id = dc.pedido_id
+        WHERE o.id = $1 AND o.alvo_documento = $2
+          AND dc.coletado_em > NOW() - INTERVAL '7 days'
+          AND dc.fonte !~ '_[0-9]+$'`,
+      [pedido.upgrade_de, pedido.alvo_documento]
+    );
+    if (!r.rows.length) return null;
+    const cache = {};
+    for (const row of r.rows) {
+      const d = typeof row.dados === 'string' ? JSON.parse(row.dados) : row.dados;
+      // Marca para services/custos.js não cobrar de novo o que já foi pago no pedido de origem
+      cache[row.fonte] = d && typeof d === 'object' && !Array.isArray(d) ? { ...d, reaproveitado_de: pedido.upgrade_de } : d;
+    }
+    console.log(`[upgrade] pedido ${pedido.id}: reaproveitando ${Object.keys(cache).join(', ')} do pedido ${pedido.upgrade_de}`);
+    return cache;
+  } catch (e) {
+    console.warn('[upgrade] cache indisponível, consulta completa:', e.message);
+    return null;
+  }
 }
 
 // V3: roda o conjunto de consultas externas para UM alvo (CPF/CNPJ).
 // Devolve um dicionário com chaves canônicas (sem sufixo) — o orquestrador
 // adiciona _N quando há múltiplos alvos.
-async function executarConsultasParaAlvo(alvo, { precisaVinculos, precisaVeiculos, tipo, addonBoaVista }) {
+async function executarConsultasParaAlvo(alvo, { precisaVinculos, precisaVeiculos, tipo, addonBoaVista, cache }) {
   const { documento, tipo: tipoAlvo, nome } = alvo;
   if (!documento) return {};
 
   // Cadastral primeiro — precisamos da UF para escolher tribunais Datajud corretamente
   // e para enriquecer sócios (due_diligence). Em troca de paralelismo, ganhamos
   // dados consistentes por região e mini-dossiê de cada sócio.
-  const cadastral = tipoAlvo === 'PJ' ? await consultarCNPJ(documento) : await consultarCPF(documento);
+  // Upgrade (pedidos.upgrade_de): reaproveita o que o pedido anterior já pagou e
+  // consultou — só as fontes que faltam vão para a API. cache = {fonte: dados}.
+  const c = cache || {};
+  const usar = (fonte, fn) => (c[fonte] != null ? Promise.resolve(c[fonte]) : fn());
+  const cadastral = c.receita_federal || (tipoAlvo === 'PJ' ? await consultarCNPJ(documento) : await consultarCPF(documento));
+  // Negativações do Nome Limpo vêm sem a lista de credores (sem Boa Vista): no
+  // upgrade busca só a Boa Vista quando houver pendência, sem repetir o DetalhamentoNegativo.
+  const negativacoesComCache = async () => {
+    const n = c.negativacoes;
+    if (!n) return consultarNegativacoes(documento);
+    const temDivida = Number(n.total_pendencias || 0) > 0 || (n.protestos || []).length > 0;
+    if (!temDivida || n.boa_vista_consultada || (n.pendencias || []).length) return n;
+    const itens = await consultarApontamentosBoaVista(limparDoc(documento));
+    return { ...n, pendencias: itens, boa_vista_consultada: true, boa_vista_no_upgrade: true,
+      fonte: itens.length ? 'Direct Data (Detalhamento Negativo + Boa Vista Acerta Completo)' : n.fonte };
+  };
   // Operação é Anápolis-GO: quando o cadastro não traz UF, assume GO para NÃO
   // cair no default só-federal (STJ+TST) e perder o TJGO — onde estão os
   // processos estaduais locais (ação de despejo, execução, cível).
   const ufAlvo = cadastral?.uf || 'GO';
 
   const promises = [
-    consultarProcessos(documento, tipoAlvo, nome, ufAlvo),
-    tipoAlvo === 'PJ' ? consultarTransparencia(documento, nome) : Promise.resolve(null),
-    consultarScore(documento),
-    consultarNegativacoes(documento),
-    tipoAlvo === 'PF' ? consultarPerfilEconomico(documento) : Promise.resolve(null)
+    usar('processos', () => consultarProcessos(documento, tipoAlvo, nome, ufAlvo)),
+    tipoAlvo === 'PJ' ? usar('transparencia', () => consultarTransparencia(documento, nome)) : Promise.resolve(null),
+    usar('score_credito', () => consultarScore(documento)),
+    negativacoesComCache(),
+    tipoAlvo === 'PF' ? usar('perfil_economico', () => consultarPerfilEconomico(documento)) : Promise.resolve(null)
   ];
 
-  if (precisaVinculos) promises.push(consultarVinculos(documento));
-  if (precisaVeiculos) promises.push(consultarVeiculos(documento));
+  if (precisaVinculos) promises.push(usar('vinculos', () => consultarVinculos(documento)));
+  if (precisaVeiculos) promises.push(usar('veiculos', () => consultarVeiculos(documento)));
   // DETRAN-GO (consultarVeiculos) só cobre Goiás. HistoricoVeiculos (DirectData)
   // é nacional e devolve placa/renavam/chassi/data_aquisicao — fonte primária do
   // patrimônio veicular por documento, independente do estado de registro.
-  if (precisaVeiculos) promises.push(consultarHistoricoVeiculos(documento));
+  if (precisaVeiculos) promises.push(usar('historico_veiculos_proprietario', () => consultarHistoricoVeiculos(documento)));
   // AML (DirectData): parentescos + sociedades (com co-sócios) — alimenta a
   // análise de interpostas pessoas e supre participações societárias.
-  if (precisaVinculos) promises.push(consultarAML(documento));
+  if (precisaVinculos) promises.push(usar('aml', () => consultarAML(documento)));
   // INCRA/SIGEF: imóveis rurais por CPF (InfoSimples, requer credencial gov.br).
   // Mesmos produtos que precisaVeiculos (patrimonial + imobiliária).
-  if (precisaVeiculos) promises.push(consultarImoveisRuraisSIGEF(documento));
+  if (precisaVeiculos) promises.push(usar('imoveis_rurais', () => consultarImoveisRuraisSIGEF(documento)));
   // 2ª opinião de bureau (Boa Vista/SCPC): só nos produtos que olham crédito/dívida.
   const precisaBoaVista = !!addonBoaVista; // 2ª opinião Boa Vista vira ADD-ON opcional (+R$29) — fora da base p/ margem
   if (precisaBoaVista) promises.push(consultarBoaVista(documento));

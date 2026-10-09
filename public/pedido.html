@@ -79,6 +79,20 @@
     if (usuario.perfil === 'admin') carregarCustoAdmin(data);
   }
 
+  async function fazerUpgrade(pedidoId, tipo, el) {
+    if (el) { el.disabled = true; el.style.pointerEvents = 'none'; el.textContent = 'Criando upgrade…'; }
+    try {
+      const r = await fetch(`/api/pedidos/${pedidoId}/upgrade`, { method: 'POST', headers: { Authorization: `Bearer ${localStorage.getItem('rastreia_token')}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ tipo }) });
+      const j = await r.json();
+      if (!r.ok || !j.id) throw new Error(j.erro || 'Não foi possível criar o upgrade');
+      window.location.href = '/pedido.html?id=' + encodeURIComponent(j.id);
+    } catch (e) {
+      if (el) { el.disabled = false; el.style.pointerEvents = ''; el.textContent = 'Tentar de novo'; }
+      const box = document.getElementById('proximo-degrau');
+      if (box) box.insertAdjacentHTML('beforeend', `<div style="color:#b91c1c;font-size:13px;margin-top:8px">${esc(e.message)}</div>`);
+    }
+  }
+
   // Próximo degrau da escada (GET /api/pedidos/:id/proximo-degrau)
   async function carregarProximoDegrau(pedidoId) {
     const el = document.getElementById('proximo-degrau');
@@ -94,12 +108,22 @@
       const link = (t) => '/novo-pedido.html?tipo=' + encodeURIComponent(t);
       const linkVeic = (t) => '/veicular.html';
       const href = (t) => t.startsWith('consulta_veicular') ? linkVeic(t) : link(t);
+      // Pedido pago: upgrade cobrando só a diferença (POST /api/pedidos/:id/upgrade).
+      // Ainda não pago: link para pedir o produto cheio.
+      const dif = (x) => x.upgrade ? x.upgrade.diferenca : x.diferenca;
+      const botao = s.upgrade
+        ? `<button class="btn btn-primary" onclick="fazerUpgrade('${pedidoId}','${s.tipo}', this)">Fazer upgrade por + ${brl(dif(s))}</button>`
+        : `<a class="btn btn-primary" href="${href(s.tipo)}">Pedir ${esc(s.nome)} (${brl(s.preco)})</a>`;
+      const alt = !s.alternativa ? '' : (s.alternativa.upgrade
+        ? `<div style="margin-top:10px;font-size:13px;color:#374151">Ou <a href="#" onclick="fazerUpgrade('${pedidoId}','${s.alternativa.tipo}', this); return false"><strong>upgrade para ${esc(s.alternativa.nome)}</strong> por + ${brl(dif(s.alternativa))}</a>: ${esc(s.alternativa.motivo)}</div>`
+        : `<div style="margin-top:10px;font-size:13px;color:#374151">Ou <a href="${href(s.alternativa.tipo)}"><strong>${esc(s.alternativa.nome)}</strong> por mais ${brl(s.alternativa.diferenca)}</a>: ${esc(s.alternativa.motivo)}</div>`);
       el.innerHTML = `
         <div style="font-size:12px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:#1a3a8a">Próximo passo</div>
-        <div style="font-size:17px;font-weight:800;margin:4px 0 8px">${esc(s.nome)} — por mais ${brl(s.diferenca)}</div>
+        <div style="font-size:17px;font-weight:800;margin:4px 0 8px">${esc(s.nome)} — por mais ${brl(dif(s))}</div>
         <ul style="margin:0 0 12px;padding-left:18px;font-size:14px;line-height:1.5">${s.motivos.map(m => `<li>${esc(m)}</li>`).join('')}</ul>
-        <a class="btn btn-primary" href="${href(s.tipo)}">Pedir ${esc(s.nome)} (${brl(s.preco)})</a>
-        ${s.alternativa ? `<div style="margin-top:10px;font-size:13px;color:#374151">Ou <a href="${href(s.alternativa.tipo)}"><strong>${esc(s.alternativa.nome)}</strong> por mais ${brl(s.alternativa.diferenca)}</a>: ${esc(s.alternativa.motivo)}</div>` : ''}`;
+        ${botao}
+        ${s.upgrade ? `<div style="font-size:12px;color:#4b5563;margin-top:6px">Paga só a diferença e aproveita as consultas já feitas.</div>` : ''}
+        ${alt}`;
       el.hidden = false;
     } catch (_) { el.hidden = true; }
   }
@@ -141,6 +165,7 @@
       <div style="display:flex;align-items:center;gap:12px;margin-bottom:20px">
         <a href="/dashboard.html" class="btn btn-outline btn-sm">← Voltar</a>
         <h1 class="page-title" style="margin:0">Pedido #${p.numero}</h1>
+        ${p.upgrade_de ? `<span class="badge" style="background:#e0e7ff;color:#1a3a8a" title="Cobra só a diferença sobre o pedido anterior e reaproveita as consultas já feitas">⬆ Upgrade — paga só a diferença</span>` : ''}
         <span class="badge badge-${p.status === 'concluido' ? 'concluido' : p.status === 'em_andamento' ? 'andamento' : p.status === 'pago' ? 'pago' : 'aguardando'}">${STATUS_LABEL[p.status]}</span>
       </div>
 

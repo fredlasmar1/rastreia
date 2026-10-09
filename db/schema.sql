@@ -361,6 +361,8 @@ ALTER TABLE clientes ADD COLUMN IF NOT EXISTS plano_ciclo_inicio DATE;
 ALTER TABLE clientes ADD COLUMN IF NOT EXISTS plano_valor_mensal NUMERIC(10,2) DEFAULT 0;
 -- Cota por produto (09/10/2026): {"consulta_restricoes": 20, "analise_inquilino": 6}
 ALTER TABLE clientes ADD COLUMN IF NOT EXISTS plano_cotas JSONB;
+-- Upgrade (09/10/2026): pedido criado a partir de outro, cobrando só a diferença
+ALTER TABLE pedidos ADD COLUMN IF NOT EXISTS upgrade_de UUID;
 ALTER TABLE clientes ADD COLUMN IF NOT EXISTS plano_usadas JSONB DEFAULT '{}'::jsonb;
 
 -- Fase 2: liga o pedido ao cliente cadastrado (p/ cobrar do plano do mensalista)
