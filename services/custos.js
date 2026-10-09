@@ -124,6 +124,8 @@ function chavesPorFonte(fonte, dados) {
     leilao: 'dd_veic_leilao', roubo_furto: 'dd_veic_roubo_furto', renajud: 'dd_veic_renajud', recall: 'dd_veic_recall',
     historico_proprietarios: 'dd_veic_hist_prop' };
   if (VEIC[fonteCanon] && dados && dados.disponivel !== false) c.push(VEIC[fonteCanon]);
+  if (fonteCanon === 'cndt' && dados && dados.disponivel !== false) c.push('dd_cndt');
+  if (fonteCanon === 'certidao_conjunta' && dados && dados.disponivel !== false) c.push('dd_certidao_conjunta');
   return c;
 }
 
@@ -181,6 +183,8 @@ const APIS_POR_PRODUTO = {
   // Nome Limpo ou Sujo: sem a Boa Vista (sem lista nominal de credores)
   consulta_restricoes: ['directd_pf_plus', 'directd_score_quod', 'directd_negativacoes', 'directd_protestos'],
   analise_inquilino: BASE_PF,
+  // Checagem do Vendedor: cadastro, processos, negativações + Boa Vista, protestos, CNDT, certidão federal
+  checagem_vendedor: ['directd_pf_plus', 'directd_processos', 'directd_negativacoes', 'directd_boa_vista', 'directd_protestos', 'dd_cndt', 'dd_certidao_conjunta'],
   // Capacidade de Compra: cadastro, score, negativações + Boa Vista, renda (sem processos)
   capacidade_compra: ['directd_pf_plus', 'directd_score_quod', 'directd_negativacoes', 'directd_boa_vista', 'directd_perfil_economico'],
   dossie_pf: BASE_PF,

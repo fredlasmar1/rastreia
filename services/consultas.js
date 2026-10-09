@@ -1028,6 +1028,65 @@ async function consultarNegativacoes(documento, { detalharCredores = true } = {}
 // Endpoint: /api/Protestos | R$ 0,72
 // ─────────────────────────────────────────────
 
+// ─── Certidões pela Direct Data (Checagem do Vendedor) ───────────────────
+// GerarComprovante=habilitar devolve metaDados.urlComprovante (PDF oficial).
+async function _certidaoDD(endpoint, params, fonte) {
+  if (!process.env.DIRECTD_TOKEN) return { disponivel: false, fonte };
+  try {
+    const res = await axios.get(`https://apiv3.directd.com.br/api/${endpoint}`, {
+      params: { ...params, GerarComprovante: 'habilitar', Token: process.env.DIRECTD_TOKEN },
+      timeout: 60000
+    });
+    const r = res.data?.retorno;
+    if (!r) return { disponivel: false, erro: res.data?.metaDados?.mensagem || 'Sem retorno', fonte };
+    return { ok: true, r, comprovante: res.data?.metaDados?.urlComprovante || '' };
+  } catch (e) {
+    const msg = e.response?.data?.metaDados?.mensagem || e.response?.data?.mensagem || e.message;
+    logarFalhaAPI(fonte, e.response?.status, msg);
+    return { disponivel: false, erro: msg, fonte };
+  }
+}
+
+// CNDT — Certidão Negativa de Débitos Trabalhistas (TST)
+async function consultarCNDT(documento) {
+  const doc = limparDoc(documento);
+  const fonte = 'Direct Data TST CNDT';
+  const out = await _certidaoDD('TSTCertidaoNegativaDebitosTrabalhistas', doc.length === 14 ? { CNPJ: doc } : { CPF: doc }, fonte);
+  if (!out.ok) return out;
+  const r = out.r;
+  return {
+    disponivel: true,
+    positiva: !!r.possuiProcesso || Number(r.totalProcessos || 0) > 0,
+    total: Number(r.totalProcessos || 0),
+    status: r.status || '',
+    numero: r.numeroCertidao || '', validade: r.dataValidade || '',
+    processos: (r.processos || []).slice(0, 20).map(p => ({ codigo: p.codigo || '', local: p.local || '' })),
+    comprovante: out.comprovante,
+    fonte, consultado_em: new Date().toISOString()
+  };
+}
+
+// Certidão Conjunta de Débitos (Receita Federal + PGFN). PF exige data de nascimento.
+async function consultarCertidaoConjunta(documento, dataNascimento) {
+  const doc = limparDoc(documento);
+  const pj = doc.length === 14;
+  const fonte = 'Direct Data Certidão Conjunta RFB/PGFN';
+  if (!pj && !dataNascimento) return { disponivel: false, erro: 'Data de nascimento não encontrada no cadastro', fonte };
+  const out = await _certidaoDD(pj ? 'CertidaoConjuntaDebitosPessoaJuridica' : 'CertidaoConjuntaDebitosPessoaFisica',
+    pj ? { CNPJ: doc } : { CPF: doc, DataNascimento: dataNascimento }, fonte);
+  if (!out.ok) return out;
+  const r = out.r;
+  return {
+    disponivel: true,
+    positiva: !!r.possuiDividas,
+    status: r.status || '', titulo: r.titulo || '',
+    dividas: (r.listaDividas || []).slice(0, 20),
+    validade: r.validaAte || '', codigo_controle: r.codigoControleCertidao || '',
+    comprovante: out.comprovante,
+    fonte, consultado_em: new Date().toISOString()
+  };
+}
+
 async function consultarProtestos(documento) {
   if (!process.env.DIRECTD_TOKEN) {
     return { disponivel: false, fonte: 'Direct Data Protestos' };
@@ -2383,6 +2442,29 @@ async function executarConsultaCompleta(pedido) {
     };
   }
 
+  // Checagem do Vendedor: o que pode travar ou anular a venda — processos
+  // (execuções como réu = risco de fraude à execução), dívidas com credores,
+  // protestos e as certidões trabalhista (TST) e federal (RFB/PGFN).
+  if (tipo === 'checagem_vendedor') {
+    if (!alvo_documento) return {};
+    const pj = limparDoc(alvo_documento).length === 14;
+    const cadastral = pj ? await consultarCNPJ(alvo_documento) : await consultarCPF(alvo_documento);
+    const [processos, negativacoes, protestos, cndt, certidao_conjunta] = await Promise.all([
+      consultarProcessos(alvo_documento, pj ? 'PJ' : 'PF', alvo_nome || cadastral?.nome || cadastral?.razao_social, cadastral?.uf || 'GO'),
+      consultarNegativacoes(alvo_documento),
+      consultarProtestos(alvo_documento),
+      consultarCNDT(alvo_documento),
+      consultarCertidaoConjunta(alvo_documento, cadastral?.data_nascimento)
+    ]);
+    return {
+      receita_federal: cadastral,
+      processos,
+      ...(negativacoes?.status ? { negativacoes } : {}),
+      ...(protestos && protestos.disponivel !== false ? { protestos } : {}),
+      cndt, certidao_conjunta
+    };
+  }
+
   // Capacidade de Compra: só o que o banco olha — cadastro (renda), score,
   // dívidas COM credores (Boa Vista, para dizer o que limpar) e renda.
   // Sem processos: não entram na análise de financiamento.
@@ -2824,6 +2906,7 @@ module.exports = {
   consultarCNPJ, consultarCPF, consultarProcessos,
   consultarEscavador, consultarDatajud, consultarTransparencia,
   consultarSerasa, consultarScore, consultarNegativacoes, consultarProtestos, consultarBoaVista,
+  consultarCNDT, consultarCertidaoConjunta,
   consultarPerfilEconomico, consultarVinculos, consultarAML, montarInterpostas, consultarObito,
   consultarONR, consultarMatricula, consultarVeiculos, consultarImoveisRuraisSIGEF,
   consultarVeiculoPorPlaca, consultarProprietariosPlaca, consultarHistoricoVeiculos,

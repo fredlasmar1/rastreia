@@ -428,6 +428,11 @@
       dados: ['Identificação completa (marca, modelo, ano, chassi, renavam)', 'Situação atual do veículo no DETRAN', 'Restrições administrativas e judiciais', 'Alienação fiduciária e penhoras', 'Valor FIPE atualizado', 'Município e UF de registro', 'Histórico de roubo/furto'],
       publico: ['Comprador de veículo usado', 'Quem vai receber veículo como pagamento', 'Locadoras e revendas', 'Credor pesquisando veículo por placa', 'Leiloéiro e mecânica']
     },
+    checagem_vendedor: { nome: 'Checagem do Vendedor', preco: 79, prazo: '30 minutos', icone: '📜',
+      argumento: 'Antes de fechar a venda: o vendedor tem execução de dívida que pode anular o negócio (fraude à execução)? Débito trabalhista ou com a Receita/PGFN? Dívidas e protestos? Resposta LIVRE, ATENÇÃO ou RISCO, com as certidões oficiais.',
+      dados: ['Veredito: livre / atenção / risco', 'Execuções contra o vendedor e valores', 'Certidão trabalhista (TST) e federal (Receita/PGFN) com comprovante', 'Dívidas, credores e protestos', 'Outros processos como réu'],
+      publico: ['Corretor antes da escritura', 'Comprador de imóvel ou carro de particular', 'Loja comprando carro de pessoa física ou empresa']
+    },
     capacidade_compra: { nome: 'Capacidade de Compra', preco: 49, prazo: 'minutos', icone: '💳',
       argumento: 'Antes de levar o cliente ao banco: ele comporta a parcela (até 30% da renda)? Quanto consegue financiar? Que entrada falta? O que trava (dívida, protesto, score) e com quem?',
       dados: ['Veredito: comporta / comporta com ajuste / trava no banco', 'Parcela estimada e quanto da renda ela usa', 'Quanto consegue financiar e a entrada necessária', 'Dívidas com o nome de cada credor', 'Protestos e score de crédito'],

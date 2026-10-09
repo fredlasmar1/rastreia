@@ -28,6 +28,7 @@ const renderers = {
   analise_devedor: require('./analise_devedor').render,
   analise_inquilino: require('./analise_inquilino').render,
   capacidade_compra: require('./capacidade_compra').render,
+  checagem_vendedor: require('./checagem_vendedor').render,
   consulta_veicular: require('./consulta_veicular').render,
   // Pacotes veiculares pela Direct Data (a Credify saiu em 09/10/2026)
   consulta_veicular_simples: require('./consulta_veicular_dd').render,

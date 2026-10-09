@@ -78,7 +78,9 @@ Regra do dono (09/10/2026): preço atrativo, abaixo do mercado de Anápolis, com
 | Degrau | Produto | Chave | Preço | Custo cheio |
 |---|---|---|---|---|
 | 1 | Nome Limpo ou Sujo (CPF/CNPJ) | `consulta_restricoes` | R$ 19,90 | R$ 5,44 (sem Boa Vista) |
-| 2 | Análise de Inquilino | `analise_inquilino` | R$ 47 | R$ 22,41 |
+| 2 | Aprovação de Inquilino (pede aluguel → aprovar/garantia/recusar) | `analise_inquilino` | R$ 47 | R$ 22,41 |
+| Imob/Veíc | Capacidade de Compra (consegue financiar?) | `capacidade_compra` | R$ 49 | R$ 19,11 |
+| Imob/Veíc | Checagem do Vendedor (algo trava/anula a venda?) | `checagem_vendedor` | R$ 79 | ≈ R$ 22,79 |
 | 3 | Dossiê Pessoa Física | `dossie_pf` | R$ 59,90 | R$ 22,41 |
 | 4 | Análise de Devedor | `analise_devedor` | R$ 99 | R$ 25,85 |
 | 5 | Investigação Patrimonial | `investigacao_patrimonial` | R$ 149 | R$ 25,85 |
@@ -87,6 +89,9 @@ Regra do dono (09/10/2026): preço atrativo, abaixo do mercado de Anápolis, com
 | Imóvel | Due Diligence Imobiliária | `due_diligence_imobiliaria` | R$ 797 | ≈ R$ 52,50 |
 | Veículo | Simples / Mediana / Completa | `consulta_veicular_*` | 19,90 / 34,90 / 64,90 | 3,90 / 15,42 / 31,27 |
 
+- Produtos de venda respondem uma pergunta com VEREDITO (função pura, usada por PDF e tela):
+  `veredito_locacao.js` (inquilino), `veredito_compra.js` (financiamento), `veredito_vendedor.js`
+  (vendedor), `veredito_veicular.js` (carro).
 - Todo relatório termina oferecendo o próximo degrau: `sugerirProximoDegrau` em
   `services/produtos.js` → bloco no PDF (`services/pdf/chrome.js`) e cartão nas telas
   (`GET /api/pedidos/:id/proximo-degrau`).

@@ -68,6 +68,28 @@ const PRODUTOS = {
     ],
   },
 
+  // Checagem do Vendedor (09/10/2026): "tem algo que trava ou anula a venda?"
+  // Veredito em services/veredito_vendedor.js.
+  checagem_vendedor: {
+    nome: 'Checagem do Vendedor',
+    preco: 79,
+    prazo_horas: 0.5,
+    icone: '📜',
+    publico_alvo: [
+      'Corretor antes de levar a proposta à escritura',
+      'Comprador de imóvel ou veículo de particular',
+      'Loja comprando carro de pessoa física ou empresa',
+    ],
+    argumento: 'Antes de fechar: o vendedor tem execução de dívida que pode anular a venda (fraude à execução)? Débito trabalhista ou com a Receita/PGFN? Dívidas e protestos? Resposta: LIVRE, ATENÇÃO ou RISCO — com as certidões oficiais anexas.',
+    dados_entregues: [
+      { secao: 'VEREDITO', campos: ['Livre / Atenção / Risco', 'O que resolver antes de fechar'] },
+      { secao: 'PROCESSOS', campos: ['Execuções contra o vendedor e valores', 'Outros processos como réu'] },
+      { secao: 'CERTIDÕES', campos: ['Trabalhista (TST)', 'Receita Federal / PGFN', 'Link do comprovante oficial'] },
+      { secao: 'DÍVIDAS', campos: ['Negativações e credores', 'Protestos'] },
+    ],
+    fatores_score: [],
+  },
+
   // Capacidade de Compra (09/10/2026): "esse cliente consegue comprar/financiar?"
   // Imóvel (imobiliária) ou veículo (loja). Veredito em services/veredito_compra.js.
   capacidade_compra: {

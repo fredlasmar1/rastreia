@@ -226,7 +226,9 @@ INSERT INTO api_custos (chave, rotulo, valor_brl, fonte, confianca) VALUES
   ('dd_veic_roubo_furto',    'DirectData — Roubo e Furto',                5.0000, 'ESTIMADO — confirmar com a Direct Data',                 'estimado'),
   ('dd_veic_renajud',        'DirectData — RENAJUD',                      1.5000, 'ESTIMADO — confirmar com a Direct Data',                 'estimado'),
   ('dd_veic_recall',         'DirectData — Recall',                       0.5000, 'ESTIMADO — confirmar com a Direct Data',                 'estimado'),
-  ('dd_veic_hist_prop',      'DirectData — Histórico de Proprietários',   5.0000, 'ESTIMADO — confirmar com a Direct Data',                 'estimado')
+  ('dd_veic_hist_prop',      'DirectData — Histórico de Proprietários',   5.0000, 'ESTIMADO — confirmar com a Direct Data',                 'estimado'),
+  ('dd_cndt',                'DirectData — TST Certidão Negativa de Débitos Trabalhistas', 1.0000, 'ESTIMADO — confirmar com a Direct Data', 'estimado'),
+  ('dd_certidao_conjunta',   'DirectData — Certidão Conjunta de Débitos (RFB/PGFN)', 1.0000, 'ESTIMADO — confirmar com a Direct Data',     'estimado')
 ON CONFLICT (chave) DO UPDATE SET
   rotulo = EXCLUDED.rotulo,
   valor_brl = EXCLUDED.valor_brl,
