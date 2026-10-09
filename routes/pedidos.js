@@ -55,6 +55,7 @@ const PRECOS = {
   capacidade_compra: 49,
   checagem_vendedor: 79,
   dossie_pj: 89.90,
+  dossie_pj_socios: 189,
   due_diligence: 497,
   due_diligence_imobiliaria: 797,
   analise_devedor: 99,
@@ -68,6 +69,7 @@ const PRECOS = {
 
 const PRAZOS = {
   dossie_pf: 2,
+  dossie_pj_socios: 2,
   analise_inquilino: 2,
   capacidade_compra: 0.25,
   checagem_vendedor: 0.5,

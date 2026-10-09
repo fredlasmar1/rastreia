@@ -22,6 +22,7 @@ const storagePaths = require('../storage_paths');
 const renderers = {
   dossie_pf: require('./dossie_pf').render,
   dossie_pj: require('./dossie_pj').render,
+  dossie_pj_socios: require('./dossie_pj_socios').render,
   due_diligence: require('./due_diligence').render,
   due_diligence_imobiliaria: require('./due_diligence_imobiliaria').render,
   investigacao_patrimonial: require('./investigacao_patrimonial').render,
@@ -73,8 +74,10 @@ function gerarDossie(pedido, dadosDB) {
         score = { score: '-', classificacao: '-', alertas: [], contribuicoes: [] };
         checklist = [];
       } else {
-        score = calcularScore(pedido.tipo, dados);
-        checklist = gerarChecklist(pedido.tipo, dados);
+        // PJ + Sócios usa as mesmas regras de score/checklist do Dossiê PJ
+        const tipoRegra = pedido.tipo === 'dossie_pj_socios' ? 'dossie_pj' : pedido.tipo;
+        score = calcularScore(tipoRegra, dados);
+        checklist = gerarChecklist(tipoRegra, dados);
       }
 
       // Próximo degrau da escada: chrome.blocoFinal desenha antes do aviso LGPD

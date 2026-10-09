@@ -2512,7 +2512,7 @@ async function executarConsultaCompleta(pedido) {
   }
 
   // Vínculos societários para produtos premium
-  const precisaVinculos = ['due_diligence', 'analise_devedor', 'investigacao_patrimonial', 'due_diligence_imobiliaria'].includes(tipo);
+  const precisaVinculos = ['due_diligence', 'analise_devedor', 'investigacao_patrimonial', 'due_diligence_imobiliaria', 'dossie_pj_socios'].includes(tipo);
   // Veículos e imóveis para investigação patrimonial e imobiliária
   const precisaVeiculos = ['analise_devedor', 'investigacao_patrimonial', 'due_diligence_imobiliaria'].includes(tipo);
   // Add-on Boa Vista (+R$29): flag vem do pedido; propagada por alvo (o `pedido`
@@ -2753,6 +2753,17 @@ async function executarConsultasParaAlvo(alvo, { precisaVinculos, precisaVeiculo
     }
   }
 
+  // Dossiê PJ e PJ + Sócios: certidão real da Receita/PGFN (antes o PDF dizia
+  // "Em integração (Credify)"); o degrau com sócios roda o mini-dossiê de até
+  // 5 sócios, com as dívidas de cada um.
+  let certidao_conjunta = null;
+  if ((tipo === 'dossie_pj' || tipo === 'dossie_pj_socios') && tipoAlvo === 'PJ') {
+    certidao_conjunta = c.certidao_conjunta || await consultarCertidaoConjunta(documento); // upgrade reaproveita
+    if (tipo === 'dossie_pj_socios' && Array.isArray(cadastral?.socios) && cadastral.socios.length) {
+      socios_enriquecidos = await enriquecerSocios(cadastral.socios, documento, { limite: 5, negativacoes: true });
+    }
+  }
+
   return {
     receita_federal: cadastral,
     processos,
@@ -2781,7 +2792,8 @@ async function executarConsultasParaAlvo(alvo, { precisaVinculos, precisaVeiculo
     ...(cepim ? { cepim } : {}),
     ...(contratos_publicos ? { contratos_publicos } : {}),
     ...(veiculos_pj ? { veiculos_pj } : {}),
-    ...(socios_enriquecidos ? { socios_enriquecidos } : {})
+    ...(socios_enriquecidos ? { socios_enriquecidos } : {}),
+    ...(certidao_conjunta ? { certidao_conjunta } : {})
   };
 }
 
@@ -2821,8 +2833,10 @@ async function consultarQSADirectd(cnpj) {
 //
 // `cnpj` é usado para tentar resolver CPFs completos via Direct Data quando a
 // base cadastral primária (CNPJá) devolver CPFs mascarados (`***xxxxxx**`).
-async function enriquecerSocios(socios, cnpj) {
-  const lista = (socios || []).slice(0, 8);
+// opts.limite: quantos sócios recebem mini-dossiê (padrão 8)
+// opts.negativacoes: inclui dívidas de cada sócio (Dossiê PJ + Sócios)
+async function enriquecerSocios(socios, cnpj, opts = {}) {
+  const lista = (socios || []).slice(0, opts.limite || 8);
   if (!lista.length) return [];
 
   // Tenta enriquecer CPFs mascarados via Direct Data PJ (QSA).
@@ -2857,12 +2871,19 @@ async function enriquecerSocios(socios, cnpj) {
       out.aviso = 'CPF do sócio não retornado pela base cadastral — análise individual indisponível.';
       return out;
     }
-    const [cadPF, score, processos, transparencia] = await Promise.allSettled([
+    const [cadPF, score, processos, transparencia, negs] = await Promise.allSettled([
       consultarCPF(cpf),
       consultarScore(cpf),
       consultarProcessos(cpf, 'PF', s.nome || ''),
-      consultarTransparencia(cpf, s.nome || '')
+      consultarTransparencia(cpf, s.nome || ''),
+      opts.negativacoes ? consultarNegativacoes(cpf, { detalharCredores: false }) : Promise.resolve(null)
     ]);
+    const ng = negs.status === 'fulfilled' ? negs.value : null;
+    if (ng && ng.status !== undefined) {
+      out.negativacoes_consultadas = true;
+      out.pendencias = Number(ng.total_pendencias || 0);
+      out.protestos = (ng.protestos || []).length;
+    }
 
     const c = cadPF.status === 'fulfilled' ? cadPF.value : null;
     if (c && !c.aviso) {
@@ -2900,6 +2921,8 @@ async function enriquecerSocios(socios, cnpj) {
     if (out.qtd_processos >= 5) sinais.push(`${out.qtd_processos} processo(s)`);
     else if (out.qtd_processos > 0) sinais.push(`${out.qtd_processos} processo(s)`);
     if (out.score_quod && out.score_quod < 400) sinais.push(`score baixo (${out.score_quod})`);
+    if (out.pendencias > 0) sinais.push(`dívidas de R$ ${out.pendencias.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`);
+    if (out.protestos > 0) sinais.push(`${out.protestos} protesto(s)`);
     if (sinais.length) out.alertas = sinais;
 
     return out;

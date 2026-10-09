@@ -17,14 +17,25 @@ const {
 } = require('./sections');
 const { secao, linha, boxEmIntegracao, COR, MARGEM, LARGURA, verificarPagina } = require('./helpers');
 
-// Situação fiscal resumida (CND/FGTS/PGFN) — quando Credify entregar, substituir
+// Situação fiscal: certidão conjunta Receita/PGFN pela Direct Data. Linhas sem
+// fonte não aparecem (antes diziam "Em integração (Credify)").
 function secaoSituacaoFiscalPJ(doc, y, dados) {
   const cadastral = dados.receita_federal || {};
+  const ccd = dados.certidao_conjunta;
   y = secao(doc, 'SITUAÇÃO FISCAL E REGULARIDADE', y);
   y = linha(doc, 'Situação RF', cadastral.situacao || '-', y, 13);
-  y = linha(doc, 'Dívida Ativa PGFN', dados.pgfn?.status || 'Em integração (Credify)', y, 13);
-  y = linha(doc, 'Regularidade FGTS', dados.fgts?.status || 'Em integração (Credify)', y, 13);
-  y = linha(doc, 'Débitos Estaduais', dados.debitos_estaduais?.status || 'Em integração (Credify)', y, 13);
+  if (ccd) {
+    const txt = ccd.disponivel === false ? `não respondeu${ccd.erro ? ` (${ccd.erro})` : ''}`
+      : (ccd.positiva ? `POSITIVA — há débitos${ccd.dividas?.length ? `: ${ccd.dividas.slice(0, 2).join('; ')}` : ''}` : 'Negativa (sem débitos)');
+    y = linha(doc, 'Receita Federal / PGFN', txt, y, 13);
+    if (ccd.comprovante) {
+      doc.fillColor(COR.azul).fontSize(7.5).font('Helvetica').text('Comprovante oficial da certidão', MARGEM + 4, y, { link: ccd.comprovante, underline: true });
+      y += 11;
+    }
+  }
+  if (dados.pgfn?.status) y = linha(doc, 'Dívida Ativa PGFN', dados.pgfn.status, y, 13);
+  if (dados.fgts?.status) y = linha(doc, 'Regularidade FGTS', dados.fgts.status, y, 13);
+  if (dados.debitos_estaduais?.status) y = linha(doc, 'Débitos Estaduais', dados.debitos_estaduais.status, y, 13);
   return y + 4;
 }
 
@@ -41,10 +52,7 @@ function secaoFaturamentoPresumido(doc, y, dados) {
     }
     return y + 4;
   }
-  return boxEmIntegracao(doc, y,
-    'FATURAMENTO PRESUMIDO — Em integração',
-    'Será disponibilizado via Credify no próximo release (endpoint /faturamentopresumidopjcredify).'
-  );
+  return y; // sem fonte de faturamento: a seção não aparece
 }
 
 function render(doc, pedido, dados, score, checklist, produto) {
@@ -69,4 +77,4 @@ function render(doc, pedido, dados, score, checklist, produto) {
   chrome.blocoFinal(doc, y);
 }
 
-module.exports = { render };
+module.exports = { render, secaoSituacaoFiscalPJ };

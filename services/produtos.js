@@ -111,6 +111,27 @@ const PRODUTOS = {
     fatores_score: [],
   },
 
+  // Degrau entre o Dossiê PJ (R$ 89,90) e a Due Diligence (R$ 497) — 09/10/2026
+  dossie_pj_socios: {
+    nome: 'Dossiê PJ + Sócios',
+    preco: 189,
+    prazo_horas: 2,
+    icone: '👥',
+    publico_alvo: [
+      'Fornecedor antes de dar crédito alto a uma empresa',
+      'Quem vai fechar contrato longo ou parceria',
+      'Loja/imobiliária vendendo para empresa',
+    ],
+    argumento: 'Empresa limpa com sócio enrolado é risco escondido. Tudo do Dossiê PJ + certidão da Receita/PGFN, grupo econômico e o mini-dossiê de até 5 sócios: score, processos e dívidas de cada um — quem está por trás da empresa.',
+    dados_entregues: [
+      { secao: 'TUDO DO DOSSIÊ PJ', campos: ['Cadastro, sócios, regime', 'Processos, protestos, negativações', 'Listas CEIS/CNEP'] },
+      { secao: 'CERTIDÃO FEDERAL', campos: ['Receita Federal / PGFN', 'Comprovante oficial'] },
+      { secao: 'GRUPO ECONÔMICO', campos: ['Outras empresas ligadas', 'Vínculos dos sócios'] },
+      { secao: 'SÓCIOS (até 5)', campos: ['Score de crédito', 'Processos', 'Dívidas e protestos', 'Listas negras', 'Alerta por sócio'] },
+    ],
+    fatores_score: [],
+  },
+
   dossie_pj: {
     nome: 'Dossiê Pessoa Jurídica',
     preco: 89.90,
@@ -745,7 +766,13 @@ function gerarChecklist(tipo, dadosAutomaticos) {
     { item: 'Confirmar inexistência de inventário/usucapião sobre o imóvel', link: '', obrigatorio: false },
   ];
 
-  return checklists[tipo] || [];
+  let lista = checklists[tipo] || [];
+  // Certidão federal já veio pela Direct Data: não mandar o operador verificar de novo
+  const ccdChk = (dadosAutomaticos || {}).certidao_conjunta;
+  if (ccdChk && ccdChk.disponivel !== false) {
+    lista = lista.filter(c => !/Certidão Negativa Federal/i.test(c.item));
+  }
+  return lista;
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -812,10 +839,18 @@ function sugerirProximoDegrau(tipo, dados = {}, alvoTipo = 'PF') {
       motivos.push('Roteiro de imóveis urbanos e estratégia de penhora pronta para a execução.');
       break;
     }
-    case 'dossie_pj':
+    case 'dossie_pj': {
+      destino = 'dossie_pj_socios';
+      const nSocios = Array.isArray((dados.receita_federal || {}).socios) ? dados.receita_federal.socios.length : 0;
+      motivos.push(`${nSocios ? `A empresa tem ${nSocios} sócio(s)` : 'Quem está por trás da empresa'}: veja score, processos e dívidas de cada um (até 5).`);
+      if (resumoDividas) motivos.push(`Encontramos ${resumoDividas} na empresa — confira se os sócios também estão enrolados.`);
+      motivos.push('Grupo econômico: outras empresas ligadas aos sócios.');
+      break;
+    }
+    case 'dossie_pj_socios':
       destino = 'due_diligence';
       if (resumoDividas) motivos.push(`Encontramos ${resumoDividas}: a Due Diligence detalha o passivo e o risco de cada um.`);
-      motivos.push('Dossiê de cada sócio, certidões (PGFN, trabalhista, FGTS), marcas no INPI e parecer técnico final.');
+      motivos.push('Certidões trabalhista e FGTS, marcas no INPI, patrimônio da empresa e parecer técnico final para compra ou sociedade.');
       break;
     case 'consulta_veicular_simples':
     case 'consulta_veicular_mediana': {

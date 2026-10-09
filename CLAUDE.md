@@ -84,7 +84,8 @@ Regra do dono (09/10/2026): preço atrativo, abaixo do mercado de Anápolis, com
 | 3 | Dossiê Pessoa Física | `dossie_pf` | R$ 59,90 | R$ 22,41 |
 | 4 | Análise de Devedor | `analise_devedor` | R$ 99 | R$ 25,85 |
 | 5 | Investigação Patrimonial | `investigacao_patrimonial` | R$ 149 | R$ 25,85 |
-| PJ | Dossiê Pessoa Jurídica | `dossie_pj` | R$ 89,90 | R$ 28,66 |
+| PJ | Dossiê Pessoa Jurídica (+ certidão Receita/PGFN) | `dossie_pj` | R$ 89,90 | ≈ R$ 29,66 |
+| PJ | Dossiê PJ + Sócios (até 5 sócios: score, processos, dívidas) | `dossie_pj_socios` | R$ 189 | ≈ R$ 72,68 |
 | PJ | Due Diligence Empresarial | `due_diligence` | R$ 497 | ≈ R$ 48,46 |
 | Imóvel | Due Diligence Imobiliária | `due_diligence_imobiliaria` | R$ 797 | ≈ R$ 52,50 |
 | Veículo | Simples / Mediana / Completa | `consulta_veicular_*` | 19,90 / 34,90 / 64,90 | 3,90 / 15,42 / 31,27 |

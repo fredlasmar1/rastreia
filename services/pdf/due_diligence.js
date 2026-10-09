@@ -360,4 +360,4 @@ function render(doc, pedido, dados, score, checklist, produto) {
   ]);
 }
 
-module.exports = { render };
+module.exports = { render, secaoAnaliseSocios };

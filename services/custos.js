@@ -100,13 +100,15 @@ function chavesPorFonte(fonte, dados) {
       c.push('credify_historico_proprietario');
       break;
     case 'pgfn': case 'cndt': case 'fgts': case 'inpi': case 'inpi_patentes': case 'ceis': case 'cepim':
-      if (dados) c.push('infosimples_certidao');
+      // CNDT pela Direct Data (Checagem do Vendedor) é contada abaixo como dd_cndt
+      if (dados && !/direct data/i.test(dados.fonte || '')) c.push('infosimples_certidao');
       break;
     case 'socios_enriquecidos':
       if (Array.isArray(dados) && dados.length) {
         c.push('directd_qsa_pj');
         for (const s of dados) {
           if (s?.tem_cpf) c.push('directd_pf_plus', 'directd_score_quod', 'directd_processos');
+          if (s?.negativacoes_consultadas) c.push('directd_negativacoes');
         }
       }
       break;
@@ -124,7 +126,7 @@ function chavesPorFonte(fonte, dados) {
     leilao: 'dd_veic_leilao', roubo_furto: 'dd_veic_roubo_furto', renajud: 'dd_veic_renajud', recall: 'dd_veic_recall',
     historico_proprietarios: 'dd_veic_hist_prop' };
   if (VEIC[fonteCanon] && dados && dados.disponivel !== false) c.push(VEIC[fonteCanon]);
-  if (fonteCanon === 'cndt' && dados && dados.disponivel !== false) c.push('dd_cndt');
+  if (fonteCanon === 'cndt' && dados && dados.disponivel !== false && /direct data/i.test(dados.fonte || '')) c.push('dd_cndt');
   if (fonteCanon === 'certidao_conjunta' && dados && dados.disponivel !== false) c.push('dd_certidao_conjunta');
   return c;
 }
@@ -188,7 +190,10 @@ const APIS_POR_PRODUTO = {
   // Capacidade de Compra: cadastro, score, negativações + Boa Vista, renda (sem processos)
   capacidade_compra: ['directd_pf_plus', 'directd_score_quod', 'directd_negativacoes', 'directd_boa_vista', 'directd_perfil_economico'],
   dossie_pf: BASE_PF,
-  dossie_pj: BASE_PJ,
+  dossie_pj: [...BASE_PJ, 'dd_certidao_conjunta'],
+  // PJ + Sócios: Dossiê PJ + vínculos/AML + QSA + até 5 sócios (cadastro, score, processos, dívidas)
+  dossie_pj_socios: [...BASE_PJ, 'dd_certidao_conjunta', 'directd_vinculos', 'directd_aml', 'directd_qsa_pj',
+    ...[1, 2, 3, 4, 5].flatMap(() => ['directd_pf_plus', 'directd_score_quod', 'directd_processos', 'directd_negativacoes'])],
   analise_devedor: [...BASE_PF, ...PATRIMONIAL],
   investigacao_patrimonial: [...BASE_PF, ...PATRIMONIAL],
   // Due Diligence Empresarial: base PJ + vínculos/AML + 7 certidões InfoSimples + QSA + 2 sócios
