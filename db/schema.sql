@@ -366,3 +366,28 @@ CREATE INDEX IF NOT EXISTS idx_pedidos_cliente_id ON pedidos(cliente_id);
 
 -- Add-on opcional: 2a opiniao de bureau (Boa Vista/SCPC, +R$29). Off por padrao.
 ALTER TABLE pedidos ADD COLUMN IF NOT EXISTS addon_boa_vista BOOLEAN DEFAULT false;
+
+-- ==========================================================================
+-- 09/10/2026: renda gravada 100x maior (parser apagava o ponto decimal de
+-- "19699.97"). Corrige só o que foi coletado ANTES do deploy da correção
+-- (6517fe4, 09/10 13:09 UTC) e marca a linha para não rodar de novo.
+-- ==========================================================================
+UPDATE dados_consulta dc
+   SET dados = dc.dados
+     || jsonb_build_object(
+          'renda_numerica', v.nova,
+          'renda_estimada', 'R$ ' || replace(replace(replace(to_char(v.nova, 'FM999,999,990.00'), ',', 'X'), '.', ','), 'X', '.'),
+          'renda_inconsistente', (v.nova > 100000 OR (v.nova > 15000 AND COALESCE(dc.dados->>'profissao', '') ~* '(motofret|mototaxi|bikeboy|entregad|auxiliar|ajudant|motorista de entrega|atendent|caixa|vigilant|porteir|doméstic|faxineir|zelador|aux\.)')),
+          'renda_motivo_inconsistencia', CASE
+            WHEN v.nova > 100000 THEN 'Renda estimada improvável e não será usada no cálculo de score'
+            WHEN v.nova > 15000 AND COALESCE(dc.dados->>'profissao', '') ~* '(motofret|mototaxi|bikeboy|entregad|auxiliar|ajudant|motorista de entrega|atendent|caixa|vigilant|porteir|doméstic|faxineir|zelador|aux\.)'
+              THEN 'Renda estimada incompatível com a profissão - descartada do score'
+            ELSE '' END,
+          'renda_corrigida_100x', true)
+  FROM (SELECT id, round(((dados->>'renda_numerica')::numeric) / 100, 2) AS nova
+          FROM dados_consulta
+         WHERE fonte ~ '^receita_federal(_[0-9]+)?$'
+           AND jsonb_typeof(dados->'renda_numerica') = 'number'
+           AND NOT (dados ? 'renda_corrigida_100x')
+           AND coletado_em < '2026-10-09 13:09:00') v
+ WHERE dc.id = v.id;
