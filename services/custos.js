@@ -119,11 +119,11 @@ function chavesPorFonte(fonte, dados) {
       if (dados?.concluida) c.push('claude_analise_imovel');
       break;
   }
-  // Pacotes Credify (consulta_veicular_simples/mediana/completa): a linha `pacote` diz qual foi.
-  if (fonteCanon === 'pacote' && typeof dados === 'string') {
-    const k = { simples: 'credify_pacote_simples', mediana: 'credify_pacote_mediana', completa: 'credify_pacote_completa' }[dados];
-    if (k) c.push(k);
-  }
+  // Pacotes veiculares Direct Data: cada base gravada é uma chamada paga
+  const VEIC = { veiculo: 'dd_veic_nacional', gravame: 'dd_veic_gravame', estadual: 'dd_veic_estadual', fipe: 'dd_veic_fipe',
+    leilao: 'dd_veic_leilao', roubo_furto: 'dd_veic_roubo_furto', renajud: 'dd_veic_renajud', recall: 'dd_veic_recall',
+    historico_proprietarios: 'dd_veic_hist_prop' };
+  if (VEIC[fonteCanon] && dados && dados.disponivel !== false) c.push(VEIC[fonteCanon]);
   return c;
 }
 
@@ -192,9 +192,11 @@ const APIS_POR_PRODUTO = {
   due_diligence_imobiliaria: [...BASE_PF, ...PATRIMONIAL, ...BASE_PF, ...PATRIMONIAL, 'claude_analise_imovel'],
   // Veicular legado (tiers): placa + Credify histórico (pago mesmo no Básico) + histórico por CPF
   consulta_veicular: ['directd_veiculos', 'credify_historico_proprietario', 'directd_historico_veiculos'],
-  consulta_veicular_simples: ['credify_pacote_simples'],
-  consulta_veicular_mediana: ['credify_pacote_mediana'],
-  consulta_veicular_completa: ['credify_pacote_completa']
+  // Veicular Direct Data (09/10/2026)
+  consulta_veicular_simples: ['dd_veic_nacional', 'dd_veic_gravame'],
+  consulta_veicular_mediana: ['dd_veic_nacional', 'dd_veic_gravame', 'dd_veic_estadual', 'dd_veic_fipe'],
+  consulta_veicular_completa: ['dd_veic_nacional', 'dd_veic_gravame', 'dd_veic_estadual', 'dd_veic_fipe',
+    'dd_veic_leilao', 'dd_veic_roubo_furto', 'dd_veic_renajud', 'dd_veic_recall', 'dd_veic_hist_prop']
 };
 
 async function estimarCustoProduto(tipo) {

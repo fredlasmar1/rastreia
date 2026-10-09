@@ -2308,40 +2308,36 @@ async function consultarImoveisVeiculosPJ(cnpj, uf) {
 async function executarConsultaCompleta(pedido) {
   const { alvo_documento, alvo_tipo, alvo_nome, tipo, alvo_placa } = pedido;
 
-  // ─── Pacotes Credify (Simples / Mediano / Completo) ─────────────
-  // Regra inviolável: estes 3 produtos usam EXCLUSIVAMENTE a Credify.
+  // ─── Pacotes veiculares (Simples / Mediana / Completa) — Direct Data ─────
+  // 09/10/2026: a Credify saiu (os leitores adivinhavam os campos: carro
+  // financiado saía LIVRE). Tudo pela Direct Data, ver services/veicular_dd.js.
+  //   Simples  = nacional (dados + indicadores) + gravame
+  //   Mediana  = Simples + estadual (débitos) + FIPE
+  //   Completa = Mediana + leilão + roubo/furto + RENAJUD + histórico de donos + recall
   if (tipo === 'consulta_veicular_simples' || tipo === 'consulta_veicular_mediana' || tipo === 'consulta_veicular_completa') {
-    const credify = require('./credify/api');
-    const placa = credify.normalizarPlaca(alvo_placa || '');
-    if (!credify.placaValida(placa)) {
+    const dd = require('./veicular_dd');
+    const placa = dd.normalizarPlaca(alvo_placa || '');
+    if (!dd.placaValida(placa)) {
       return { erro: 'Placa inválida (formato esperado AAA1A23 Mercosul ou AAA1234 antiga)' };
     }
-
-    if (tipo === 'consulta_veicular_completa') {
-      // Pacote único Credify VeiculoTotal
-      const veiculo_total = await credify.consultarVeiculoTotal(placa);
-      return { placa, pacote: 'completa', veiculo_total };
+    const pacote = tipo.replace('consulta_veicular_', '');
+    const chamadas = { veiculo: dd.consultarNacional(placa), gravame: dd.consultarGravame(placa) };
+    if (pacote !== 'simples') {
+      chamadas.estadual = dd.consultarEstadual(placa);
+      chamadas.fipe = dd.consultarFipe(placa);
     }
-
-    if (tipo === 'consulta_veicular_simples') {
-      const [veicular, gravame, renainf] = await Promise.all([
-        credify.consultarVeicularBNacionalOnLine(placa),
-        credify.consultarGravame(placa),
-        credify.consultarRenainf(placa)
-      ]);
-      return { placa, pacote: 'simples', veicular, gravame, renainf };
+    if (pacote === 'completa') {
+      chamadas.leilao = dd.consultarLeilao(placa);
+      chamadas.roubo_furto = dd.consultarRouboFurto(placa);
+      chamadas.renajud = dd.consultarRenajud(placa);
+      chamadas.recall = dd.consultarRecall(placa);
+      chamadas.historico_proprietarios = dd.consultarHistoricoProprietarios(placa);
     }
-
-    // Mediano
-    const [veicular, gravame, renainf, renajud, historico, sinistro] = await Promise.all([
-      credify.consultarVeicularBNacionalOnLine(placa),
-      credify.consultarGravame(placa),
-      credify.consultarRenainf(placa),
-      credify.consultarRenajud(placa),
-      credify.consultarHistoricoProprietarios(placa),
-      credify.consultarIndicioSinistro(placa)
-    ]);
-    return { placa, pacote: 'mediana', veicular, gravame, renainf, renajud, historico, sinistro };
+    const chaves = Object.keys(chamadas);
+    const valores = await Promise.all(Object.values(chamadas));
+    const out = { placa, pacote };
+    chaves.forEach((k, i) => { out[k] = valores[i]; });
+    return out;
   }
 
   // Produto standalone: Consulta Veicular

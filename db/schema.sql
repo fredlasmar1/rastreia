@@ -215,7 +215,18 @@ INSERT INTO api_custos (chave, rotulo, valor_brl, fonte, confianca) VALUES
   ('infosimples_certidao',   'InfoSimples — Certidao (PGFN/CNDT/FGTS/INPI/CEIS/CEPIM)', 0.8000, 'Estimativa custos_apis.js — confirmar na InfoSimples', 'estimado'),
   ('credify_pacote_simples', 'Credify — Pacote Veicular Simples',        3.9000, 'Catalogo Credify (1,17 + 2,09 + 0,64)',                  'estimado'),
   ('credify_pacote_mediana', 'Credify — Pacote Veicular Mediana',       15.4200, 'Catalogo Credify (simples + Renajud + HistProp + Sinistro)', 'estimado'),
-  ('credify_pacote_completa','Credify — Pacote Veicular Completa',      31.2700, 'Catalogo Credify (VeiculoTotal)',                        'estimado')
+  ('credify_pacote_completa','Credify — Pacote Veicular Completa',      31.2700, 'Catalogo Credify (VeiculoTotal)',                        'estimado'),
+  -- Veicular pela Direct Data (09/10/2026). Nacional confirmada no extrato (R$1,10 em 22/04);
+  -- as demais são ESTIMATIVA conservadora até a Direct Data informar o preço.
+  ('dd_veic_nacional',       'DirectData — Consulta Veicular Nacional',   1.1000, 'Extrato DirectData 22/04/2026',                          'oficial'),
+  ('dd_veic_gravame',        'DirectData — Gravame',                      2.0000, 'ESTIMADO — confirmar com a Direct Data',                 'estimado'),
+  ('dd_veic_estadual',       'DirectData — Consulta Veicular Estadual (débitos)', 2.0000, 'ESTIMADO — confirmar com a Direct Data',         'estimado'),
+  ('dd_veic_fipe',           'DirectData — FIPE',                         0.5000, 'ESTIMADO — confirmar com a Direct Data',                 'estimado'),
+  ('dd_veic_leilao',         'DirectData — Leilão Veicular',             10.0000, 'ESTIMADO — confirmar com a Direct Data',                 'estimado'),
+  ('dd_veic_roubo_furto',    'DirectData — Roubo e Furto',                5.0000, 'ESTIMADO — confirmar com a Direct Data',                 'estimado'),
+  ('dd_veic_renajud',        'DirectData — RENAJUD',                      1.5000, 'ESTIMADO — confirmar com a Direct Data',                 'estimado'),
+  ('dd_veic_recall',         'DirectData — Recall',                       0.5000, 'ESTIMADO — confirmar com a Direct Data',                 'estimado'),
+  ('dd_veic_hist_prop',      'DirectData — Histórico de Proprietários',   5.0000, 'ESTIMADO — confirmar com a Direct Data',                 'estimado')
 ON CONFLICT (chave) DO UPDATE SET
   rotulo = EXCLUDED.rotulo,
   valor_brl = EXCLUDED.valor_brl,

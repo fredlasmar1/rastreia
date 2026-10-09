@@ -225,9 +225,11 @@ function blocoProximoDegrau(doc, y, sug) {
   return y + altura + 4;
 }
 
-function blocoFinal(doc, y, fontesExtras) {
+// opts.fontes: substitui a lista padrão (ex.: relatório veicular, que não usa
+// Receita/Direct Data/Escavador).
+function blocoFinal(doc, y, fontesExtras, opts = {}) {
   y = blocoProximoDegrau(doc, y, doc.__proximoDegrau);
-  const fontes = [
+  const fontes = Array.isArray(opts.fontes) ? [...opts.fontes] : [
     'Receita Federal do Brasil (CPF/CNPJ)',
     'Direct Data - Cadastro, Score QUOD, Protestos e Negativações',
     'Escavador - Processos Judiciais estruturados',

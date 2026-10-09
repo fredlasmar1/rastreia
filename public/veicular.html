@@ -61,30 +61,28 @@
         <div class="nome">Simples</div>
         <div class="preco">R$ 19<small>,90</small></div>
         <ul>
-          <li>Dados do veículo</li>
-          <li>Gravame (financiamento)</li>
-          <li>Multas RENAINF</li>
+          <li>Veredito: pode vender / atenção / não venda</li>
+          <li>Financiamento ativo e banco</li>
+          <li>Alertas: leilão, roubo/furto, bloqueio judicial, multas, recall</li>
         </ul>
       </div>
       <div class="pacote selecionado" data-tipo="consulta_veicular_mediana" data-preco="34.90" onclick="selecionarPacote(this)">
         <div class="badge">Recomendado</div>
-        <div class="nome">Mediano</div>
+        <div class="nome">Mediana</div>
         <div class="preco">R$ 34<small>,90</small></div>
         <ul>
           <li>Tudo do Simples</li>
-          <li>RENAJUD (bloqueio judicial)</li>
-          <li>Histórico de proprietários</li>
-          <li>Indício de sinistro</li>
+          <li>Débitos em R$: IPVA, licenciamento, multas</li>
+          <li>Valor FIPE</li>
         </ul>
       </div>
       <div class="pacote" data-tipo="consulta_veicular_completa" data-preco="64.90" onclick="selecionarPacote(this)">
-        <div class="nome">Completo</div>
+        <div class="nome">Completa</div>
         <div class="preco">R$ 64<small>,90</small></div>
         <ul>
-          <li>VeiculoTotal Credify</li>
-          <li>Leilão + roubo/furto</li>
-          <li>Recall + FIPE + chassi</li>
-          <li>Dossiê completo</li>
+          <li>Tudo da Mediana</li>
+          <li>Detalhe de leilão, roubo/furto e bloqueio judicial</li>
+          <li>Histórico de donos e recall</li>
         </ul>
       </div>
     </div>
@@ -143,38 +141,23 @@
   <div id="resultado-card" style="display:none">
     <div id="r-banner"></div>
 
+    <div class="res-card" id="card-valor" style="display:none">
+      <h3>Valor e débitos</h3>
+      <div id="r-valor"></div>
+    </div>
+
     <div class="res-card">
       <h3>Identificação do veículo</h3>
       <div id="r-veiculo"></div>
     </div>
 
     <div class="res-card">
-      <h3>Gravame / Financiamento</h3>
+      <h3>Financiamento (gravame)</h3>
       <div id="r-gravame"></div>
     </div>
 
-    <div class="res-card">
-      <h3>Multas RENAINF</h3>
-      <div id="r-renainf"></div>
-    </div>
-
-    <div class="res-card" id="card-renajud" style="display:none">
-      <h3>Bloqueio judicial (RENAJUD)</h3>
-      <div id="r-renajud"></div>
-    </div>
-
-    <div class="res-card" id="card-historico" style="display:none">
-      <h3>Histórico de proprietários</h3>
-      <div id="r-historico"></div>
-    </div>
-
-    <div class="res-card" id="card-sinistro" style="display:none">
-      <h3>Indício de sinistro</h3>
-      <div id="r-sinistro"></div>
-    </div>
-
     <div class="res-card" id="card-completo" style="display:none">
-      <h3>Demais informações (Completo)</h3>
+      <h3>Detalhe das bases</h3>
       <div id="r-completo"></div>
     </div>
 
@@ -348,7 +331,7 @@
     const out = await r.json();
     const dados = out.resultados || {};
     document.getElementById('processing-card').style.display = 'none';
-    renderizarResultado(dados);
+    renderizarResultado(dados, out.veredito);
   }
 
   function infoRow(label, valor) {
@@ -356,127 +339,65 @@
     return `<div class="info-row"><span>${esc(label)}</span><span>${esc(valor)}</span></div>`;
   }
 
-  function renderizarResultado(dados) {
+  function renderizarResultado(dados, ver) {
     document.getElementById('resultado-card').style.display = '';
+    const cv = dados || {};
+    const ok = (x) => x && x.disponivel !== false;
+    const indisp = (x) => `<div style="color:#6b7280;font-size:13px">Indisponível: ${esc((x && x.erro) || 'sem retorno')}</div>`;
 
-    // O backend retorna em `resultados` exatamente o que o orquestrador devolveu:
-    //   Simples/Mediano: { placa, pacote, veicular, gravame, renainf, [renajud, historico, sinistro] }
-    //   Completo:        { placa, pacote, veiculo_total }
-    const cv = dados;
-    const tipo = pedidoAtual.tipo;
+    // Veredito (mesma regra do PDF — services/veredito_veicular.js, vem do servidor)
+    if (ver) {
+      const cor = { NAO_VENDA: ['#fee2e2', '#7f1d1d'], ATENCAO: ['#ffedd5', '#7c2d12'], PODE_VENDER: ['#dcfce7', '#14532d'], INCONCLUSIVO: ['#e5e7eb', '#1f2937'] }[ver.nivel] || ['#e5e7eb', '#1f2937'];
+      document.getElementById('r-banner').innerHTML = `
+        <div style="background:${cor[0]};color:${cor[1]};border-radius:10px;padding:16px 18px;margin-bottom:14px">
+          <div style="font-size:12px;font-weight:700;letter-spacing:.06em">PODE VENDER ESTE VEÍCULO?</div>
+          <div style="font-size:24px;font-weight:800;margin:2px 0 4px">${esc(ver.titulo)}</div>
+          <div style="font-size:14px">${esc(ver.frase)}</div>
+          ${ver.motivos.length ? `<ul style="margin:10px 0 0;padding-left:18px;font-size:14px">${ver.motivos.map(m => `<li style="${m.nivel === 'grave' ? 'font-weight:700' : ''}">${esc(m.texto)}</li>`).join('')}</ul>` : ''}
+          ${ver.nao_consultado.length ? `<div style="font-size:12px;margin-top:8px;opacity:.85">Este pacote não consulta: ${esc(ver.nao_consultado.join(', '))}.</div>` : ''}
+        </div>`;
+    }
 
-    // Banner
-    const sinaisCriticos = [];
-    const g = cv.gravame || cv.veiculo_total?.gravame;
-    const r = cv.renajud || cv.veiculo_total?.renajud;
-    const s = cv.sinistro || cv.veiculo_total?.sinistro;
-    const rf = cv.veiculo_total?.roubo_furto;
-    if (g?.disponivel && g.tem_gravame !== false && (g.tipo || g.financeira)) sinaisCriticos.push('Gravame ativo');
-    if (r?.disponivel && (r.restricoes?.length || r.tem_restricao)) sinaisCriticos.push('Bloqueio RENAJUD');
-    if (s?.disponivel && s.tem_indicio) sinaisCriticos.push('Indício de sinistro');
-    if (rf?.tem_registro) sinaisCriticos.push('Roubo/furto');
-
-    document.getElementById('r-banner').innerHTML = sinaisCriticos.length
-      ? `<div class="alerta-banner">⚠️ Atenção: ${sinaisCriticos.join(', ')}</div>`
-      : '<div class="ok-banner">✅ Veículo sem alertas críticos nos itens consultados</div>';
+    // Valor e débitos (Mediana/Completa)
+    if (cv.fipe || cv.estadual) {
+      document.getElementById('card-valor').style.display = '';
+      let h = '';
+      if (ok(cv.fipe)) h += infoRow('Tabela FIPE', `R$ ${fmtBRL(cv.fipe.valor)}${cv.fipe.mes_referencia ? ' (ref. ' + cv.fipe.mes_referencia + ')' : ''}`);
+      if (ok(cv.estadual)) {
+        h += cv.estadual.debitos.length
+          ? cv.estadual.debitos.map(x => infoRow(x.nome, `R$ ${fmtBRL(x.valor)}${x.situacao ? ' — ' + x.situacao : ''}`)).join('') + infoRow('Total de débitos', `R$ ${fmtBRL(cv.estadual.total_debitos)}`)
+          : '<div class="ok-banner">✅ Nenhum débito encontrado</div>';
+      }
+      document.getElementById('r-valor').innerHTML = h || indisp(cv.estadual || cv.fipe);
+    }
 
     // Identificação
-    const v = (tipo === 'consulta_veicular_completa' ? cv.veiculo_total?.identificacao : cv.veicular) || cv.veicular || {};
-    document.getElementById('r-veiculo').innerHTML = v.disponivel
-      ? infoRow('Placa', pedidoAtual.alvo_placa)
-        + infoRow('Marca/Modelo', v.marca_modelo || [v.marca, v.modelo].filter(Boolean).join(' '))
-        + infoRow('Ano fab./modelo', `${v.ano_fabricacao || '?'}/${v.ano_modelo || '?'}`)
-        + infoRow('Cor', v.cor)
-        + infoRow('Combustível', v.combustivel)
-        + infoRow('Chassi', v.chassi)
-        + infoRow('Renavam', v.renavam)
-        + infoRow('Município/UF', [v.municipio, v.uf].filter(Boolean).join('/'))
-        + infoRow('Proprietário', v.proprietario)
-      : `<div style="color:#6b7280;font-size:13px">Indisponível: ${esc(v.erro || 'sem retorno')}</div>`;
+    const v = cv.veiculo || {};
+    document.getElementById('r-veiculo').innerHTML = ok(v)
+      ? infoRow('Placa', v.placa || pedidoAtual.alvo_placa) + infoRow('Marca/Modelo', v.marca_modelo)
+        + infoRow('Ano fab./modelo', [v.ano_fabricacao, v.ano_modelo].filter(Boolean).join('/'))
+        + infoRow('Cor', v.cor) + infoRow('Combustível', v.combustivel) + infoRow('Chassi', v.chassi)
+        + infoRow('Renavam', v.renavam) + infoRow('Município/UF', [v.municipio, v.uf].filter(Boolean).join('/'))
+        + infoRow('Situação', v.situacao)
+      : indisp(v);
 
     // Gravame
-    const gv = cv.gravame || cv.veiculo_total?.gravame;
-    if (gv) {
-      document.getElementById('r-gravame').innerHTML = !gv.disponivel
-        ? `<div style="color:#6b7280;font-size:13px">Indisponível: ${esc(gv.erro || 'sem retorno')}</div>`
-        : (gv.tem_gravame === false || gv.sem_restricao)
-          ? '<div class="ok-banner">✅ Sem gravame ativo</div>'
-          : infoRow('Tipo', gv.tipo) + infoRow('Financeira', gv.financeira || gv.banco) + infoRow('Data contrato', gv.data_contrato);
-    }
+    const g = cv.gravame;
+    document.getElementById('r-gravame').innerHTML = !ok(g) ? indisp(g)
+      : g.tem_gravame ? infoRow('Situação', 'Financiamento ATIVO') + infoRow('Financeira', g.financeira) + infoRow('Desde', g.data_inclusao)
+      : '<div class="ok-banner">✅ Sem financiamento ativo</div>';
 
-    // RENAINF
-    const rn = cv.renainf || cv.veiculo_total?.renainf;
-    if (rn) {
-      const qtd = rn.quantidade ?? rn.total ?? (rn.multas?.length || 0);
-      document.getElementById('r-renainf').innerHTML = !rn.disponivel
-        ? `<div style="color:#6b7280;font-size:13px">Indisponível: ${esc(rn.erro || 'sem retorno')}</div>`
-        : qtd === 0
-          ? '<div class="ok-banner">✅ Sem multas RENAINF em aberto</div>'
-          : infoRow('Multas em aberto', qtd) + infoRow('Valor total', `R$ ${fmtBRL(rn.valor_total || 0)}`);
-    }
-
-    // RENAJUD (Mediano e Completo)
-    if (tipo !== 'consulta_veicular_simples') {
-      const rj = cv.renajud || cv.veiculo_total?.renajud;
-      if (rj) {
-        document.getElementById('card-renajud').style.display = '';
-        const lista = rj.restricoes || rj.lista || [];
-        document.getElementById('r-renajud').innerHTML = !rj.disponivel
-          ? `<div style="color:#6b7280;font-size:13px">Indisponível: ${esc(rj.erro || 'sem retorno')}</div>`
-          : (lista.length === 0 && !rj.tem_restricao)
-            ? '<div class="ok-banner">✅ Sem bloqueio judicial RENAJUD</div>'
-            : lista.slice(0, 5).map(rr => `<div class="lista-item"><strong>${esc(rr.tribunal || 'Tribunal')}</strong> — ${esc(rr.processo || '')} ${rr.tipo_restricao ? `(${esc(rr.tipo_restricao)})` : ''}</div>`).join('');
-      }
-
-      // Histórico
-      const h = cv.historico || cv.veiculo_total?.historico;
-      if (h) {
-        document.getElementById('card-historico').style.display = '';
-        const lista = h.proprietarios || [];
-        document.getElementById('r-historico').innerHTML = !h.disponivel
-          ? `<div style="color:#6b7280;font-size:13px">Indisponível: ${esc(h.erro || 'sem retorno')}</div>`
-          : infoRow('Total de donos', lista.length)
-            + lista.slice(0, 5).map((p, i) => `<div class="info-row"><span>Dono ${i + 1}</span><span>${esc([p.exercicio, p.uf_circulacao].filter(Boolean).join(' - '))}</span></div>`).join('');
-      }
-
-      // Sinistro
-      const sn = cv.sinistro || cv.veiculo_total?.sinistro;
-      if (sn) {
-        document.getElementById('card-sinistro').style.display = '';
-        document.getElementById('r-sinistro').innerHTML = !sn.disponivel
-          ? `<div style="color:#6b7280;font-size:13px">Indisponível: ${esc(sn.erro || 'sem retorno')}</div>`
-          : sn.tem_indicio
-            ? `<div class="alerta-banner">⚠️ Indício de sinistro encontrado${sn.descricao ? ': ' + esc(sn.descricao) : ''}</div>`
-            : '<div class="ok-banner">✅ Nenhum indício de sinistro</div>';
-      }
-    }
-
-    // Completo: leilão, roubo/furto, recall, FIPE
-    if (tipo === 'consulta_veicular_completa') {
-      const vt = cv.veiculo_total || {};
+    // Detalhe (Completa)
+    if (pedidoAtual.tipo === 'consulta_veicular_completa') {
       document.getElementById('card-completo').style.display = '';
-      let html = '';
-      if (vt.roubo_furto) {
-        html += vt.roubo_furto.tem_registro
-          ? '<div class="alerta-banner" style="margin-bottom:10px">⚠️ Veículo em registro de roubo/furto</div>'
-          : '<div class="ok-banner" style="margin-bottom:10px">✅ Sem registro de roubo/furto</div>';
-      }
-      if (vt.leilao) {
-        html += vt.leilao.tem_registro
-          ? `<div class="alerta-banner" style="margin-bottom:10px">⚠️ Veículo passou por leilão${vt.leilao.tipo ? ' (' + esc(vt.leilao.tipo) + ')' : ''}</div>`
-          : '<div class="ok-banner" style="margin-bottom:10px">✅ Não consta em leilão</div>';
-      }
-      if (vt.recall) {
-        html += vt.recall.tem_pendencia
-          ? `<div class="alerta-banner" style="margin-bottom:10px">⚠️ ${vt.recall.quantidade || 1} recall(s) pendente(s)</div>`
-          : '<div class="ok-banner" style="margin-bottom:10px">✅ Sem recall pendente</div>';
-      }
-      if (vt.fipe?.valor) {
-        html += `<div class="info-row"><span>Valor FIPE</span><span><strong>R$ ${fmtBRL(vt.fipe.valor)}</strong></span></div>`;
-        if (vt.fipe.codigo) html += infoRow('Código FIPE', vt.fipe.codigo);
-        if (vt.fipe.mes_referencia) html += infoRow('Mês referência', vt.fipe.mes_referencia);
-      }
-      document.getElementById('r-completo').innerHTML = html || '<div style="color:#6b7280;font-size:13px">Sem dados adicionais.</div>';
+      const lin = (titulo, txt, alerta) => `<div class="${alerta ? 'alerta-banner' : 'ok-banner'}" style="margin-bottom:8px">${alerta ? '⚠️' : '✅'} <strong>${esc(titulo)}:</strong> ${esc(txt)}</div>`;
+      let h = '';
+      if (ok(cv.leilao)) h += lin('Leilão', cv.leilao.tem_registro ? cv.leilao.registros.map(r => [r.data, r.leiloeiro, r.classificacao].filter(Boolean).join(' — ')).join(' | ') || 'consta registro' : 'nenhum registro', cv.leilao.tem_registro);
+      if (ok(cv.roubo_furto)) h += lin('Roubo/furto', cv.roubo_furto.tem_registro ? (cv.roubo_furto.ativo ? 'registro ATIVO' : 'teve registro, recuperado') : 'nenhum registro', cv.roubo_furto.tem_registro);
+      if (ok(cv.renajud)) h += lin('Bloqueio judicial', cv.renajud.bloqueios_ativos ? `${cv.renajud.bloqueios_ativos} ativo(s): ` + cv.renajud.ocorrencias.map(o => o.processo).filter(Boolean).join(', ') : 'nenhum ativo', cv.renajud.bloqueios_ativos > 0);
+      if (ok(cv.recall)) h += lin('Recall', cv.recall.tem_recall ? cv.recall.campanhas.map(c => c.nome).filter(Boolean).join('; ') || 'pendente' : 'nenhum pendente', cv.recall.tem_recall);
+      if (ok(cv.historico_proprietarios)) h += infoRow('Donos registrados', cv.historico_proprietarios.total) + cv.historico_proprietarios.proprietarios.slice(0, 5).map((p, i) => infoRow(`${p.ano || '?'}`, [p.nome, p.uf].filter(Boolean).join(' — '))).join('');
+      document.getElementById('r-completo').innerHTML = h || '<div style="color:#6b7280;font-size:13px">Sem dados adicionais.</div>';
     }
   }
 

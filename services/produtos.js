@@ -241,6 +241,8 @@ const PRODUTOS = {
     fatores_score: [],
   },
 
+  // Pacotes veiculares — Direct Data (09/10/2026). Cada um responde
+  // "esse carro é seguro de vender?" com veredito (services/veredito_veicular.js).
   consulta_veicular_simples: {
     nome: 'Consulta Veicular Simples',
     preco: 19.90,
@@ -248,14 +250,15 @@ const PRODUTOS = {
     icone: '🚗',
     sem_alvo_documento: true,
     publico_alvo: [
-      'Comprador fazendo triagem rápida antes de visitar o veículo',
-      'Quem quer checagem básica de proprietário, financiamento e multas',
+      'Loja avaliando um carro na troca ou na compra',
+      'Comprador fazendo a triagem antes de visitar o veículo',
     ],
-    argumento: 'Em poucos minutos, basta a placa: dados do veículo, gravame (alienação fiduciária) e multas RENAINF. Pacote enxuto e barato para triagem.',
+    argumento: 'Basta a placa: veredito na hora (pode vender / atenção / não venda), financiamento ativo com o nome do banco e os alertas da base nacional — leilão, roubo/furto, bloqueio judicial, multas, recall e comunicado de venda.',
     dados_entregues: [
-      { secao: 'IDENTIFICAÇÃO DO VEÍCULO', campos: ['Placa', 'Marca/modelo', 'Ano fabricação/modelo', 'Cor', 'Combustível', 'Chassi', 'Renavam', 'Município/UF'] },
-      { secao: 'GRAVAME / FINANCIAMENTO', campos: ['Tipo de restrição financeira', 'Banco/financeira', 'Data do contrato'] },
-      { secao: 'MULTAS RENAINF', campos: ['Quantidade de multas federais', 'Valor total em aberto'] },
+      { secao: 'VEREDITO', campos: ['Pode vender / Atenção / Não venda', 'Motivos em linguagem de vendedor'] },
+      { secao: 'IDENTIFICAÇÃO DO VEÍCULO', campos: ['Placa', 'Marca/modelo', 'Ano', 'Cor', 'Chassi', 'Renavam', 'Município/UF', 'Situação'] },
+      { secao: 'FINANCIAMENTO (GRAVAME)', campos: ['Ativo ou livre', 'Banco/financeira', 'Data'] },
+      { secao: 'ALERTAS DA BASE NACIONAL', campos: ['Leilão', 'Roubo/furto', 'Bloqueio judicial', 'Multas', 'Recall', 'Comunicado de venda', 'Chassi remarcado'] },
     ],
     fatores_score: [],
   },
@@ -267,17 +270,14 @@ const PRODUTOS = {
     icone: '🚗',
     sem_alvo_documento: true,
     publico_alvo: [
-      'Lojista, despachante ou consultor de compra',
-      'Comprador sério antes de fechar negócio',
+      'Loja fechando o preço de compra ou de venda',
+      'Comprador que quer saber quanto custa deixar o carro em dia',
     ],
-    argumento: 'Pacote intermediário: tudo do Simples + bloqueio judicial RENAJUD, histórico de proprietários e indícios de sinistro. Cobertura ampla por preço acessível.',
+    argumento: 'Tudo do Simples + quanto o carro deve (IPVA, licenciamento e multas em reais) e quanto ele vale na FIPE — o vendedor já negocia com o desconto certo.',
     dados_entregues: [
-      { secao: 'IDENTIFICAÇÃO DO VEÍCULO', campos: ['Placa', 'Marca/modelo', 'Ano fabricação/modelo', 'Cor', 'Combustível', 'Chassi', 'Renavam', 'Município/UF'] },
-      { secao: 'GRAVAME / FINANCIAMENTO', campos: ['Tipo de restrição', 'Banco/financeira', 'Data do contrato'] },
-      { secao: 'MULTAS RENAINF', campos: ['Quantidade e valor total das multas'] },
-      { secao: 'BLOQUEIO JUDICIAL (RENAJUD)', campos: ['Restrições judiciais ativas', 'Tribunal e processo'] },
-      { secao: 'HISTÓRICO DE PROPRIETÁRIOS', campos: ['Quantidade total de donos', 'Datas das transferências', 'UF de cada proprietário'] },
-      { secao: 'INDÍCIO DE SINISTRO', campos: ['Indicadores de batida/perda total', 'Histórico de avarias declaradas'] },
+      { secao: 'TUDO DO SIMPLES', campos: ['Veredito', 'Financiamento', 'Alertas da base nacional'] },
+      { secao: 'DÉBITOS', campos: ['IPVA', 'Licenciamento', 'Multas', 'Total em R$'] },
+      { secao: 'VALOR', campos: ['Tabela FIPE', 'FIPE menos débitos'] },
     ],
     fatores_score: [],
   },
@@ -289,16 +289,16 @@ const PRODUTOS = {
     icone: '🚗',
     sem_alvo_documento: true,
     publico_alvo: [
-      'Compra de alto valor (carros premium, motos importadas, frota)',
-      'Due diligence pré-leilão ou consignação',
-      'Quem não pode errar na decisão de compra',
+      'Carro de valor alto ou com histórico duvidoso',
+      'Loja que vai dar garantia de procedência ao cliente',
     ],
-    argumento: 'Pacote VeículoTotal da Credify: TODAS as consultas disponíveis em uma só chamada — identificação, gravame, multas, bloqueio judicial, histórico de proprietários, sinistro, leilão, roubo/furto, recall, FIPE e mais.',
+    argumento: 'Tudo da Mediana + o detalhe de cada alerta: leilão (data, leiloeiro, classificação), roubo/furto (ocorrências e recuperação), bloqueio judicial (processo e tribunal), histórico de donos e recall.',
     dados_entregues: [
-      { secao: 'IDENTIFICAÇÃO COMPLETA', campos: ['Todos os dados do Mediano', 'Decodificação completa do chassi'] },
-      { secao: 'RESTRIÇÕES E GRAVAMES', campos: ['Gravame', 'RENAJUD', 'RENAINF', 'Demais restrições administrativas'] },
-      { secao: 'HISTÓRICO COMPLETO', campos: ['Histórico de proprietários', 'Indícios de sinistro', 'Histórico de roubo/furto', 'Bases de leilão (sinistro grave/salvado)', 'Recalls pendentes'] },
-      { secao: 'AVALIAÇÃO FIPE', campos: ['Valor FIPE atualizado', 'Código FIPE', 'Mês de referência'] },
+      { secao: 'TUDO DA MEDIANA', campos: ['Veredito', 'Financiamento', 'Débitos', 'FIPE'] },
+      { secao: 'LEILÃO', campos: ['Data', 'Leiloeiro', 'Lote', 'Classificação'] },
+      { secao: 'ROUBO E FURTO', campos: ['Ocorrências', 'Recuperação'] },
+      { secao: 'BLOQUEIO JUDICIAL', campos: ['Processo', 'Tribunal', 'Situação'] },
+      { secao: 'HISTÓRICO', campos: ['Donos anteriores', 'Recall pendente'] },
     ],
     fatores_score: [],
   },
@@ -775,13 +775,22 @@ function sugerirProximoDegrau(tipo, dados = {}, alvoTipo = 'PF') {
       motivos.push('Dossiê de cada sócio, certidões (PGFN, trabalhista, FGTS), marcas no INPI e parecer técnico final.');
       break;
     case 'consulta_veicular_simples':
-      destino = 'consulta_veicular_mediana';
-      motivos.push('Restrições judiciais (RENAJUD), sinistro e histórico de proprietários.');
+    case 'consulta_veicular_mediana': {
+      const ind = (dados.veiculo || {}).indicadores || {};
+      const acusou = [ind.leilao && 'leilão', ind.roubo_furto && 'roubo/furto', ind.renajud && 'bloqueio judicial'].filter(Boolean);
+      if (acusou.length) {
+        // Alerta grave sem detalhe: vai direto para a Completa
+        destino = 'consulta_veicular_completa';
+        motivos.push(`A base nacional acusou ${acusou.join(' e ')}: a Completa mostra o detalhe (data, processo, recuperação) antes de você negociar.`);
+      } else if (tipo === 'consulta_veicular_simples') {
+        destino = 'consulta_veicular_mediana';
+        motivos.push('Quanto o carro deve (IPVA, licenciamento, multas em R$) e quanto vale na FIPE — negocie com o desconto certo.');
+      } else {
+        destino = 'consulta_veicular_completa';
+        motivos.push('Detalhe de leilão, roubo/furto e bloqueio judicial, histórico de donos e recall — para dar garantia de procedência ao cliente.');
+      }
       break;
-    case 'consulta_veicular_mediana':
-      destino = 'consulta_veicular_completa';
-      motivos.push('Pacote total: todas as bases veiculares da Credify num relatório só.');
-      break;
+    }
     default:
       return null; // topo da escada (Investigação, Due Diligences, Completa)
   }

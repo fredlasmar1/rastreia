@@ -94,6 +94,9 @@ Regra do dono (09/10/2026): preço atrativo, abaixo do mercado de Anápolis, com
   (única fonte; `services/custos_apis.js` é legado, não usar). Conferir preço unitário no
   extrato da Direct Data (app.directd.com.br → Financeiro → Extrato).
 - `consulta_veicular` (Básico/Completo/Premium) saiu da venda: o servidor recusa pedido novo.
+- Veicular é 100% Direct Data (`services/veicular_dd.js`, veredito em `services/veredito_veicular.js`,
+  PDF `services/pdf/consulta_veicular_dd.js`). A Credify NÃO é mais usada (decisão do dono, 09/10/2026).
+  Custos das consultas veiculares (exceto a Nacional, R$1,10) estão ESTIMADOS em api_custos até a Direct Data informar.
 - PDF só abre com link assinado (`services/link_relatorio.js`) ou JWT — nunca devolver
   `relatorio_url` cru numa resposta.
 - API Direct Data: doc em https://apiv3.directd.com.br/swagger/v3-scalar/swagger.json;

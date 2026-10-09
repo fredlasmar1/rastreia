@@ -28,9 +28,10 @@ const renderers = {
   analise_devedor: require('./analise_devedor').render,
   analise_inquilino: require('./analise_inquilino').render,
   consulta_veicular: require('./consulta_veicular').render,
-  consulta_veicular_simples: require('./consulta_veicular_pacotes').render,
-  consulta_veicular_mediana: require('./consulta_veicular_pacotes').render,
-  consulta_veicular_completa: require('./consulta_veicular_pacotes').render,
+  // Pacotes veiculares pela Direct Data (a Credify saiu em 09/10/2026)
+  consulta_veicular_simples: require('./consulta_veicular_dd').render,
+  consulta_veicular_mediana: require('./consulta_veicular_dd').render,
+  consulta_veicular_completa: require('./consulta_veicular_dd').render,
   consulta_restricoes: require('./consulta_restricoes').render,
 };
 

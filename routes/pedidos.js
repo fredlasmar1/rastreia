@@ -846,7 +846,12 @@ async function executarConsultasParaPedido(pedidoId, usuarioId) {
     }
   }
 
-  return { ok: true, resultados, analise_ia: analiseOut };
+  // Pacotes veiculares: a tela mostra o mesmo veredito do PDF
+  let veredito;
+  if (/^consulta_veicular_(simples|mediana|completa)$/.test(pedido.tipo)) {
+    try { veredito = require('../services/veredito_veicular').veredictoVeicular(resultados); } catch (_) {}
+  }
+  return { ok: true, resultados, analise_ia: analiseOut, ...(veredito ? { veredito } : {}) };
 }
 
 // Executar consultas automáticas
