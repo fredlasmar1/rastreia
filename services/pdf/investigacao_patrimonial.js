@@ -142,7 +142,8 @@ function secaoVeiculos(doc, y, dados) {
       descricao: ano && !String(descricao).includes(String(ano)) ? `${descricao} ${ano}` : descricao,
       renavam: v.renavam || '-',
       chassi: v.chassi || '-',
-      situacao: v.situacao || v.situacaoVeiculo || '-',
+      // Histórico Nacional não traz situação: mostra onde o carro está registrado
+      situacao: v.situacao || v.situacaoVeiculo || (v.uf ? [v.municipio, v.uf].filter(Boolean).join('/') : '-'),
       restricoes: Array.isArray(v.restricoes) ? v.restricoes.filter(Boolean) : []
     };
   });
@@ -173,7 +174,7 @@ function secaoVeiculos(doc, y, dados) {
   doc.text('VEÍCULO', MARGEM + 60, y + 4, { width: 184, lineBreak: false });
   doc.text('RENAVAM', MARGEM + 248, y + 4, { width: 68, lineBreak: false });
   doc.text('CHASSI', MARGEM + 320, y + 4, { width: 94, lineBreak: false });
-  doc.text('SITUAÇÃO', MARGEM + 418, y + 4, { width: 72, lineBreak: false });
+  doc.text('SITUAÇÃO/UF', MARGEM + 418, y + 4, { width: 72, lineBreak: false });
   y += 14;
 
   let comRestricao = [];

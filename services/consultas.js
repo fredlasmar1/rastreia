@@ -1823,8 +1823,10 @@ async function consultarHistoricoVeiculos(cpfCnpj) {
     return { disponivel: false, erro: 'DIRECTD_TOKEN nao configurado', fonte: 'DirectData HistoricoVeiculos' };
   }
 
+  // Nacional (R$1,80). A versão /api/HistoricoVeiculos é SÓ São Paulo e
+  // atualizada uma vez por ano — em Anápolis não achava os carros do devedor.
   const endpoint = process.env.DIRECTD_HISTORICO_VEICULOS_URL
-    || 'https://apiv3.directd.com.br/api/HistoricoVeiculos';
+    || 'https://apiv3.directd.com.br/api/HistoricoVeiculosNacional';
 
   const params = { Token: process.env.DIRECTD_TOKEN };
   if (doc.length === 14) params.Cnpj = doc; else params.Cpf = doc;
@@ -1864,13 +1866,18 @@ async function consultarHistoricoVeiculos(cpfCnpj) {
       };
     }
 
+    // Nacional: placa, chassi, marcaModelo, ano, municipio, uf.
+    // (SP trazia veiculo/marca/modelo/renavam/dataAquisicao — mantidos por compat.)
     const veiculos = listaBruta.map(v => ({
       placa: (v.placa || '').toUpperCase().trim(),
-      veiculo: v.veiculo || '',
+      veiculo: v.veiculo || v.marcaModelo || '',
       marca: v.marca || '',
-      modelo: v.modelo || '',
+      modelo: v.modelo || v.marcaModelo || '',
       renavam: String(v.renavam || '').trim(),
       chassi: String(v.chassi || '').trim(),
+      ano: v.ano || null,
+      municipio: v.municipio || '',
+      uf: v.uf || '',
       data_aquisicao: v.dataAquisicao || v.data_aquisicao || ''
     })).filter(v => v.placa || v.chassi || v.renavam);
 
