@@ -52,6 +52,7 @@ const uploadDocumentos = multer({
 const PRECOS = {
   dossie_pf: 59.90,
   analise_inquilino: 47,
+  capacidade_compra: 49,
   dossie_pj: 89.90,
   due_diligence: 497,
   due_diligence_imobiliaria: 797,
@@ -67,6 +68,7 @@ const PRECOS = {
 const PRAZOS = {
   dossie_pf: 2,
   analise_inquilino: 2,
+  capacidade_compra: 0.25,
   dossie_pj: 2,
   due_diligence: 24,
   due_diligence_imobiliaria: 24,
@@ -187,7 +189,9 @@ router.post('/', autenticar, async (req, res) => {
       // Add-on opcional: 2a opinião de bureau (Boa Vista)
       addon_boa_vista,
       // Aprovação de Inquilino: valores da locação
-      locacao_aluguel, locacao_encargos, renda_declarada
+      locacao_aluguel, locacao_encargos, renda_declarada,
+      // Capacidade de Compra: bem, valor, entrada, prazo
+      compra_tipo_bem, compra_valor, compra_entrada, compra_prazo
     } = req.body;
     const numPos = (v) => { const n = Number(v); return Number.isFinite(n) && n > 0 ? Math.round(n * 100) / 100 : null; };
 
@@ -200,6 +204,9 @@ router.post('/', autenticar, async (req, res) => {
     // Linha veicular antiga (Básico/Completo/Premium + add-ons leilão/CNH) saiu
     // da venda em 08/10/2026: o Premium e os add-ons cobravam consultas que o
     // pipeline não executa. Veículo é vendido pelos pacotes de /veicular.html.
+    if (tipo === 'capacidade_compra' && !numPos(compra_valor)) {
+      return res.status(400).json({ erro: 'Informe o valor do imóvel ou do veículo: é com ele que a Capacidade de Compra calcula a parcela.' });
+    }
     if (tipo === 'analise_inquilino' && !numPos(locacao_aluguel)) {
       return res.status(400).json({ erro: 'Informe o valor do aluguel: é com ele que a Aprovação de Inquilino decide se pode alugar.' });
     }
@@ -339,6 +346,15 @@ router.post('/', autenticar, async (req, res) => {
     const pedido = result.rows[0];
     await pool.query('INSERT INTO logs (pedido_id, usuario_id, acao, detalhes) VALUES ($1, $2, $3, $4)',
       [pedido.id, req.usuario.id, 'Pedido criado', `Finalidade: ${finalidade} | IP: ${ip}`]);
+    if (tipo === 'capacidade_compra') {
+      const upd = await pool.query(
+        `UPDATE pedidos SET compra_tipo_bem = $1, compra_valor = $2, compra_entrada = $3, compra_prazo = $4, renda_declarada = $5
+          WHERE id = $6 RETURNING compra_tipo_bem, compra_valor, compra_entrada, compra_prazo, renda_declarada`,
+        [compra_tipo_bem === 'veiculo' ? 'veiculo' : 'imovel', numPos(compra_valor), numPos(compra_entrada) || 0,
+         parseInt(compra_prazo, 10) > 0 ? parseInt(compra_prazo, 10) : null, numPos(renda_declarada), pedido.id]
+      );
+      Object.assign(pedido, upd.rows[0]);
+    }
     if (tipo === 'analise_inquilino') {
       const upd = await pool.query(
         'UPDATE pedidos SET locacao_aluguel = $1, locacao_encargos = $2, renda_declarada = $3 WHERE id = $4 RETURNING locacao_aluguel, locacao_encargos, renda_declarada',

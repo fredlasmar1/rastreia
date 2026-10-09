@@ -87,6 +87,33 @@
     <div style="font-size:12px;color:#6b7280">O relatório diz se pode alugar: APROVAR, APROVAR COM GARANTIA (qual e quanto) ou RECUSAR, comparando aluguel + encargos com a renda (ideal até 30%), despejos e dívidas.</div>
   </div>
 
+  <!-- Capacidade de Compra: o bem e a entrada (a parcela é calculada com eles) -->
+  <div class="pedido-section" id="secao-compra" style="display:none">
+    <div class="section-title">Dados da compra</div>
+    <div class="form-grid">
+      <div class="form-group">
+        <label>O que vai comprar *</label>
+        <select id="compra_tipo_bem"><option value="imovel">Imóvel</option><option value="veiculo">Veículo</option></select>
+      </div>
+      <div class="form-group">
+        <label>Valor do bem (R$) *</label>
+        <input type="text" id="compra_valor" inputmode="decimal" placeholder="Ex: 450.000,00">
+      </div>
+      <div class="form-group">
+        <label>Entrada (R$)</label>
+        <input type="text" id="compra_entrada" inputmode="decimal" placeholder="Ex: 90.000,00">
+      </div>
+      <div class="form-group">
+        <label>Prazo (meses, opcional)</label>
+        <input type="number" id="compra_prazo" min="6" max="420" placeholder="Imóvel 360 · veículo 48">
+      </div>
+      <div class="form-group full">
+        <label>Renda comprovada (R$/mês, opcional)</label>
+        <input type="text" id="compra_renda" inputmode="decimal" placeholder="Se apresentou holerite/extrato — senão usamos a renda estimada">
+      </div>
+    </div>
+  </div>
+
   <!-- PASSO 2-V: Placa (Consulta Veicular) -->
   <div class="pedido-section" id="secao-placa" style="display:none">
     <div class="section-title">2. Placa do Veículo</div>
@@ -401,7 +428,12 @@
       dados: ['Identificação completa (marca, modelo, ano, chassi, renavam)', 'Situação atual do veículo no DETRAN', 'Restrições administrativas e judiciais', 'Alienação fiduciária e penhoras', 'Valor FIPE atualizado', 'Município e UF de registro', 'Histórico de roubo/furto'],
       publico: ['Comprador de veículo usado', 'Quem vai receber veículo como pagamento', 'Locadoras e revendas', 'Credor pesquisando veículo por placa', 'Leiloéiro e mecânica']
     },
-    analise_inquilino: { nome: 'Análise de Inquilino', preco: 47, prazo: '2 horas', icone: '🔑',
+    capacidade_compra: { nome: 'Capacidade de Compra', preco: 49, prazo: 'minutos', icone: '💳',
+      argumento: 'Antes de levar o cliente ao banco: ele comporta a parcela (até 30% da renda)? Quanto consegue financiar? Que entrada falta? O que trava (dívida, protesto, score) e com quem?',
+      dados: ['Veredito: comporta / comporta com ajuste / trava no banco', 'Parcela estimada e quanto da renda ela usa', 'Quanto consegue financiar e a entrada necessária', 'Dívidas com o nome de cada credor', 'Protestos e score de crédito'],
+      publico: ['Corretor antes da simulação no banco', 'Loja de veículos antes do financiamento', 'Vendedor que quer saber se o cliente consegue pagar']
+    },
+    analise_inquilino: { nome: 'Aprovação de Inquilino', preco: 47, prazo: '2 horas', icone: '🔑',
       argumento: 'Antes de entregar as chaves, saiba se o candidato tem renda compatível com o aluguel, nome limpo e histórico de despejo ou processos. Em 2 horas você decide com segurança.',
       dados: ['Identificação e situação na Receita Federal', 'Endereços e telefones atuais', 'Faixa de renda e capacidade de pagar o aluguel', 'Nome limpo ou sujo (negativações, protestos, score)', 'Processos: ações de despejo, execuções, réu', 'Score de risco + recomendação: aprovar / pedir fiador / recusar'],
       publico: ['Imobiliária analisando candidato a locação', 'Proprietário que aluga direto', 'Administradora de imóveis', 'Fiador avaliando o risco que vai assumir']
@@ -616,6 +648,7 @@
     document.getElementById('label-alvo-doc').textContent = isImob ? 'CPF ou CNPJ (opcional se anexar documentos)' : 'CPF ou CNPJ *';
 
     document.getElementById('secao-locacao').style.display = tipo === 'analise_inquilino' ? 'block' : 'none';
+    document.getElementById('secao-compra').style.display = tipo === 'capacidade_compra' ? 'block' : 'none';
 
     // Mostrar/ocultar seção veicular
     const isVeicular = tipo === 'consulta_veicular';
@@ -729,6 +762,15 @@
       payload.alvo_documento = alvo_documento || null;
       payload.alvo_tipo = alvo_tipo;
       if (isImobiliaria && temDocs) payload.tem_documentos = true;
+      if (tipo === 'capacidade_compra') {
+        const numC = (id) => { const v = document.getElementById(id).value.replace(/[^\d,.]/g, ''); const n = v.includes(',') ? Number(v.replace(/\./g, '').replace(',', '.')) : Number(v); return Number.isFinite(n) && n > 0 ? n : null; };
+        payload.compra_tipo_bem = document.getElementById('compra_tipo_bem').value;
+        payload.compra_valor = numC('compra_valor');
+        payload.compra_entrada = numC('compra_entrada');
+        payload.compra_prazo = parseInt(document.getElementById('compra_prazo').value, 10) || null;
+        payload.renda_declarada = numC('compra_renda');
+        if (!payload.compra_valor) return alerta('Informe o valor do imóvel ou do veículo.', 'error');
+      }
       if (tipo === 'analise_inquilino') {
         const num = (id) => { const v = document.getElementById(id).value.replace(/[^\d,.]/g, ''); const n = v.includes(',') ? Number(v.replace(/\./g, '').replace(',', '.')) : Number(v); return Number.isFinite(n) && n > 0 ? n : null; };
         payload.locacao_aluguel = num('locacao_aluguel');

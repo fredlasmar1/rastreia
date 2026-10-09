@@ -2383,6 +2383,25 @@ async function executarConsultaCompleta(pedido) {
     };
   }
 
+  // Capacidade de Compra: só o que o banco olha — cadastro (renda), score,
+  // dívidas COM credores (Boa Vista, para dizer o que limpar) e renda.
+  // Sem processos: não entram na análise de financiamento.
+  if (tipo === 'capacidade_compra') {
+    if (!alvo_documento) return {};
+    const [cadastral, score_credito, negativacoes, perfil_economico] = await Promise.all([
+      consultarCPF(alvo_documento),
+      consultarScore(alvo_documento),
+      consultarNegativacoes(alvo_documento),
+      consultarPerfilEconomico(alvo_documento)
+    ]);
+    return {
+      receita_federal: cadastral,
+      ...(score_credito?.score ? { score_credito } : {}),
+      ...(negativacoes?.status ? { negativacoes } : {}),
+      ...(perfil_economico ? { perfil_economico } : {})
+    };
+  }
+
   // Produto standalone: Consulta de Restrições
   // Subset leve do Direct Data — apenas o necessário para responder
   // se o CPF/CNPJ está negativado/protestado/com score ruim.

@@ -378,6 +378,11 @@ ALTER TABLE pedidos ADD COLUMN IF NOT EXISTS upgrade_de UUID;
 ALTER TABLE pedidos ADD COLUMN IF NOT EXISTS locacao_aluguel NUMERIC(12,2);
 ALTER TABLE pedidos ADD COLUMN IF NOT EXISTS locacao_encargos NUMERIC(12,2);
 ALTER TABLE pedidos ADD COLUMN IF NOT EXISTS renda_declarada NUMERIC(12,2);
+-- Capacidade de Compra (09/10/2026)
+ALTER TABLE pedidos ADD COLUMN IF NOT EXISTS compra_tipo_bem VARCHAR(10);
+ALTER TABLE pedidos ADD COLUMN IF NOT EXISTS compra_valor NUMERIC(14,2);
+ALTER TABLE pedidos ADD COLUMN IF NOT EXISTS compra_entrada NUMERIC(14,2);
+ALTER TABLE pedidos ADD COLUMN IF NOT EXISTS compra_prazo INTEGER;
 ALTER TABLE clientes ADD COLUMN IF NOT EXISTS plano_usadas JSONB DEFAULT '{}'::jsonb;
 
 -- Fase 2: liga o pedido ao cliente cadastrado (p/ cobrar do plano do mensalista)

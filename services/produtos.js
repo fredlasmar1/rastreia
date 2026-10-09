@@ -41,7 +41,7 @@ const PRODUTOS = {
   // Análise de Inquilino — Dossiê PF enxuto, focado em locação (imobiliárias).
   // Reusa o pipeline e o PDF do dossie_pf (renderers[tipo] || dossie_pf).
   analise_inquilino: {
-    nome: 'Análise de Inquilino',
+    nome: 'Aprovação de Inquilino',
     preco: 47,
     prazo_horas: 2,
     icone: '🔑',
@@ -51,7 +51,7 @@ const PRODUTOS = {
       'Administradora de imóveis',
       'Fiador avaliando o risco que vai assumir',
     ],
-    argumento: 'Antes de entregar as chaves, saiba se o candidato tem renda compatível com o aluguel, nome limpo e histórico de despejo ou processos. Em 2 horas você decide com segurança.',
+    argumento: 'Informe o aluguel e receba a resposta: APROVAR, APROVAR COM GARANTIA (qual e quanto) ou RECUSAR — aluguel + encargos contra a renda (até 30%), despejos, dívidas e score.',
     dados_entregues: [
       { secao: 'IDENTIFICAÇÃO', campos: ['Nome completo', 'CPF', 'Idade', 'Situação na Receita Federal'] },
       { secao: 'CONTATO E LOCALIZAÇÃO', campos: ['Endereços recentes', 'Telefones', 'Emails'] },
@@ -66,6 +66,27 @@ const PRODUTOS = {
       { fator: 'situacao_rf', peso: 25 },
       { fator: 'protestos', peso: 20 },
     ],
+  },
+
+  // Capacidade de Compra (09/10/2026): "esse cliente consegue comprar/financiar?"
+  // Imóvel (imobiliária) ou veículo (loja). Veredito em services/veredito_compra.js.
+  capacidade_compra: {
+    nome: 'Capacidade de Compra',
+    preco: 49,
+    prazo_horas: 0.25,
+    icone: '💳',
+    publico_alvo: [
+      'Corretor antes de levar o comprador ao banco',
+      'Loja de veículos antes de simular o financiamento',
+      'Vendedor que quer saber se o cliente consegue pagar',
+    ],
+    argumento: 'Informe o valor do bem e a entrada: a resposta diz se o cliente COMPORTA o financiamento (parcela até 30% da renda), quanto ele consegue financiar, a entrada que falta — ou o que TRAVA no banco (dívida, protesto, score) e com quem.',
+    dados_entregues: [
+      { secao: 'VEREDITO', campos: ['Comporta / Comporta com ajuste / Trava no banco', 'Quanto consegue financiar'] },
+      { secao: 'A CONTA', campos: ['Parcela estimada', 'Quanto da renda a parcela usa', 'Entrada necessária', 'Renda necessária'] },
+      { secao: 'O QUE TRAVA', campos: ['Dívidas e credores', 'Protestos', 'Score de crédito', 'Situação do CPF'] },
+    ],
+    fatores_score: [],
   },
 
   dossie_pj: {
