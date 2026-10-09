@@ -10,7 +10,7 @@ const { executarConsultaCompleta } = require('../services/consultas');
 const { gerarDossie } = require('../services/pdf');
 const { notificarClienteConcluido, notificarOperadorNovoPedido } = require('../services/whatsapp');
 const { criarPreferenceParaPedido, configurado: mpConfigurado } = require('../services/mercadopago');
-const { PRODUTOS } = require('../services/produtos');
+const { PRODUTOS, sugerirProximoDegrau } = require('../services/produtos');
 const credifyCatalogo = require('../services/credify/catalogo');
 const analiseIA = require('../services/analise_documentos_ia');
 const pedidoAlvos = require('../services/pedido_alvos');
@@ -524,6 +524,22 @@ router.get('/:id/documentos', autenticar, async (req, res) => {
     res.json({ documentos: r.rows });
   } catch (e) {
     res.status(500).json({ erro: 'Erro ao listar documentos' });
+  }
+});
+
+// Próximo degrau da escada: oferta montada com o que a consulta encontrou
+router.get('/:id/proximo-degrau', autenticar, async (req, res) => {
+  try {
+    const p = await pool.query('SELECT tipo, alvo_tipo, alvo_documento, alvo_nome FROM pedidos WHERE id = $1', [req.params.id]);
+    if (!p.rows.length) return res.status(404).json({ erro: 'Pedido não encontrado' });
+    const rows = await pool.query('SELECT fonte, dados FROM dados_consulta WHERE pedido_id = $1', [req.params.id]);
+    const dados = {};
+    for (const r of rows.rows) dados[r.fonte] = typeof r.dados === 'string' ? JSON.parse(r.dados) : r.dados;
+    const { tipo, alvo_tipo, alvo_documento, alvo_nome } = p.rows[0];
+    res.json({ sugestao: sugerirProximoDegrau(tipo, dados, alvo_tipo), alvo: { documento: alvo_documento, nome: alvo_nome, tipo: alvo_tipo } });
+  } catch (e) {
+    console.error('[proximo-degrau]', e.message);
+    res.status(500).json({ erro: 'Erro ao montar o próximo degrau' });
   }
 });
 

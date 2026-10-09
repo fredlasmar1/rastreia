@@ -126,6 +126,8 @@
       <div id="r-negativacoes"></div>
     </div>
 
+    <div class="res-card" id="proximo-degrau" hidden style="border:1px solid #c7d2fe;background:#eef2ff;border-left:4px solid #1a3a8a"></div>
+
     <div style="display:flex;gap:10px;flex-wrap:wrap">
       <button class="btn btn-primary" id="btn-gerar-pdf" onclick="gerarPDF()">📄 Gerar PDF</button>
       <a id="btn-baixar-pdf" href="#" target="_blank" class="btn btn-outline" style="display:none">⬇ Baixar PDF</a>
@@ -359,7 +361,32 @@
       });
     }
     document.getElementById('r-negativacoes').innerHTML = htmlNeg;
+    carregarProximoDegrau(pedidoAtual && pedidoAtual.id);
   }
+
+  // Próximo degrau da escada (GET /api/pedidos/:id/proximo-degrau)
+  async function carregarProximoDegrau(pedidoId) {
+    const el = document.getElementById('proximo-degrau');
+    if (!el || !pedidoId) return;
+    try {
+      const j = await (await api(`/api/pedidos/${pedidoId}/proximo-degrau`)).json();
+      const s = j && j.sugestao;
+      if (!s) { el.hidden = true; return; }
+      const brl = (v) => 'R$ ' + Number(v).toLocaleString('pt-BR', { minimumFractionDigits: Number(v) % 1 ? 2 : 0, maximumFractionDigits: 2 });
+      const alvo = j.alvo || {};
+      const link = (t) => '/novo-pedido.html?' + new URLSearchParams({ tipo: t, doc: alvo.documento || '', nome: (alvo.nome && alvo.nome !== 'A identificar') ? alvo.nome : '' }).toString();
+      const linkVeic = (t) => '/veicular.html';
+      const href = (t) => t.startsWith('consulta_veicular') ? linkVeic(t) : link(t);
+      el.innerHTML = `
+        <div style="font-size:12px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:#1a3a8a">Próximo passo</div>
+        <div style="font-size:17px;font-weight:800;margin:4px 0 8px">${esc(s.nome)} — por mais ${brl(s.diferenca)}</div>
+        <ul style="margin:0 0 12px;padding-left:18px;font-size:14px;line-height:1.5">${s.motivos.map(m => `<li>${esc(m)}</li>`).join('')}</ul>
+        <a class="btn btn-primary" href="${href(s.tipo)}">Pedir ${esc(s.nome)} (${brl(s.preco)})</a>
+        ${s.alternativa ? `<div style="margin-top:10px;font-size:13px;color:#374151">Ou <a href="${href(s.alternativa.tipo)}"><strong>${esc(s.alternativa.nome)}</strong> por mais ${brl(s.alternativa.diferenca)}</a>: ${esc(s.alternativa.motivo)}</div>` : ''}`;
+      el.hidden = false;
+    } catch (_) { el.hidden = true; }
+  }
+
 
   function temRestricoes(dados) {
     const neg = dados.negativacoes || {};

@@ -1126,6 +1126,13 @@
   carregarEstimativasCusto();
   // Pré-seleção do produto via ?tipo= (vindo dos cards do dashboard)
   try { const _t = new URLSearchParams(location.search).get('tipo'); if (_t && PRODUTOS[_t]) selecionarProduto(_t); } catch (e) {}
+  // Vindo do "Próximo passo" de um relatório: já preenche o alvo
+  try {
+    const _q = new URLSearchParams(location.search);
+    const _doc = _q.get('doc'), _nome = _q.get('nome');
+    if (_doc) { const el = document.getElementById('alvo_documento'); el.value = _doc; if (typeof detectarTipo === 'function') detectarTipo(_doc); }
+    if (_nome) document.getElementById('alvo_nome').value = _nome;
+  } catch (e) {}
 </script>
 </body>
 </html>

@@ -705,4 +705,101 @@ function gerarChecklist(tipo, dadosAutomaticos) {
   return checklists[tipo] || [];
 }
 
-module.exports = { PRODUTOS, calcularScore, gerarChecklist };
+// ═══════════════════════════════════════════════════════════════
+// ESCADA DE PRODUTOS — "sempre vendendo um pouquinho a mais"
+// Cada relatório termina oferecendo o próximo degrau, com motivos tirados do
+// que FOI encontrado (dívida sem credor, processos, bens). Usado pelo PDF
+// (services/pdf/chrome.js) e pelas telas (GET /api/pedidos/:id/proximo-degrau).
+// ═══════════════════════════════════════════════════════════════
+const BRL = (v) => 'R$ ' + Number(v).toLocaleString('pt-BR', { minimumFractionDigits: Number(v) % 1 ? 2 : 0, maximumFractionDigits: 2 });
+
+function _achados(dados) {
+  const neg = dados.negativacoes || {};
+  const proc = dados.processos || {};
+  const prot = dados.protestos || {};
+  const vinc = dados.vinculos || {};
+  const hv = dados.historico_veiculos_proprietario || {};
+  const veic = dados.veiculos || {};
+  return {
+    pendencia: Number(neg.total_pendencias || 0),
+    temCredores: Array.isArray(neg.pendencias) && neg.pendencias.length > 0,
+    protestos: Math.max((neg.protestos || []).length, Number(prot.total || 0)),
+    processos: Number(proc.total || (Array.isArray(proc.processos) ? proc.processos.length : 0) || 0),
+    empresas: Number(vinc.total || (Array.isArray(vinc.empresas) ? vinc.empresas.length : 0) || 0),
+    veiculos: Math.max(
+      Array.isArray(hv.veiculos) ? hv.veiculos.length : Number(hv.total || 0),
+      Array.isArray(veic.veiculos) ? veic.veiculos.length : Number(veic.total || 0)
+    )
+  };
+}
+
+function sugerirProximoDegrau(tipo, dados = {}, alvoTipo = 'PF') {
+  const a = _achados(dados);
+  const pj = alvoTipo === 'PJ';
+  const dividas = [];
+  if (a.pendencia > 0) dividas.push(`${BRL(a.pendencia)} em pendências`);
+  if (a.protestos > 0) dividas.push(`${a.protestos} protesto(s)`);
+  if (a.processos > 0) dividas.push(`${a.processos} processo(s)`);
+  const resumoDividas = dividas.join(', ');
+
+  let destino = null, motivos = [], alternativa = null;
+  switch (tipo) {
+    case 'consulta_restricoes':
+      destino = pj ? 'dossie_pj' : 'dossie_pf';
+      if (a.pendencia > 0 && !a.temCredores) motivos.push(`Consta ${BRL(a.pendencia)} em pendências: o ${pj ? 'Dossiê PJ' : 'Dossiê'} mostra com quem (lista de credores).`);
+      else if (a.pendencia > 0) motivos.push(`Consta ${BRL(a.pendencia)} em pendências: o ${pj ? 'Dossiê PJ' : 'Dossiê'} cruza com os processos e dá o parecer.`);
+      else motivos.push('Nome limpo hoje, mas esta consulta não olha a Justiça: processos como réu, execuções e valor das causas.');
+      motivos.push(pj ? 'Quadro de sócios, processos trabalhistas e listas CEIS/CNEP.' : 'Telefones, endereços, renda estimada e score de risco 0–100.');
+      if (!pj) alternativa = { tipo: 'analise_inquilino', motivo: 'Para locação: renda × aluguel, despejos e recomendação aprovar / fiador / recusar.' };
+      break;
+    case 'analise_inquilino':
+    case 'dossie_pf':
+      destino = 'analise_devedor';
+      if (resumoDividas) motivos.push(`Encontramos ${resumoDividas}: a Análise de Devedor mostra se há bens que garantam o contrato ou a cobrança.`);
+      else motivos.push('Perfil sem dívidas: confirme se há patrimônio antes de dar prazo maior ou crédito alto.');
+      motivos.push('Veículos, empresas e participações, imóveis rurais e chance de recebimento.');
+      break;
+    case 'analise_devedor': {
+      destino = 'investigacao_patrimonial';
+      const bens = [];
+      if (a.empresas > 0) bens.push(`${a.empresas} empresa(s)`);
+      if (a.veiculos > 0) bens.push(`${a.veiculos} veículo(s)`);
+      if (bens.length) motivos.push(`Encontramos ${bens.join(' e ')}: a Investigação cruza familiares e sócios para achar bens em nome de terceiros.`);
+      else motivos.push('Nada em nome do devedor? A Investigação procura bens em nome de familiares, sócios e empresas ligadas (laranjas).');
+      motivos.push('Roteiro de imóveis urbanos e estratégia de penhora pronta para a execução.');
+      break;
+    }
+    case 'dossie_pj':
+      destino = 'due_diligence';
+      if (resumoDividas) motivos.push(`Encontramos ${resumoDividas}: a Due Diligence detalha o passivo e o risco de cada um.`);
+      motivos.push('Dossiê de cada sócio, certidões (PGFN, trabalhista, FGTS), marcas no INPI e parecer técnico final.');
+      break;
+    case 'consulta_veicular_simples':
+      destino = 'consulta_veicular_mediana';
+      motivos.push('Restrições judiciais (RENAJUD), sinistro e histórico de proprietários.');
+      break;
+    case 'consulta_veicular_mediana':
+      destino = 'consulta_veicular_completa';
+      motivos.push('Pacote total: todas as bases veiculares da Credify num relatório só.');
+      break;
+    default:
+      return null; // topo da escada (Investigação, Due Diligences, Completa)
+  }
+  const atual = PRODUTOS[tipo]?.preco || 0;
+  const prox = PRODUTOS[destino];
+  if (!prox) return null;
+  const out = {
+    tipo: destino,
+    nome: prox.nome,
+    preco: prox.preco,
+    diferenca: Math.round((prox.preco - atual) * 100) / 100,
+    motivos: motivos.slice(0, 3)
+  };
+  if (alternativa && PRODUTOS[alternativa.tipo]) {
+    const alt = PRODUTOS[alternativa.tipo];
+    out.alternativa = { tipo: alternativa.tipo, nome: alt.nome, preco: alt.preco, diferenca: Math.round((alt.preco - atual) * 100) / 100, motivo: alternativa.motivo };
+  }
+  return out;
+}
+
+module.exports = { PRODUTOS, calcularScore, gerarChecklist, sugerirProximoDegrau };

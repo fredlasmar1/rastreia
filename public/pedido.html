@@ -23,6 +23,7 @@
   <div id="conteudo">
     <div class="loading"><div class="spinner"></div>Carregando pedido...</div>
   </div>
+  <div class="card" style="padding:18px;margin-top:16px;border:1px solid #c7d2fe;background:#eef2ff;border-left:4px solid #1a3a8a" id="proximo-degrau" hidden></div>
 </div>
 
 <script>
@@ -73,8 +74,32 @@
     if (!data || data.erro) { document.getElementById('conteudo').innerHTML = '<div class="alert alert-error">Pedido não encontrado</div>'; return; }
     pedidoAtual = data;
     renderizar(data);
+    if ((data.dados || []).length) carregarProximoDegrau(data.id);
     if (usuario.perfil === 'admin' || usuario.perfil === 'operador') carregarCusto(data);
     if (usuario.perfil === 'admin') carregarCustoAdmin(data);
+  }
+
+  // Próximo degrau da escada (GET /api/pedidos/:id/proximo-degrau)
+  async function carregarProximoDegrau(pedidoId) {
+    const el = document.getElementById('proximo-degrau');
+    if (!el || !pedidoId) return;
+    try {
+      const j = await api(`/api/pedidos/${pedidoId}/proximo-degrau`);
+      const s = j && j.sugestao;
+      if (!s) { el.hidden = true; return; }
+      const brl = (v) => 'R$ ' + Number(v).toLocaleString('pt-BR', { minimumFractionDigits: Number(v) % 1 ? 2 : 0, maximumFractionDigits: 2 });
+      const alvo = j.alvo || {};
+      const link = (t) => '/novo-pedido.html?' + new URLSearchParams({ tipo: t, doc: alvo.documento || '', nome: (alvo.nome && alvo.nome !== 'A identificar') ? alvo.nome : '' }).toString();
+      const linkVeic = (t) => '/veicular.html';
+      const href = (t) => t.startsWith('consulta_veicular') ? linkVeic(t) : link(t);
+      el.innerHTML = `
+        <div style="font-size:12px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:#1a3a8a">Próximo passo</div>
+        <div style="font-size:17px;font-weight:800;margin:4px 0 8px">${esc(s.nome)} — por mais ${brl(s.diferenca)}</div>
+        <ul style="margin:0 0 12px;padding-left:18px;font-size:14px;line-height:1.5">${s.motivos.map(m => `<li>${esc(m)}</li>`).join('')}</ul>
+        <a class="btn btn-primary" href="${href(s.tipo)}">Pedir ${esc(s.nome)} (${brl(s.preco)})</a>
+        ${s.alternativa ? `<div style="margin-top:10px;font-size:13px;color:#374151">Ou <a href="${href(s.alternativa.tipo)}"><strong>${esc(s.alternativa.nome)}</strong> por mais ${brl(s.alternativa.diferenca)}</a>: ${esc(s.alternativa.motivo)}</div>` : ''}`;
+      el.hidden = false;
+    } catch (_) { el.hidden = true; }
   }
 
   async function carregarCustoAdmin(p) {

@@ -340,7 +340,7 @@ function blocoNegativacoes(doc, y, dados) {
     y = verificarPagina(doc, y, 32);
     doc.rect(MARGEM, y, LARGURA, 28).fill('#fef3c7');
     doc.fillColor('#92400e').fontSize(8).font('Helvetica')
-      .text('A base Direct Data confirmou pendências (total acima), mas não retornou os apontamentos individuais para este documento. Para detalhamento credor a credor pode ser necessária consulta complementar SCPC/Serasa direta.', MARGEM + 8, y + 4, { width: LARGURA - 16 });
+      .text('Esta consulta mostra o total das pendências. A lista credor a credor (quem cobra, valor e data de cada dívida) vem no Dossiê Pessoa Física — veja o Próximo passo no fim do relatório.', MARGEM + 8, y + 4, { width: LARGURA - 16 });
     y += 34;
   }
 

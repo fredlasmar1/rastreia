@@ -195,7 +195,38 @@ function blocoHistoricoScores(doc, y, dados, pedido, score) {
 // fontesExtras permite acrescentar fontes específicas do produto
 // (ex: Credify em análise veicular, ONR em due diligence imobiliária).
 // ═══════════════════════════════════════════════════════════════
+// Oferta do próximo degrau (services/produtos.js sugerirProximoDegrau)
+function blocoProximoDegrau(doc, y, sug) {
+  if (!sug) return y;
+  const brl = (v) => 'R$ ' + Number(v).toLocaleString('pt-BR', { minimumFractionDigits: Number(v) % 1 ? 2 : 0, maximumFractionDigits: 2 });
+  const linhas = [...sug.motivos];
+  doc.font('Helvetica').fontSize(8);
+  const hMotivos = linhas.reduce((h, m) => h + doc.heightOfString('•  ' + m, { width: LARGURA - 24 }) + 3, 0);
+  const hAlt = sug.alternativa ? doc.heightOfString(sug.alternativa.motivo, { width: LARGURA - 24 }) + 14 : 0;
+  const altura = 34 + hMotivos + hAlt + 10;
+  y = verificarPagina(doc, y + 8, altura);
+  doc.rect(MARGEM, y, LARGURA, altura).fill('#eef2ff');
+  doc.rect(MARGEM, y, 4, altura).fill(COR.azul);
+  doc.fillColor(COR.azul).fontSize(10).font('Helvetica-Bold')
+    .text(`PRÓXIMO PASSO: ${sug.nome.toUpperCase()}  —  por mais ${brl(sug.diferenca)}`, MARGEM + 12, y + 8, { width: LARGURA - 24 });
+  let yy = y + 24;
+  doc.fillColor('#1f2937').fontSize(8).font('Helvetica');
+  linhas.forEach(m => {
+    doc.text('•  ' + m, MARGEM + 12, yy, { width: LARGURA - 24 });
+    yy += doc.heightOfString('•  ' + m, { width: LARGURA - 24 }) + 3;
+  });
+  if (sug.alternativa) {
+    yy += 4;
+    doc.fillColor(COR.azul).fontSize(8).font('Helvetica-Bold')
+      .text(`Ou ${sug.alternativa.nome} por mais ${brl(sug.alternativa.diferenca)}:`, MARGEM + 12, yy, { width: LARGURA - 24 });
+    yy += 10;
+    doc.fillColor('#1f2937').font('Helvetica').text(sug.alternativa.motivo, MARGEM + 12, yy, { width: LARGURA - 24 });
+  }
+  return y + altura + 4;
+}
+
 function blocoFinal(doc, y, fontesExtras) {
+  y = blocoProximoDegrau(doc, y, doc.__proximoDegrau);
   const fontes = [
     'Receita Federal do Brasil (CPF/CNPJ)',
     'Direct Data - Cadastro, Score QUOD, Protestos e Negativações',

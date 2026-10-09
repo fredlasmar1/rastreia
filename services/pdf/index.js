@@ -16,7 +16,7 @@
 const PDFDocument = require('pdfkit');
 const fs = require('fs');
 const path = require('path');
-const { PRODUTOS, calcularScore, gerarChecklist } = require('../produtos');
+const { PRODUTOS, calcularScore, gerarChecklist, sugerirProximoDegrau } = require('../produtos');
 const storagePaths = require('../storage_paths');
 
 const renderers = {
@@ -72,6 +72,9 @@ function gerarDossie(pedido, dadosDB) {
         score = calcularScore(pedido.tipo, dados);
         checklist = gerarChecklist(pedido.tipo, dados);
       }
+
+      // Próximo degrau da escada: chrome.blocoFinal desenha antes do aviso LGPD
+      try { doc.__proximoDegrau = sugerirProximoDegrau(pedido.tipo, dados, pedido.alvo_tipo); } catch (_) { doc.__proximoDegrau = null; }
 
       // Despacho
       const renderFn = renderers[pedido.tipo] || renderers.dossie_pf;
