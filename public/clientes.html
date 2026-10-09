@@ -108,22 +108,27 @@
         <span id="plano-uso-num" style="font-weight:800;font-size:15px;color:#0f172a"></span>
       </div>
       <div style="height:8px;background:#eef2f7;border-radius:4px;overflow:hidden;margin:8px 0"><div id="plano-uso-bar" style="height:100%;width:0;background:#16a34a;transition:width .2s"></div></div>
+      <div id="plano-por-produto" style="display:none;margin-bottom:8px"></div>
       <div style="display:flex;gap:6px;flex-wrap:wrap">
+        <span id="plano-botoes-gerais" style="display:contents">
         <button class="btn btn-sm btn-primary" onclick="debitarPlano()">&#10003; Registrar consulta (&minus;1)</button>
         <button class="btn btn-sm btn-outline" onclick="creditarPlano()">&#8617; Desfazer (+1)</button>
+        </span>
         <button class="btn btn-sm btn-outline" onclick="resetarPlano()">&#10227; Resetar ciclo</button>
       </div>
     </div>
 
     <div style="font-size:12px;font-weight:700;color:#475569;margin-bottom:6px">Modelo</div>
     <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px">
-      <button class="btn btn-sm btn-outline" onclick="aplicarPreset('Garagem Start',30,390)">🚗 Garagem Start · 30 · R$390</button>
-      <button class="btn btn-sm btn-outline" onclick="aplicarPreset('Garagem Padrão',70,690)">🚗 Garagem Padrão · 70 · R$690</button>
-      <button class="btn btn-sm btn-outline" onclick="aplicarPreset('Garagem Pro',100,890)">🚗 Garagem Pro · 100 · R$890</button>
-      <button class="btn btn-sm btn-outline" onclick="aplicarPreset('Imobiliária Start',20,490)">🏠 Imob Start · 20 · R$490</button>
-      <button class="btn btn-sm btn-outline" onclick="aplicarPreset('Imobiliária Padrão',50,890)">🏠 Imob Padrão · 50 · R$890</button>
-      <button class="btn btn-sm btn-outline" onclick="aplicarPreset('Imobiliária Pro',70,1190)">🏠 Imob Pro · 70 · R$1.190</button>
+      <button class="btn btn-sm btn-outline" onclick="aplicarPreset('Garagem Start',390,{consulta_veicular_simples:30})">🚗 Garagem Start · 30 Veicular Simples · R$390</button>
+      <button class="btn btn-sm btn-outline" onclick="aplicarPreset('Garagem Padrão',690,{consulta_veicular_simples:70})">🚗 Garagem Padrão · 70 Veicular Simples · R$690</button>
+      <button class="btn btn-sm btn-outline" onclick="aplicarPreset('Garagem Pro',990,{consulta_veicular_simples:100})">🚗 Garagem Pro · 100 Veicular Simples · R$990</button>
+      <button class="btn btn-sm btn-outline" onclick="aplicarPreset('Imobiliária Start',649,{consulta_restricoes:20,analise_inquilino:6})">🏠 Imob Start · 20 Nome Limpo + 6 Inquilino · R$649</button>
+      <button class="btn btn-sm btn-outline" onclick="aplicarPreset('Imobiliária Padrão',1449,{consulta_restricoes:40,analise_inquilino:15})">🏠 Imob Padrão · 40 Nome Limpo + 15 Inquilino · R$1.449</button>
+      <button class="btn btn-sm btn-outline" onclick="aplicarPreset('Imobiliária Pro',2249,{consulta_restricoes:60,analise_inquilino:25})">🏠 Imob Pro · 60 Nome Limpo + 25 Inquilino · R$2.249</button>
     </div>
+    <div id="plano-cotas-resumo" style="display:none;font-size:12px;color:#334155;background:#eef2ff;border-radius:8px;padding:8px 10px;margin-bottom:12px"></div>
+    <div style="font-size:11px;color:#64748b;margin-bottom:12px">Crédito vale no mês e não acumula. Cada produto tem a sua cota; o que estiver fora do plano é cobrado avulso.</div>
     <div class="form-grid">
       <div class="form-group full"><label>Nome do plano</label><input type="text" id="plano-nome" placeholder="Ex: Profissional"></div>
       <div class="form-group"><label>Cota por mês</label><input type="number" id="plano-cota" min="0" placeholder="0"></div>
@@ -285,8 +290,38 @@
     preencherPlano(s);
     document.getElementById('plano-overlay').style.display = 'flex';
   }
+  let cotasPlano = null; // {tipo: qtd} do modelo escolhido; null = cota única (personalizado)
+  const NOME_PRODUTO = { consulta_restricoes: 'Nome Limpo ou Sujo', analise_inquilino: 'Análise de Inquilino', dossie_pf: 'Dossiê PF', dossie_pj: 'Dossiê PJ', analise_devedor: 'Análise de Devedor', consulta_veicular_simples: 'Veicular Simples', consulta_veicular_mediana: 'Veicular Mediana', consulta_veicular_completa: 'Veicular Completa' };
+  function mostrarResumoCotas() {
+    const el = document.getElementById('plano-cotas-resumo');
+    const campo = document.getElementById('plano-cota');
+    if (cotasPlano) {
+      el.innerHTML = 'Inclui por mês: <strong>' + Object.entries(cotasPlano).map(([t, q]) => `${q} ${esc(NOME_PRODUTO[t] || t)}`).join(' + ') + '</strong>';
+      el.innerHTML += ' · <a href="#" onclick="cotasPlano = null; mostrarResumoCotas(); return false">trocar por cota única</a>';
+      el.style.display = '';
+      campo.value = Object.values(cotasPlano).reduce((a, b) => a + b, 0);
+      campo.readOnly = true;
+    } else {
+      el.style.display = 'none';
+      campo.readOnly = false;
+    }
+  }
   function preencherPlano(s) {
     if (!s || s.erro) s = { cota_mensal: 0, consultas_usadas: 0, restantes: 0, valor_mensal: 0, plano_nome: '' };
+    cotasPlano = s.por_produto ? Object.fromEntries(s.por_produto.map(b => [b.tipo, b.cota])) : null;
+    mostrarResumoCotas();
+    const pp = document.getElementById('plano-por-produto');
+    if (s.por_produto) {
+      pp.innerHTML = s.por_produto.map(b => `<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;font-size:13px;padding:3px 0">
+          <span>${esc(b.nome)}: <strong>${b.usadas}/${b.cota}</strong> (restam ${b.restantes})</span>
+          <span style="display:flex;gap:4px"><button class="btn btn-sm btn-primary" onclick="debitarPlano('${b.tipo}')">&minus;1</button><button class="btn btn-sm btn-outline" onclick="creditarPlano('${b.tipo}')">+1</button></span>
+        </div>`).join('');
+      pp.style.display = '';
+      document.getElementById('plano-botoes-gerais').style.display = 'none';
+    } else {
+      pp.style.display = 'none';
+      document.getElementById('plano-botoes-gerais').style.display = 'contents';
+    }
     document.getElementById('plano-nome').value = s.plano_nome || '';
     document.getElementById('plano-cota').value = s.cota_mensal || '';
     document.getElementById('plano-valor').value = s.valor_mensal || '';
@@ -303,10 +338,11 @@
     }
   }
   function fecharPlano() { document.getElementById('plano-overlay').style.display = 'none'; carregarClientes(); }
-  function aplicarPreset(nome, cota, valor) {
+  function aplicarPreset(nome, valor, cotas) {
     document.getElementById('plano-nome').value = nome;
-    document.getElementById('plano-cota').value = cota;
     document.getElementById('plano-valor').value = valor;
+    cotasPlano = cotas;
+    mostrarResumoCotas();
   }
   async function salvarPlano() {
     const id = document.getElementById('plano-cliente-id').value;
@@ -315,6 +351,7 @@
       cota_mensal: parseInt(document.getElementById('plano-cota').value, 10) || 0,
       valor_mensal: parseFloat(document.getElementById('plano-valor').value) || 0
     };
+    if (cotasPlano) body.cotas = cotasPlano;
     const s = await apiJson(`/api/clientes/${id}/plano`, { method: 'PATCH', body: JSON.stringify(body) });
     if (!s) return;
     if (s.erro) return alerta(s.erro, 'error');
@@ -324,19 +361,20 @@
   async function removerPlano() {
     if (!confirm('Remover o plano deste cliente?')) return;
     const id = document.getElementById('plano-cliente-id').value;
+    cotasPlano = null;
     const s = await apiJson(`/api/clientes/${id}/plano`, { method: 'PATCH', body: JSON.stringify({ cota_mensal: 0, valor_mensal: 0, plano_nome: '' }) });
     if (s && !s.erro) { preencherPlano(s); alerta('Plano removido', 'success'); }
   }
-  async function debitarPlano() {
+  async function debitarPlano(tipo) {
     const id = document.getElementById('plano-cliente-id').value;
-    const s = await apiJson(`/api/clientes/${id}/plano/debitar`, { method: 'POST' });
+    const s = await apiJson(`/api/clientes/${id}/plano/debitar`, { method: 'POST', body: JSON.stringify(tipo ? { tipo } : {}) });
     if (!s) return;
     if (s.erro) { alerta(s.erro, 'error'); if (s.status) preencherPlano(s.status); return; }
     preencherPlano(s);
   }
-  async function creditarPlano() {
+  async function creditarPlano(tipo) {
     const id = document.getElementById('plano-cliente-id').value;
-    const s = await apiJson(`/api/clientes/${id}/plano/creditar`, { method: 'POST' });
+    const s = await apiJson(`/api/clientes/${id}/plano/creditar`, { method: 'POST', body: JSON.stringify(tipo ? { tipo } : {}) });
     if (s && !s.erro) preencherPlano(s);
   }
   async function resetarPlano() {

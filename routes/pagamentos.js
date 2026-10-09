@@ -255,7 +255,7 @@ async function pagamentoAlternativo(req, res) {
       if (!pedido.cliente_id) {
         return res.status(400).json({ erro: 'Pedido sem cliente cadastrado vinculado. Selecione um cliente para cobrar do plano dele.' });
       }
-      const deb = await planosCliente.debitar(pedido.cliente_id);
+      const deb = await planosCliente.debitar(pedido.cliente_id, pedido.tipo);
       if (!deb.ok) {
         return res.status(400).json({ erro: deb.erro || 'Não foi possível debitar do plano do cliente', status: deb.status });
       }

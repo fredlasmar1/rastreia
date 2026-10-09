@@ -124,7 +124,7 @@ router.patch('/:id/plano', autenticar, async (req, res) => {
 // Registra 1 consulta entregue (debita da cota)
 router.post('/:id/plano/debitar', autenticar, async (req, res) => {
   try {
-    const out = await planosCliente.debitar(req.params.id);
+    const out = await planosCliente.debitar(req.params.id, (req.body || {}).tipo);
     if (!out.ok) return res.status(400).json({ erro: out.erro, status: out.status });
     res.json(out.status);
   } catch (e) {
@@ -136,7 +136,7 @@ router.post('/:id/plano/debitar', autenticar, async (req, res) => {
 // Desfaz 1 consulta (corrige erro)
 router.post('/:id/plano/creditar', autenticar, async (req, res) => {
   try {
-    const out = await planosCliente.creditar(req.params.id);
+    const out = await planosCliente.creditar(req.params.id, (req.body || {}).tipo);
     res.json(out.status);
   } catch (e) {
     console.error('Erro creditar plano cliente:', e.message);
