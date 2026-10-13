@@ -313,6 +313,25 @@ router.post('/:pedidoId/aprovar', autenticar, async (req, res) => {
   }
 });
 
+// Minutas para o advogado (Word): revisional, notificação extrajudicial, proposta de acordo
+router.get('/:pedidoId/minuta/:tipo', autenticar, async (req, res) => {
+  try {
+    const u = await usuarioDb(req.usuario.id);
+    if (!u.pode_revisar_juridico && u.perfil !== 'admin') return res.status(403).json({ erro: 'Somente o advogado revisor ou o admin.' });
+    const p = (await pool.query('SELECT * FROM pedidos WHERE id = $1 AND deletado_em IS NULL', [req.params.pedidoId])).rows[0];
+    if (!p || p.tipo !== revisao.TIPO) return res.status(404).json({ erro: 'Revisão não encontrada' });
+    const reg = await revisao.obter(p.id);
+    if (!reg || !reg.calculo) return res.status(400).json({ erro: 'A minuta sai depois do cálculo.' });
+    const revisor = reg.revisor_id ? await usuarioDb(reg.revisor_id) : (u.pode_revisar_juridico ? u : null);
+    const m = require('../services/revisao_minutas').gerarMinuta(req.params.tipo, p, reg, revisor);
+    if (!m) return res.status(400).json({ erro: 'Tipo de minuta inválido.' });
+    await pool.query('INSERT INTO logs (pedido_id, usuario_id, acao, detalhes) VALUES ($1, $2, $3, $4)', [p.id, req.usuario.id, 'Revisão bancária: minuta gerada', req.params.tipo]);
+    res.setHeader('Content-Type', 'application/msword; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="${m.nome}"`);
+    res.send('\ufeff' + m.html);
+  } catch (e) { console.error('[revisao-bancaria] minuta:', e); res.status(500).json({ erro: 'Erro ao gerar a minuta' }); }
+});
+
 // Mensagem pronta para o cliente (enquanto o WhatsApp automático não está ligado)
 router.get('/:pedidoId/mensagem-cliente', autenticar, async (req, res) => {
   try {

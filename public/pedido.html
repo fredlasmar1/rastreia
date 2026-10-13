@@ -275,6 +275,14 @@
         h += `<div class="alert alert-info" style="margin-top:12px;font-size:13px">Aguardando revisão jurídica. Somente o advogado revisor habilitado pelo admin aprova o laudo.${pia.resumo_cliente ? `<div style="margin-top:6px"><strong>Prévia (IA):</strong> ${esc(pia.resumo_cliente)}</div>` : ''}</div>`;
       }
     }
+    if (['revisao_juridica', 'aprovado'].includes(e.etapa) && e.calculo && e.pode_revisar_juridico) {
+      h += `<div style="margin-top:14px;border:1px dashed #94a3b8;border-radius:10px;padding:10px 12px"><div style="font-weight:700;font-size:13px">Minutas para o advogado (Word, editável)</div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px">
+          <button class="btn btn-sm btn-outline" onclick="rbMinuta('revisional')">📄 Ação revisional + tutela</button>
+          <button class="btn btn-sm btn-outline" onclick="rbMinuta('notificacao')">✉ Notificação extrajudicial</button>
+          <button class="btn btn-sm btn-outline" onclick="rbMinuta('acordo')">🤝 Proposta de acordo</button>
+        </div><div style="font-size:11px;color:#6b7280;margin-top:6px">Números do cálculo; o que só o advogado sabe vem entre [colchetes].</div></div>`;
+    }
     if (e.etapa === 'aprovado') {
       const pronto = e.pedido.status === 'concluido' && e.pedido.relatorio_url;
       h += `<div class="alert ${pronto ? 'alert-success' : 'alert-warning'}" style="margin-top:12px;font-size:13px">Laudo aprovado${e.revisado_em ? ' em ' + new Date(e.revisado_em).toLocaleString('pt-BR') : ''}.
@@ -314,6 +322,14 @@
     const { r, j } = await rbPost('devolver', { motivo: m });
     if (!r.ok) { rbMsg(j.erro || 'Erro', false); return; }
     await carregarRevisao(rbEstado.pedido.id);
+  }
+  async function rbMinuta(tipo) {
+    const r = await fetch(`/api/revisao-bancaria/${rbEstado.pedido.id}/minuta/${tipo}`, { headers: { Authorization: `Bearer ${localStorage.getItem('rastreia_token')}` } });
+    if (!r.ok) { const j = await r.json().catch(() => ({})); mostrarAlerta(j.erro || 'Erro ao gerar a minuta', 'error'); return; }
+    const nome = ((r.headers.get('Content-Disposition') || '').match(/filename="([^"]+)"/) || [])[1] || `minuta_${tipo}.doc`;
+    const url = URL.createObjectURL(await r.blob());
+    const a = document.createElement('a'); a.href = url; a.download = nome; document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 5000);
   }
   // Envio manual do laudo: texto pronto com link assinado (30 dias)
   async function rbMensagemCliente(modo, btn) {

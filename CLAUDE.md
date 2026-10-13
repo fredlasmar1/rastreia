@@ -137,7 +137,13 @@ pago → aguardando_documentos (upload até 10 docs) → extraindo (Claude lê o
 | `services/revisao_bancaria_laudo.js` | PDF + conclusão + envios, idempotente |
 | `services/pdf/revisao_contrato_bancario.js` | laudo em 11 seções + anexo técnico |
 | `routes/revisao_bancaria.js` | `/api/revisao-bancaria/*` (conferência, taxa manual, aprovar, revisores) |
+| `services/revisao_analise.js` | análise rápida (aba `/revisao-contratos.html`): sobe o contrato → veredito PRELIMINAR sem cliente/valor; tabela `revisao_analises`; "Abrir revisão" reaproveita a leitura |
+| `services/revisao_minutas.js` | minutas Word (revisional + tutela, notificação, acordo) por modelo fixo com números do cálculo |
 
+- Módulo à PARTE do Rastreia: aba própria `/revisao-contratos.html`, fora do dashboard/lista/números do Rastreia; sem preço fixo (o operador digita `valor_customizado`, 0 = cortesia).
+- Valor incontroverso (CPC art. 330 §§2º-3º) = parcela revisada do cenário principal (`calculo.valor_incontroverso`).
+- Parcelas pagas: a IA conta em extrato/carnê (`dados_extraidos.pagamentos`); sem documento, estimativa pela data (marcada).
+- Entrega hoje é MANUAL: "Copiar mensagem"/"Abrir no WhatsApp" na tela da revisão (Evolution/SMTP não configurados).
 - Só aprova quem tem `usuarios.pode_revisar_juridico` (admin liga em Usuários, com OAB).
 - `/concluir` recusa sem parecer jurídico aprovado. Limiares do veredito e prescrição em `configuracoes`.
 - Testes sem banco/API: `node scripts/test-revisao-bancaria.js` (cálculo/teses) e
