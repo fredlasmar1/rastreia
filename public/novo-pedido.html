@@ -87,6 +87,57 @@
     <div style="font-size:12px;color:#6b7280">O relatório diz se pode alugar: APROVAR, APROVAR COM GARANTIA (qual e quanto) ou RECUSAR, comparando aluguel + encargos com a renda (ideal até 30%), despejos e dívidas.</div>
   </div>
 
+  <!-- Revisão de Contrato Bancário: dados do contrato (opcionais — a IA lê do contrato) + documentos + LGPD -->
+  <div class="pedido-section" id="secao-revisao" style="display:none">
+    <div class="section-title">Contrato bancário</div>
+    <div style="font-size:12px;color:#6b7280;margin-bottom:10px">Os campos abaixo são opcionais: a IA lê o contrato e o operador confere antes do cálculo.</div>
+    <div class="form-grid">
+      <div class="form-group">
+        <label>Tipo de operação</label>
+        <select id="rev_tipo_operacao">
+          <option value="">— a IA identifica —</option>
+          <option value="financiamento_veiculo">Financiamento de veículo</option>
+          <option value="emprestimo_pessoal">Empréstimo pessoal</option>
+          <option value="consignado">Consignado</option>
+          <option value="ccb_capital_giro">CCB / capital de giro</option>
+          <option value="cartao_credito">Cartão de crédito</option>
+          <option value="cheque_especial">Cheque especial</option>
+          <option value="financiamento_imobiliario">Financiamento imobiliário</option>
+          <option value="outro">Outro</option>
+        </select>
+      </div>
+      <div class="form-group"><label>Banco credor</label><input type="text" id="rev_banco" placeholder="Ex: Banco Pan"></div>
+      <div class="form-group"><label>Data da contratação</label><input type="date" id="rev_data"></div>
+      <div class="form-group"><label>Valor financiado (R$)</label><input type="text" id="rev_valor" inputmode="decimal" placeholder="Ex: 45.000,00"></div>
+      <div class="form-group"><label>Valor da parcela (R$)</label><input type="text" id="rev_parcela" inputmode="decimal" placeholder="Ex: 1.580,00"></div>
+      <div class="form-group"><label>Prazo (meses)</label><input type="number" id="rev_prazo" min="1" max="480"></div>
+      <div class="form-group"><label>Parcelas pagas</label><input type="number" id="rev_pagas" min="0" max="480"></div>
+      <div class="form-group">
+        <label>Situação</label>
+        <select id="rev_situacao">
+          <option value="">—</option>
+          <option value="em_dia">Em dia</option>
+          <option value="atrasado">Atrasado</option>
+          <option value="busca_apreensao">Busca e apreensão</option>
+          <option value="executado">Executado</option>
+          <option value="quitado">Quitado</option>
+        </select>
+      </div>
+    </div>
+    <div style="margin-top:12px">
+      <label style="font-weight:600;font-size:13px">Documentos (até 10): contrato obrigatório; extratos, boletos, carnê e cálculo do banco ajudam</label>
+      <div id="docs-revisao-lista" style="margin:8px 0"></div>
+      <label class="btn btn-outline" style="cursor:pointer;display:flex;align-items:center;justify-content:center;width:100%;padding:16px;border:2px dashed #cbd5e1;background:#f8fafc;color:#475569;text-transform:none;font-weight:500">
+        📎 Anexar contrato e documentos (PDF ou foto)
+        <input type="file" accept=".pdf,.jpg,.jpeg,.png,.webp" multiple style="display:none" onchange="adicionarDocsRevisao(this.files); this.value=''">
+      </label>
+    </div>
+    <label style="display:flex;gap:8px;align-items:flex-start;margin-top:12px;font-size:12px;color:#374151">
+      <input type="checkbox" id="rev_consentimento" style="margin-top:2px">
+      <span>O contratante autoriza a Recobro e o Balladão Advogados a tratar o contrato bancário e os documentos enviados exclusivamente para a revisão do contrato e a orientação jurídica, conforme a <a href="/privacidade.html#revisao-bancaria" target="_blank">Política de Privacidade</a> e os <a href="/termos.html#revisao-bancaria" target="_blank">Termos de Uso</a> (LGPD, art. 7º, V e VI).</span>
+    </label>
+  </div>
+
   <!-- Capacidade de Compra: o bem e a entrada (a parcela é calculada com eles) -->
   <div class="pedido-section" id="secao-compra" style="display:none">
     <div class="section-title">Dados da compra</div>
@@ -433,6 +484,11 @@
       dados: ['Identificação completa (marca, modelo, ano, chassi, renavam)', 'Situação atual do veículo no DETRAN', 'Restrições administrativas e judiciais', 'Alienação fiduciária e penhoras', 'Valor FIPE atualizado', 'Município e UF de registro', 'Histórico de roubo/furto'],
       publico: ['Comprador de veículo usado', 'Quem vai receber veículo como pagamento', 'Locadoras e revendas', 'Credor pesquisando veículo por placa', 'Leiloéiro e mecânica']
     },
+    revisao_contrato_bancario: { nome: 'Revisão de Contrato Bancário', preco: 1500, prazo: '48 horas', icone: '🏦',
+      argumento: 'O banco cobrou a mais? Conferimos a taxa real do contrato, comparamos com a taxa média do Banco Central do mês da contratação, recalculamos as parcelas e aplicamos as teses do STJ. Laudo com o valor cobrado a mais, a viabilidade e os próximos passos — revisado por advogado do Balladão.',
+      dados: ['Veredito: forte / moderada / fraca / inviável', 'Taxa real × declarada × média do BACEN', 'Cobrado × devido por cenário, total pago a mais e saldo revisado', 'Teses: juros, capitalização, TAC/TEC, tarifas, seguro, comissão de permanência, mora', 'Parecer jurídico do Balladão Advogados'],
+      publico: ['Financiamento de veículo, empréstimo, consignado, CCB', 'PJ com capital de giro', 'Quem está atrasado, com busca e apreensão ou execução']
+    },
     checagem_vendedor: { nome: 'Checagem do Vendedor', preco: 79, prazo: '30 minutos', icone: '📜',
       argumento: 'Antes de fechar a venda: o vendedor tem execução de dívida que pode anular o negócio (fraude à execução)? Débito trabalhista ou com a Receita/PGFN? Dívidas e protestos? Resposta LIVRE, ATENÇÃO ou RISCO, com as certidões oficiais.',
       dados: ['Veredito: livre / atenção / risco', 'Execuções contra o vendedor e valores', 'Certidão trabalhista (TST) e federal (Receita/PGFN) com comprovante', 'Dívidas, credores e protestos', 'Outros processos como réu'],
@@ -496,6 +552,22 @@
   function removerDocImovel(idx) {
     docsImovel.splice(idx, 1);
     renderDocsImovel();
+  }
+
+  // Revisão de Contrato Bancário — anexos (até 10, 20 MB cada)
+  let docsRevisao = [];
+  function adicionarDocsRevisao(files) {
+    for (const f of Array.from(files || [])) {
+      if (docsRevisao.length >= 10) { alerta('Máximo de 10 documentos.', 'error'); break; }
+      if (f.size > 20 * 1024 * 1024) { alerta(`${f.name}: acima de 20 MB.`, 'error'); continue; }
+      docsRevisao.push({ file: f, nome: f.name, tamanho: f.size });
+    }
+    renderDocsRevisao();
+  }
+  function removerDocRevisao(i) { docsRevisao.splice(i, 1); renderDocsRevisao(); }
+  function renderDocsRevisao() {
+    const el = document.getElementById('docs-revisao-lista');
+    el.innerHTML = docsRevisao.map((d, i) => `<div style="display:flex;justify-content:space-between;align-items:center;font-size:13px;padding:6px 8px;border:1px solid #e5e7eb;border-radius:6px;margin-bottom:4px"><span>📄 ${esc(d.nome)} <span style="color:#9ca3af">(${(d.tamanho / 1024 / 1024).toFixed(1)} MB)</span></span><button type="button" class="btn btn-sm btn-outline" onclick="removerDocRevisao(${i})">remover</button></div>`).join('');
   }
 
   function renderDocsImovel() {
@@ -659,6 +731,7 @@
 
     document.getElementById('secao-locacao').style.display = tipo === 'analise_inquilino' ? 'block' : 'none';
     document.getElementById('secao-compra').style.display = tipo === 'capacidade_compra' ? 'block' : 'none';
+    document.getElementById('secao-revisao').style.display = tipo === 'revisao_contrato_bancario' ? 'block' : 'none';
 
     // Mostrar/ocultar seção veicular
     const isVeicular = tipo === 'consulta_veicular';
@@ -772,6 +845,22 @@
       payload.alvo_documento = alvo_documento || null;
       payload.alvo_tipo = alvo_tipo;
       if (isImobiliaria && temDocs) payload.tem_documentos = true;
+      if (tipo === 'revisao_contrato_bancario') {
+        const numR = (id) => { const v = document.getElementById(id).value.replace(/[^\d,.]/g, ''); const n = v.includes(',') ? Number(v.replace(/\./g, '').replace(',', '.')) : Number(v); return Number.isFinite(n) && n > 0 ? n : null; };
+        if (!docsRevisao.length) return alerta('Anexe o contrato bancário (PDF ou foto).', 'error');
+        if (!document.getElementById('rev_consentimento').checked) return alerta('Marque o consentimento LGPD do contrato bancário.', 'error');
+        payload.consentimento_revisao = true;
+        payload.revisao = {
+          tipo_operacao: document.getElementById('rev_tipo_operacao').value || null,
+          banco: document.getElementById('rev_banco').value.trim() || null,
+          data_contratacao: document.getElementById('rev_data').value || null,
+          valor_financiado: numR('rev_valor'),
+          valor_parcela: numR('rev_parcela'),
+          prazo_meses: parseInt(document.getElementById('rev_prazo').value, 10) || null,
+          parcelas_pagas: document.getElementById('rev_pagas').value === '' ? null : parseInt(document.getElementById('rev_pagas').value, 10),
+          situacao: document.getElementById('rev_situacao').value || null
+        };
+      }
       if (tipo === 'capacidade_compra') {
         const numC = (id) => { const v = document.getElementById(id).value.replace(/[^\d,.]/g, ''); const n = v.includes(',') ? Number(v.replace(/\./g, '').replace(',', '.')) : Number(v); return Number.isFinite(n) && n > 0 ? n : null; };
         payload.compra_tipo_bem = document.getElementById('compra_tipo_bem').value;
@@ -814,6 +903,19 @@
       });
       const data = await res.json();
       if (!res.ok) return alerta(data.erro || 'Erro ao criar pedido', 'error');
+
+      // Upload do contrato bancário e anexos (Revisão de Contrato Bancário)
+      if (tipo === 'revisao_contrato_bancario' && docsRevisao.length) {
+        try {
+          const fdR = new FormData();
+          for (const d of docsRevisao) fdR.append('documentos', d.file, d.nome);
+          const upR = await fetch(`/api/pedidos/${data.id}/documentos`, { method: 'POST', headers: { Authorization: `Bearer ${token}` }, body: fdR });
+          if (!upR.ok) {
+            const eu = await upR.json().catch(() => ({}));
+            alerta('Pedido criado, mas falhou o upload do contrato: ' + (eu.erro || upR.status) + '. Envie de novo na tela do pedido.', 'error');
+          }
+        } catch (eUpR) { console.warn('upload revisão erro:', eUpR); }
+      }
 
       // Upload de documentos do imóvel (apenas Due Diligence Imobiliária)
       // V2: nao manda mais tipo — a IA classifica no servidor.

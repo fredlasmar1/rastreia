@@ -146,6 +146,12 @@ async function liberarPedidoPago(pedidoId) {
       await logar(pedido.id, 'Análise iniciada (auto)', 'Disparada após confirmação de pagamento via MP');
     }
 
+    // Revisão de Contrato Bancário NÃO gera PDF sozinho: segue as etapas
+    // (extração IA → conferência → cálculo → revisão jurídica → laudo).
+    if (pedido.tipo === 'revisao_contrato_bancario') {
+      return await require('./revisao_bancaria').iniciarAposPagamento(pedido.id);
+    }
+
     const cons = await executarConsultas(pedido);
     if (cons.erro) {
       await logar(pedido.id, 'Pipeline auto: bloqueado nas consultas', cons.mensagem || cons.erro);

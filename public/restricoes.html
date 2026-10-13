@@ -401,7 +401,7 @@
         : `<a class="btn btn-primary" href="${href(s.tipo)}">Pedir ${esc(s.nome)} (${brl(s.preco)})</a>`;
       const alt = !s.alternativa ? '' : (s.alternativa.upgrade
         ? `<div style="margin-top:10px;font-size:13px;color:#374151">Ou <a href="#" onclick="fazerUpgrade('${pedidoId}','${s.alternativa.tipo}', this); return false"><strong>upgrade para ${esc(s.alternativa.nome)}</strong> por + ${brl(dif(s.alternativa))}</a>: ${esc(s.alternativa.motivo)}</div>`
-        : `<div style="margin-top:10px;font-size:13px;color:#374151">Ou <a href="${href(s.alternativa.tipo)}"><strong>${esc(s.alternativa.nome)}</strong> por mais ${brl(s.alternativa.diferenca)}</a>: ${esc(s.alternativa.motivo)}</div>`);
+        : `<div style="margin-top:10px;font-size:13px;color:#374151">Ou <a href="${href(s.alternativa.tipo)}"><strong>${esc(s.alternativa.nome)}</strong> ${s.alternativa.sem_upgrade ? `(${brl(s.alternativa.preco)})` : `por mais ${brl(s.alternativa.diferenca)}`}</a>: ${esc(s.alternativa.motivo)}</div>`);
       el.innerHTML = `
         <div style="font-size:12px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:#1a3a8a">Próximo passo</div>
         <div style="font-size:17px;font-weight:800;margin:4px 0 8px">${esc(s.nome)} — por mais ${brl(dif(s))}</div>

@@ -187,6 +187,8 @@ const APIS_POR_PRODUTO = {
   analise_inquilino: BASE_PF,
   // Checagem do Vendedor: cadastro, processos, negativações + Boa Vista, protestos, CNDT, certidão federal
   checagem_vendedor: ['directd_pf_plus', 'directd_processos', 'directd_negativacoes', 'directd_boa_vista', 'directd_protestos', 'dd_cndt', 'dd_certidao_conjunta'],
+  // Revisão de Contrato Bancário: duas chamadas Claude (extração + parecer) + BACEN (grátis)
+  revisao_contrato_bancario: ['claude_revisao_extracao', 'claude_revisao_parecer', 'bacen_sgs'],
   // Capacidade de Compra: cadastro, score, negativações + Boa Vista, renda (sem processos)
   capacidade_compra: ['directd_pf_plus', 'directd_score_quod', 'directd_negativacoes', 'directd_boa_vista', 'directd_perfil_economico'],
   dossie_pf: BASE_PF,

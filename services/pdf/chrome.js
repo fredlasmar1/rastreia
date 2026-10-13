@@ -218,7 +218,7 @@ function blocoProximoDegrau(doc, y, sug) {
   if (sug.alternativa) {
     yy += 4;
     doc.fillColor(COR.azul).fontSize(8).font('Helvetica-Bold')
-      .text(`Ou ${sug.alternativa.nome} por mais ${brl(sug.alternativa.diferenca)}:`, MARGEM + 12, yy, { width: LARGURA - 24 });
+      .text(sug.alternativa.sem_upgrade ? `Ou ${sug.alternativa.nome} (${brl(sug.alternativa.preco)}):` : `Ou ${sug.alternativa.nome} por mais ${brl(sug.alternativa.diferenca)}:`, MARGEM + 12, yy, { width: LARGURA - 24 });
     yy += 10;
     doc.fillColor('#1f2937').font('Helvetica').text(sug.alternativa.motivo, MARGEM + 12, yy, { width: LARGURA - 24 });
   }

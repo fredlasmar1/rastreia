@@ -111,6 +111,30 @@ const PRODUTOS = {
     fatores_score: [],
   },
 
+  // Revisão de Contrato Bancário (13/10/2026). Ticket alto, revisão humana
+  // obrigatória (parecer jurídico do Balladão antes do laudo). Veredito próprio
+  // (forte/moderada/fraca/inviável) no motor services/revisao_bancaria_calculo.js.
+  revisao_contrato_bancario: {
+    nome: 'Revisão de Contrato Bancário',
+    preco: 1500,
+    prazo_horas: 48,
+    icone: '🏦',
+    publico_alvo: [
+      'PF com financiamento de veículo, empréstimo pessoal, consignado ou CCB',
+      'PJ com capital de giro ou CCB',
+      'Quem está atrasado, com busca e apreensão ou execução do banco',
+    ],
+    argumento: 'O banco cobrou a mais? Conferimos a taxa real do contrato, comparamos com a taxa média do Banco Central do mês da contratação, recalculamos as parcelas e aplicamos as teses do STJ (juros abusivos, tarifas, seguro, capitalização, encargos). Laudo com o valor cobrado a mais, a viabilidade e os próximos passos — revisado por advogado do Balladão.',
+    dados_entregues: [
+      { secao: 'VEREDITO', campos: ['Forte / Moderada / Fraca / Inviável', 'Economia estimada'] },
+      { secao: 'TAXA', campos: ['Taxa real (implícita) × declarada', 'Taxa média BACEN do mês da contratação'] },
+      { secao: 'COBRADO × DEVIDO', campos: ['Nova parcela por cenário', 'Total pago a mais', 'Saldo revisado', 'Repetição simples e em dobro'] },
+      { secao: 'TESES', campos: ['Juros, capitalização, TAC/TEC, tarifas, seguro, comissão de permanência, mora'] },
+      { secao: 'PARECER', campos: ['Parecer jurídico do Balladão Advogados', 'Próximos passos'] },
+    ],
+    fatores_score: [],
+  },
+
   // Degrau entre o Dossiê PJ (R$ 89,90) e a Due Diligence (R$ 497) — 09/10/2026
   dossie_pj_socios: {
     nome: 'Dossiê PJ + Sócios',
@@ -803,6 +827,17 @@ function _achados(dados) {
   };
 }
 
+// Dívida com banco/financeira relevante → oferecer a Revisão de Contrato Bancário
+// (abre pedido novo; não é upgrade — precisa do contrato e de consentimento próprio).
+const RE_BANCO = /\b(banco|bco|financeira|financ|cr[eé]dito|credifibra|aymor[eé]|santander|ita[uú]|bradesco|caixa|pan\b|bv\b|omni|losango|crefisa|nubank|c6|safra|sicoob|sicredi|mercantil|daycoval|agibank|banrisul|inter\b|original|votorantim|porto ?seguro|portoseg)/i;
+function _alternativaRevisao(dados) {
+  const pend = ((dados.negativacoes || {}).pendencias || []);
+  const bancarias = pend.filter(p => RE_BANCO.test(String(p.credor || '')) && Number(p.valor || 0) >= 5000);
+  if (!bancarias.length) return null;
+  const total = bancarias.reduce((s, p) => s + Number(p.valor || 0), 0);
+  return { tipo: 'revisao_contrato_bancario', motivo: `Dívida bancária de ${BRL(total)} (${[...new Set(bancarias.map(p => p.credor))].slice(0, 2).join(', ')}): a Revisão de Contrato Bancário confere se o banco cobrou juros e tarifas acima do permitido.`, sem_upgrade: true };
+}
+
 function sugerirProximoDegrau(tipo, dados = {}, alvoTipo = 'PF') {
   const a = _achados(dados);
   const pj = alvoTipo === 'PJ';
@@ -825,12 +860,14 @@ function sugerirProximoDegrau(tipo, dados = {}, alvoTipo = 'PF') {
     case 'analise_inquilino':
     case 'dossie_pf':
       destino = 'analise_devedor';
+      alternativa = _alternativaRevisao(dados);
       if (resumoDividas) motivos.push(`Encontramos ${resumoDividas}: a Análise de Devedor mostra se há bens que garantam o contrato ou a cobrança.`);
       else motivos.push('Perfil sem dívidas: confirme se há patrimônio antes de dar prazo maior ou crédito alto.');
       motivos.push('Veículos, empresas e participações, imóveis rurais e chance de recebimento.');
       break;
     case 'analise_devedor': {
       destino = 'investigacao_patrimonial';
+      alternativa = _alternativaRevisao(dados);
       const bens = [];
       if (a.empresas > 0) bens.push(`${a.empresas} empresa(s)`);
       if (a.veiculos > 0) bens.push(`${a.veiculos} veículo(s)`);
@@ -884,7 +921,7 @@ function sugerirProximoDegrau(tipo, dados = {}, alvoTipo = 'PF') {
   };
   if (alternativa && PRODUTOS[alternativa.tipo]) {
     const alt = PRODUTOS[alternativa.tipo];
-    out.alternativa = { tipo: alternativa.tipo, nome: alt.nome, preco: alt.preco, diferenca: Math.round((alt.preco - atual) * 100) / 100, motivo: alternativa.motivo };
+    out.alternativa = { tipo: alternativa.tipo, nome: alt.nome, preco: alt.preco, diferenca: Math.round((alt.preco - atual) * 100) / 100, motivo: alternativa.motivo, ...(alternativa.sem_upgrade ? { sem_upgrade: true } : {}) };
   }
   return out;
 }

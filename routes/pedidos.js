@@ -12,6 +12,7 @@ const { notificarClienteConcluido, notificarOperadorNovoPedido } = require('../s
 const { criarPreferenceParaPedido, configurado: mpConfigurado } = require('../services/mercadopago');
 const { PRODUTOS, sugerirProximoDegrau } = require('../services/produtos');
 const { assinar, assinarPedido, VALIDADE } = require('../services/link_relatorio');
+const revisaoBancaria = require('../services/revisao_bancaria');
 const credifyCatalogo = require('../services/credify/catalogo');
 const analiseIA = require('../services/analise_documentos_ia');
 const pedidoAlvos = require('../services/pedido_alvos');
@@ -23,11 +24,15 @@ const UPLOADS_ROOT = storagePaths.UPLOADS_DIR;
 const MIMES_DOCUMENTOS = new Set([
   'application/pdf', 'image/jpeg', 'image/jpg', 'image/png', 'image/webp'
 ]);
-const MAX_DOCS_POR_PEDIDO = 5;
+const MAX_DOCS_POR_PEDIDO = 5;            // Due Diligence Imobiliária
+const MAX_DOCS_REVISAO_BANCARIA = 10;     // contrato + extratos/boletos/carnê/cálculo do banco
+const TIPOS_COM_UPLOAD = new Set(['due_diligence_imobiliaria', 'revisao_contrato_bancario']);
 // V2: tipos sao classificados pela IA. O upload aceita o campo `tipo` se o cliente
 // quiser sugerir, mas e opcional — default e null e a IA decide.
 const TIPOS_DOCUMENTOS_VALIDOS = new Set([
-  'matricula', 'escritura', 'iptu', 'contrato', 'certidao_onus', 'itbi', 'outro'
+  'matricula', 'escritura', 'iptu', 'contrato', 'certidao_onus', 'itbi', 'outro',
+  // Revisão de Contrato Bancário
+  'extrato', 'boleto', 'carne', 'calculo_banco'
 ]);
 
 const uploadDocumentos = multer({
@@ -42,7 +47,7 @@ const uploadDocumentos = multer({
       cb(null, `${Date.now()}_${safeOrig}`);
     }
   }),
-  limits: { fileSize: 20 * 1024 * 1024, files: MAX_DOCS_POR_PEDIDO },
+  limits: { fileSize: 20 * 1024 * 1024, files: MAX_DOCS_REVISAO_BANCARIA },
   fileFilter: (req, file, cb) => {
     if (MIMES_DOCUMENTOS.has((file.mimetype || '').toLowerCase())) return cb(null, true);
     cb(new Error('Tipo de arquivo não suportado. Use PDF, JPG ou PNG.'));
@@ -56,6 +61,7 @@ const PRECOS = {
   checagem_vendedor: 79,
   dossie_pj: 89.90,
   dossie_pj_socios: 189,
+  revisao_contrato_bancario: 1500,
   due_diligence: 497,
   due_diligence_imobiliaria: 797,
   analise_devedor: 99,
@@ -69,6 +75,7 @@ const PRECOS = {
 
 const PRAZOS = {
   dossie_pf: 2,
+  revisao_contrato_bancario: 48,
   dossie_pj_socios: 2,
   analise_inquilino: 2,
   capacidade_compra: 0.25,
@@ -195,7 +202,9 @@ router.post('/', autenticar, async (req, res) => {
       // Aprovação de Inquilino: valores da locação
       locacao_aluguel, locacao_encargos, renda_declarada,
       // Capacidade de Compra: bem, valor, entrada, prazo
-      compra_tipo_bem, compra_valor, compra_entrada, compra_prazo
+      compra_tipo_bem, compra_valor, compra_entrada, compra_prazo,
+      // Revisão de Contrato Bancário: dados do contrato (opcionais) + consentimento LGPD
+      revisao, consentimento_revisao
     } = req.body;
     const numPos = (v) => { const n = Number(v); return Number.isFinite(n) && n > 0 ? Math.round(n * 100) / 100 : null; };
 
@@ -208,6 +217,9 @@ router.post('/', autenticar, async (req, res) => {
     // Linha veicular antiga (Básico/Completo/Premium + add-ons leilão/CNH) saiu
     // da venda em 08/10/2026: o Premium e os add-ons cobravam consultas que o
     // pipeline não executa. Veículo é vendido pelos pacotes de /veicular.html.
+    if (tipo === 'revisao_contrato_bancario' && !consentimento_revisao) {
+      return res.status(400).json({ erro: 'Marque o consentimento LGPD para o tratamento do contrato bancário.' });
+    }
     if (tipo === 'capacidade_compra' && !numPos(compra_valor)) {
       return res.status(400).json({ erro: 'Informe o valor do imóvel ou do veículo: é com ele que a Capacidade de Compra calcula a parcela.' });
     }
@@ -291,6 +303,9 @@ router.post('/', autenticar, async (req, res) => {
     const ADDON_BV_PRODUTOS = new Set(['dossie_pf', 'dossie_pj', 'analise_devedor', 'investigacao_patrimonial', 'due_diligence', 'analise_inquilino']);
     const usaBoaVista = !!addon_boa_vista && ADDON_BV_PRODUTOS.has(tipo);
     if (usaBoaVista) valor += 29;
+    // Revisão Bancária: preço configurável (fixo ou % do valor financiado com mínimo)
+    const revisaoInformados = tipo === 'revisao_contrato_bancario' ? revisaoBancaria.normalizarInformados(revisao || {}) : null;
+    if (revisaoInformados) valor = await revisaoBancaria.precoRevisao(revisaoInformados.valor_financiado);
 
     // Admin/operador pode sobrescrever o valor final (ex: desconto ou cobrança especial)
     if (typeof valor_customizado === 'number' && valor_customizado >= 0) {
@@ -350,6 +365,11 @@ router.post('/', autenticar, async (req, res) => {
     const pedido = result.rows[0];
     await pool.query('INSERT INTO logs (pedido_id, usuario_id, acao, detalhes) VALUES ($1, $2, $3, $4)',
       [pedido.id, req.usuario.id, 'Pedido criado', `Finalidade: ${finalidade} | IP: ${ip}`]);
+    if (tipo === 'revisao_contrato_bancario') {
+      await revisaoBancaria.criarRegistro(pedido.id, revisaoInformados, !!consentimento_revisao);
+      await pool.query('INSERT INTO logs (pedido_id, usuario_id, acao, detalhes) VALUES ($1, $2, $3, $4)',
+        [pedido.id, req.usuario.id, 'Revisão bancária: consentimento LGPD', `Aceite do tratamento do contrato bancário | IP: ${ip}`]);
+    }
     if (tipo === 'capacidade_compra') {
       const upd = await pool.query(
         `UPDATE pedidos SET compra_tipo_bem = $1, compra_valor = $2, compra_entrada = $3, compra_prazo = $4, renda_declarada = $5
@@ -489,7 +509,7 @@ router.get('/:id', autenticar, async (req, res) => {
 // na fase de analise. O campo `tipos` continua aceito (compatibilidade), mas
 // e ignorado se nao vier — o tipo fica NULL ate a IA preencher.
 router.post('/:id/documentos', autenticar, (req, res) => {
-  uploadDocumentos.array('documentos', MAX_DOCS_POR_PEDIDO)(req, res, async (err) => {
+  uploadDocumentos.array('documentos', MAX_DOCS_REVISAO_BANCARIA)(req, res, async (err) => {
     if (err) {
       return res.status(400).json({ erro: err.message || 'Erro no upload' });
     }
@@ -503,16 +523,18 @@ router.post('/:id/documentos', autenticar, (req, res) => {
         arquivos.forEach(a => { try { fs.unlinkSync(a.path); } catch (_) {} });
         return res.status(404).json({ erro: 'Pedido não encontrado' });
       }
-      if (pResult.rows[0].tipo !== 'due_diligence_imobiliaria') {
+      const tipoPedido = pResult.rows[0].tipo;
+      if (!TIPOS_COM_UPLOAD.has(tipoPedido)) {
         arquivos.forEach(a => { try { fs.unlinkSync(a.path); } catch (_) {} });
-        return res.status(400).json({ erro: 'Upload de documentos só é permitido para Due Diligence Imobiliária' });
+        return res.status(400).json({ erro: 'Upload de documentos só é permitido para Due Diligence Imobiliária e Revisão de Contrato Bancário' });
       }
+      const maxDocs = tipoPedido === 'revisao_contrato_bancario' ? MAX_DOCS_REVISAO_BANCARIA : MAX_DOCS_POR_PEDIDO;
 
-      // Limite total: existentes + novos <= MAX_DOCS_POR_PEDIDO
+      // Limite total: existentes + novos <= maxDocs
       const jaExistem = await pool.query('SELECT COUNT(*) FROM pedido_documentos WHERE pedido_id = $1', [pedidoId]);
-      if (parseInt(jaExistem.rows[0].count, 10) + arquivos.length > MAX_DOCS_POR_PEDIDO) {
+      if (parseInt(jaExistem.rows[0].count, 10) + arquivos.length > maxDocs) {
         arquivos.forEach(a => { try { fs.unlinkSync(a.path); } catch (_) {} });
-        return res.status(400).json({ erro: `Máximo de ${MAX_DOCS_POR_PEDIDO} documentos por pedido` });
+        return res.status(400).json({ erro: `Máximo de ${maxDocs} documentos por pedido` });
       }
 
       // Tipos: aceita JSON ('["matricula","escritura"]') OU array de strings
@@ -540,10 +562,12 @@ router.post('/:id/documentos', autenticar, (req, res) => {
         inseridos.push(r.rows[0]);
       }
       // marca status pendente; processo real roda quando rodar /consultar
-      await pool.query(
-        `UPDATE pedidos SET analise_ia_status = 'pendente', atualizado_em = NOW() WHERE id = $1`,
-        [pedidoId]
-      );
+      if (tipoPedido === 'due_diligence_imobiliaria') {
+        await pool.query(
+          `UPDATE pedidos SET analise_ia_status = 'pendente', atualizado_em = NOW() WHERE id = $1`,
+          [pedidoId]
+        );
+      }
       res.status(201).json({ documentos: inseridos });
     } catch (e) {
       console.error('[pedidos] upload documentos:', e);
@@ -582,7 +606,7 @@ router.get('/:id/proximo-degrau', autenticar, async (req, res) => {
     const dif = (t) => Math.round(((PRODUTOS[t]?.preco || 0) - Number(valor || 0)) * 100) / 100;
     if (sugestao && pago) {
       sugestao.upgrade = { diferenca: dif(sugestao.tipo) };
-      if (sugestao.alternativa) sugestao.alternativa.upgrade = { diferenca: dif(sugestao.alternativa.tipo) };
+      if (sugestao.alternativa && !sugestao.alternativa.sem_upgrade) sugestao.alternativa.upgrade = { diferenca: dif(sugestao.alternativa.tipo) };
     }
     res.json({ sugestao, pode_upgrade: pago, alvo: { documento: alvo_documento, nome: alvo_nome, tipo: alvo_tipo } });
   } catch (e) {
@@ -629,7 +653,7 @@ router.post('/:id/upgrade', autenticar, async (req, res) => {
     for (const r of rows.rows) dados[r.fonte] = typeof r.dados === 'string' ? JSON.parse(r.dados) : r.dados;
     const sug = sugerirProximoDegrau(origem.tipo, dados, origem.alvo_tipo);
     if (!sug) return res.status(400).json({ erro: 'Este produto já é o topo da escada.' });
-    const permitidos = [sug.tipo, sug.alternativa?.tipo].filter(Boolean);
+    const permitidos = [sug.tipo, !sug.alternativa?.sem_upgrade && sug.alternativa?.tipo].filter(Boolean);
     const destino = (req.body && req.body.tipo) || sug.tipo;
     if (!permitidos.includes(destino)) return res.status(400).json({ erro: 'Upgrade não disponível para este produto.' });
     const valor = Math.round(((PRODUTOS[destino]?.preco || 0) - Number(origem.valor || 0)) * 100) / 100;
@@ -877,6 +901,10 @@ async function executarConsultasParaPedido(pedidoId, usuarioId) {
 // Executar consultas automáticas
 router.post('/:id/consultar', autenticar, async (req, res) => {
   try {
+    const tp = await pool.query('SELECT tipo FROM pedidos WHERE id = $1', [req.params.id]);
+    if (tp.rows[0]?.tipo === 'revisao_contrato_bancario') {
+      return res.status(400).json({ erro: 'A Revisão de Contrato Bancário não usa consultas automáticas: siga as etapas da revisão (conferência, cálculo e revisão jurídica).' });
+    }
     const out = await executarConsultasParaPedido(req.params.id, req.usuario.id);
     if (out.erro) {
       return res.status(out.status || 400).json({ erro: out.erro, mensagem: out.mensagem });
@@ -895,6 +923,13 @@ router.post('/:id/concluir', autenticar, async (req, res) => {
     const pResult = await pool.query('SELECT * FROM pedidos WHERE id = $1', [req.params.id]);
     if (pResult.rows.length === 0) return res.status(404).json({ erro: 'Pedido não encontrado' });
     let pedido = pResult.rows[0];
+    // Revisão Bancária: laudo só com parecer jurídico aprovado
+    if (pedido.tipo === 'revisao_contrato_bancario') {
+      const rv = await revisaoBancaria.obter(pedido.id);
+      if (!rv || rv.etapa !== 'aprovado' || !rv.parecer_juridico || !rv.revisor_id) {
+        return res.status(400).json({ erro: 'Laudo bloqueado: a Revisão de Contrato Bancário precisa de parecer jurídico aprovado por advogado revisor.' });
+      }
+    }
     let dadosResult = await pool.query('SELECT * FROM dados_consulta WHERE pedido_id = $1', [pedido.id]);
 
     // Rede de segurança (todos os tipos): se as consultas externas (Receita
