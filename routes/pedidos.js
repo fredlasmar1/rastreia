@@ -561,6 +561,15 @@ router.post('/:id/documentos', autenticar, (req, res) => {
         );
         inseridos.push(r.rows[0]);
       }
+      // Revisão Bancária paga esperando o contrato: dispara a extração em background
+      if (tipoPedido === 'revisao_contrato_bancario') {
+        const rv = await revisaoBancaria.obter(pedidoId);
+        const st = (await pool.query('SELECT status FROM pedidos WHERE id = $1', [pedidoId])).rows[0]?.status;
+        if (rv && rv.etapa === 'aguardando_documentos' && ['pago', 'em_andamento'].includes(st)) {
+          require('../services/revisao_bancaria_ia').extrairContrato(pedidoId, { usuarioId: req.usuario.id })
+            .catch(e => console.warn('[revisao] extração após upload falhou:', e.message));
+        }
+      }
       // marca status pendente; processo real roda quando rodar /consultar
       if (tipoPedido === 'due_diligence_imobiliaria') {
         await pool.query(

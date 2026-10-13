@@ -23,6 +23,7 @@
   <div id="conteudo">
     <div class="loading"><div class="spinner"></div>Carregando pedido...</div>
   </div>
+  <div class="card" id="revisao-box" hidden style="padding:18px;margin-top:16px"></div>
   <div class="card" id="locacao-box" hidden style="padding:18px;margin-top:16px"></div>
   <div class="card" style="padding:18px;margin-top:16px;border:1px solid #c7d2fe;background:#eef2ff;border-left:4px solid #1a3a8a" id="proximo-degrau" hidden></div>
 </div>
@@ -76,9 +77,148 @@
     pedidoAtual = data;
     renderizar(data);
     renderLocacao(data);
+    if (data.tipo === 'revisao_contrato_bancario') carregarRevisao(data.id);
     if ((data.dados || []).length) carregarProximoDegrau(data.id);
     if (usuario.perfil === 'admin' || usuario.perfil === 'operador') carregarCusto(data);
     if (usuario.perfil === 'admin') carregarCustoAdmin(data);
+  }
+
+  // ── Revisão de Contrato Bancário: painel por etapa ─────────────────────
+  // Conferência (entrega 4). Cálculo e revisão jurídica entram nas entregas 5 e 6.
+  const RB_ETAPAS = { aguardando_documentos: 'Aguardando contrato', extraindo: 'Lendo o contrato (IA)…', conferencia_operador: 'Conferência do operador', calculando: 'Calculando', revisao_juridica: 'Revisão jurídica', aprovado: 'Aprovado', reprovado_juridico: 'Devolvido pelo jurídico' };
+  const RB_CAMPOS = [
+    ['Contrato', [
+      ['instituicao.nome', 'Banco credor'], ['instituicao.cnpj', 'CNPJ do banco'],
+      ['contratante.nome', 'Contratante'], ['contratante.cpf_cnpj', 'CPF/CNPJ do contratante'],
+      ['pfpj', 'Pessoa', 'select', ['PF', 'PJ']],
+      ['tipo_operacao', 'Tipo de operação', 'select', ['', 'financiamento_veiculo', 'emprestimo_pessoal', 'consignado', 'ccb_capital_giro', 'cartao_credito', 'cheque_especial', 'financiamento_imobiliario', 'outro']],
+      ['subtipo', 'Subtipo (consignado: inss/publico/privado)', 'select', ['', 'inss', 'publico', 'privado', 'parcelado', 'ate_365']],
+      ['operacao.numero_contrato', 'Nº do contrato'], ['operacao.data_contratacao', 'Data da contratação', 'date'],
+      ['operacao.data_primeiro_vencimento', '1º vencimento', 'date'],
+      ['situacao', 'Situação', 'select', ['', 'em_dia', 'atrasado', 'busca_apreensao', 'executado', 'quitado']],
+      ['parcelas_pagas', 'Parcelas pagas', 'number']
+    ]],
+    ['Valores e taxas', [
+      ['operacao.valor_liberado', 'Valor liberado (R$)', 'number'], ['operacao.valor_financiado_total', 'Valor financiado total (R$)', 'number'],
+      ['operacao.prazo_meses', 'Prazo (meses)', 'number'], ['operacao.valor_parcela', 'Parcela (R$)', 'number'],
+      ['operacao.sistema_amortizacao', 'Sistema', 'select', ['nao_informado', 'price', 'sac', 'outro']],
+      ['operacao.taxa_juros_mensal_declarada', 'Taxa mensal declarada (%)', 'number'], ['operacao.taxa_juros_anual_declarada', 'Taxa anual declarada (%)', 'number'],
+      ['operacao.cet_mensal', 'CET mensal (%)', 'number'], ['operacao.cet_anual', 'CET anual (%)', 'number'],
+      ['operacao.capitalizacao_expressa', 'Capitalização expressa?', 'bool'], ['operacao.clausula_capitalizacao_trecho', 'Trecho da capitalização', 'text'],
+      ['iof.valor', 'IOF (R$)', 'number'], ['iof.financiado', 'IOF financiado?', 'bool']
+    ]],
+    ['Garantia e mora', [
+      ['garantia.tipo', 'Garantia', 'select', ['', 'alienacao_fiduciaria', 'consignacao', 'aval', 'nenhuma', 'outro']], ['garantia.bem_descricao', 'Bem'],
+      ['encargos_mora.juros_mora', 'Juros de mora (% a.m.)', 'number'], ['encargos_mora.multa_percentual', 'Multa (%)', 'number'],
+      ['encargos_mora.comissao_permanencia', 'Comissão de permanência?', 'bool'], ['encargos_mora.comissao_permanencia_cumulada', 'Cumulada com outros encargos?', 'bool'],
+      ['encargos_mora.trecho', 'Trecho dos encargos', 'text']
+    ]]
+  ];
+  let rbEstado = null;
+  const rbGet = (o, p) => p.split('.').reduce((a, k) => (a == null ? a : a[k]), o);
+  const rbSet = (o, p, v) => { const ks = p.split('.'); let a = o; ks.slice(0, -1).forEach(k => { if (a[k] == null || typeof a[k] !== 'object') a[k] = {}; a = a[k]; }); a[ks[ks.length - 1]] = v; };
+  async function carregarRevisao(id) {
+    const box = document.getElementById('revisao-box');
+    try {
+      const r = await fetch(`/api/revisao-bancaria/${id}`, { headers: { Authorization: `Bearer ${localStorage.getItem('rastreia_token')}` } });
+      if (!r.ok) { box.hidden = true; return; }
+      rbEstado = await r.json();
+      rbEstado.original = JSON.parse(JSON.stringify(rbEstado.campos));
+      renderRevisao();
+    } catch (_) { box.hidden = true; }
+  }
+  function rbConfianca(path) {
+    const c = rbEstado.confianca || {}; const folha = path.split('.').pop();
+    return c[path] || c[folha] || null;
+  }
+  function rbPagina(path) {
+    const folha = path.split('.').pop();
+    const p = (rbEstado.paginas || []).find(x => x.campo === path || x.campo === folha);
+    return p && p.pagina ? `pág. ${p.pagina}` : '';
+  }
+  function rbInput(path, label, tipo, opts) {
+    const v = rbGet(rbEstado.campos, path);
+    const conf = rbConfianca(path);
+    const editado = (rbEstado.campos.campos_editados || []).includes(path);
+    const estilo = conf === 'baixa' ? 'background:#fef9c3;border-color:#eab308' : '';
+    const id = 'rb-' + path.replace(/\./g, '-');
+    let campo;
+    if (tipo === 'select') campo = `<select id="${id}" data-path="${path}" style="width:100%;${estilo}">${opts.map(o => `<option value="${o}" ${String(v ?? '') === o ? 'selected' : ''}>${o || '—'}</option>`).join('')}</select>`;
+    else if (tipo === 'bool') campo = `<select id="${id}" data-path="${path}" data-tipo="bool" style="width:100%;${estilo}"><option value="" ${v == null ? 'selected' : ''}>—</option><option value="true" ${v === true ? 'selected' : ''}>Sim</option><option value="false" ${v === false ? 'selected' : ''}>Não</option></select>`;
+    else if (tipo === 'text') campo = `<textarea id="${id}" data-path="${path}" rows="2" style="width:100%;${estilo}">${esc(v ?? '')}</textarea>`;
+    else campo = `<input id="${id}" data-path="${path}" data-tipo="${tipo || 'text'}" type="${tipo === 'date' ? 'date' : 'text'}" inputmode="${tipo === 'number' ? 'decimal' : 'text'}" value="${esc(v ?? '')}" style="width:100%;${estilo}">`;
+    return `<label style="font-size:12px;display:block">${esc(label)}${conf ? ` <span style="color:${conf === 'baixa' ? '#a16207' : '#6b7280'}">(${conf})</span>` : ''}${rbPagina(path) ? ` <span style="color:#6b7280">${rbPagina(path)}</span>` : ''}${editado ? ' <span style="color:#1d4ed8">✎ conferido manualmente</span>' : ''}${campo}</label>`;
+  }
+  function rbLista(nome, itens, chaveFin) {
+    return `<div style="margin-top:10px"><div style="font-weight:600;font-size:13px">${nome}</div>${(itens || []).map((it, i) => `
+      <div style="display:grid;grid-template-columns:minmax(0,2fr) minmax(0,1fr) auto;gap:6px;align-items:end;margin-top:6px">
+        <label style="font-size:12px">Nome<input data-lista="${nome}" data-i="${i}" data-k="${nome === 'Seguros' ? 'tipo' : 'nome'}" value="${esc(it.nome || it.tipo || '')}" style="width:100%"></label>
+        <label style="font-size:12px">Valor (R$)<input data-lista="${nome}" data-i="${i}" data-k="valor" inputmode="decimal" value="${esc(it.valor ?? '')}" style="width:100%"></label>
+        <label style="font-size:12px">Financiado<select data-lista="${nome}" data-i="${i}" data-k="${chaveFin}"><option value="true" ${it[chaveFin] ? 'selected' : ''}>Sim</option><option value="false" ${!it[chaveFin] ? 'selected' : ''}>Não</option></select></label>
+      </div>${it.trecho ? `<div style="font-size:11px;color:#6b7280;margin-top:2px">“${esc(it.trecho)}”</div>` : ''}`).join('') || '<div style="font-size:12px;color:#6b7280">Nenhum.</div>'}
+      <button type="button" class="btn btn-sm btn-outline" style="margin-top:6px" onclick="rbAddItem('${nome}')">+ adicionar</button></div>`;
+  }
+  function rbAddItem(nome) {
+    rbColetar();
+    const k = nome === 'Seguros' ? 'seguros' : 'tarifas';
+    rbEstado.campos[k] = [...(rbEstado.campos[k] || []), nome === 'Seguros' ? { tipo: '', valor: null, financiado: true } : { nome: '', valor: null, financiada: true }];
+    renderRevisao();
+  }
+  function renderRevisao() {
+    const box = document.getElementById('revisao-box'); const e = rbEstado;
+    const conferindo = ['conferencia_operador', 'aguardando_documentos', 'reprovado_juridico', 'calculando'].includes(e.etapa);
+    let h = `<div style="display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;align-items:center">
+      <div style="font-weight:800;font-size:16px">🏦 Revisão de Contrato Bancário</div>
+      <span class="badge" style="background:#e0e7ff;color:#1e3a8a">${esc(RB_ETAPAS[e.etapa] || e.etapa)}</span></div>
+      <div style="font-size:13px;color:#4b5563;margin:6px 0 10px">Documentos: ${e.documentos.map(d => `${esc(d.filename)}${d.tipo ? ` <em>(${esc(d.tipo)})</em>` : ''}`).join(' · ') || '<strong style="color:#b91c1c">nenhum — envie o contrato</strong>'}</div>`;
+    if (e.alertas_leitura.length) h += `<div class="alert alert-warning" style="font-size:13px">Alertas da leitura: <ul style="margin:4px 0 0 18px">${e.alertas_leitura.map(a => `<li>${esc(a)}</li>`).join('')}</ul></div>`;
+    if (e.etapa === 'extraindo') h += `<div style="font-size:14px">A IA está lendo o contrato. Atualize em alguns instantes.</div>`;
+    if (conferindo) {
+      RB_CAMPOS.forEach(([grupo, campos]) => {
+        h += `<div style="font-weight:700;margin:12px 0 6px">${grupo}</div><div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:8px">${campos.map(c => rbInput(c[0], c[1], c[2], c[3])).join('')}</div>`;
+      });
+      h += rbLista('Tarifas', e.campos.tarifas, 'financiada') + rbLista('Seguros', e.campos.seguros, 'financiado');
+      h += `<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:14px">
+        <button class="btn btn-outline" onclick="rbSalvar(false)">Salvar</button>
+        <button class="btn btn-primary" onclick="rbSalvar(true)">✓ Confirmar dados</button>
+        ${e.documentos.length ? `<button class="btn btn-outline" onclick="rbReextrair()">↻ Ler o contrato de novo (IA)</button>` : ''}
+        <span id="rb-msg" style="font-size:13px;align-self:center"></span></div>`;
+    }
+    if (typeof renderRevisaoResultado === 'function') h += renderRevisaoResultado(e);
+    box.innerHTML = h; box.hidden = false;
+  }
+  function rbColetar() {
+    const c = rbEstado.campos; const orig = rbEstado.original; const editados = new Set(c.campos_editados || []);
+    document.querySelectorAll('#revisao-box [data-path]').forEach(el => {
+      const p = el.dataset.path; let v = el.value;
+      if (el.dataset.tipo === 'bool') v = v === '' ? null : v === 'true';
+      else if (el.dataset.tipo === 'number') { const t = String(v).replace(/[^\d,.-]/g, ''); v = t === '' ? null : Number(t.includes(',') ? t.replace(/\./g, '').replace(',', '.') : t); if (!Number.isFinite(v)) v = null; }
+      else if (v === '') v = null;
+      if (JSON.stringify(v ?? null) !== JSON.stringify(rbGet(orig, p) ?? null)) editados.add(p);
+      rbSet(c, p, v);
+    });
+    document.querySelectorAll('#revisao-box [data-lista]').forEach(el => {
+      const k = el.dataset.lista === 'Seguros' ? 'seguros' : 'tarifas'; const i = Number(el.dataset.i); const campo = el.dataset.k;
+      let v = el.value; if (campo === 'valor') { const t = v.replace(/[^\d,.-]/g, ''); v = t === '' ? null : Number(t.includes(',') ? t.replace(/\./g, '').replace(',', '.') : t); }
+      if (campo === 'financiada' || campo === 'financiado') v = v === 'true';
+      c[k][i] = { ...c[k][i], [campo]: v };
+    });
+    if (JSON.stringify(c.tarifas) !== JSON.stringify(orig.tarifas)) editados.add('tarifas');
+    if (JSON.stringify(c.seguros) !== JSON.stringify(orig.seguros)) editados.add('seguros');
+    c.campos_editados = [...editados];
+  }
+  async function rbSalvar(confirmar) {
+    rbColetar();
+    const msg = document.getElementById('rb-msg'); msg.style.color = '#374151'; msg.textContent = confirmar ? 'Confirmando e calculando…' : 'Salvando…';
+    const r = await fetch(`/api/revisao-bancaria/${rbEstado.pedido.id}/conferencia`, { method: 'PUT', headers: { Authorization: `Bearer ${localStorage.getItem('rastreia_token')}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ dados: rbEstado.campos, confirmar }) });
+    const j = await r.json();
+    if (!r.ok) { msg.style.color = '#b91c1c'; msg.textContent = j.erro || 'Erro ao salvar'; return; }
+    await carregarRevisao(rbEstado.pedido.id);
+  }
+  async function rbReextrair() {
+    const msg = document.getElementById('rb-msg'); msg.textContent = 'Lendo o contrato…';
+    await fetch(`/api/revisao-bancaria/${rbEstado.pedido.id}/extrair`, { method: 'POST', headers: { Authorization: `Bearer ${localStorage.getItem('rastreia_token')}` } });
+    await carregarRevisao(rbEstado.pedido.id);
   }
 
   // Aprovação de Inquilino: aluguel/encargos/renda comprovada (o veredito do PDF depende deles)
