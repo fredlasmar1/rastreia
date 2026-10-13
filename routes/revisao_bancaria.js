@@ -313,6 +313,24 @@ router.post('/:pedidoId/aprovar', autenticar, async (req, res) => {
   }
 });
 
+// Mensagem pronta para o cliente (enquanto o WhatsApp automático não está ligado)
+router.get('/:pedidoId/mensagem-cliente', autenticar, async (req, res) => {
+  try {
+    const p = (await pool.query('SELECT * FROM pedidos WHERE id = $1 AND deletado_em IS NULL', [req.params.pedidoId])).rows[0];
+    if (!p || p.tipo !== revisao.TIPO) return res.status(404).json({ erro: 'Revisão não encontrada' });
+    if (p.status !== 'concluido' || !p.relatorio_url) return res.status(400).json({ erro: 'O laudo ainda não foi gerado.' });
+    const reg = await revisao.obter(p.id);
+    const { VALIDADE } = require('../services/link_relatorio');
+    const link = (process.env.BASE_URL || 'https://www.recobrorastreia.com.br') + assinar(p.relatorio_url, VALIDADE.WHATSAPP);
+    const wpp = await revisao.config('balladao_whatsapp', '');
+    const texto = require('../services/revisao_bancaria_laudo').mensagemCliente(p, reg, link, wpp);
+    let fone = String(p.cliente_whatsapp || '').replace(/\D/g, '');
+    if (fone && !fone.startsWith('55')) fone = '55' + fone;
+    await pool.query('INSERT INTO logs (pedido_id, usuario_id, acao) VALUES ($1, $2, $3)', [p.id, req.usuario.id, 'Revisão bancária: mensagem do laudo copiada para envio manual']);
+    res.json({ texto, link, whatsapp: fone || null, validade_dias: 30 });
+  } catch (e) { console.error('[revisao-bancaria] mensagem:', e); res.status(500).json({ erro: 'Erro ao montar a mensagem' }); }
+});
+
 // Aprovado mas o laudo não saiu (falha no PDF): gera de novo, sem duplicar envios
 router.post('/:pedidoId/gerar-laudo', autenticar, async (req, res) => {
   try {

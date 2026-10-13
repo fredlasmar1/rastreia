@@ -106,7 +106,7 @@ async function encaminharBalladao(pedido, reg, linkAbs, usuarioId) {
     await log(pedido.id, usuarioId, 'Revisão bancária: oportunidade para o Balladão (sem webhook)', resumo);
   }
   // Sem webhook (ou falhou): avisa o admin no WhatsApp
-  const admin = process.env.WHATSAPP_OPERADOR;
+  const admin = (await revisao.config('revisao_aviso_whatsapp', '')) || process.env.WHATSAPP_OPERADOR;
   if (admin) {
     await enviarMensagem(admin, `⚖️ *RASTREIA — Oportunidade para o Balladão*\n\n${resumo}\nContato: ${pedido.cliente_nome}${pedido.cliente_whatsapp ? ' — ' + pedido.cliente_whatsapp : ''}\nProtocolo #${pedido.numero}\n📄 ${linkAbs}`);
   }

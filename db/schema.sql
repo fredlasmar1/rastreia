@@ -462,7 +462,8 @@ INSERT INTO configuracoes (chave, valor) VALUES
   ('revisao_bancaria_economia_forte_pct', '15'),     -- % do valor financiado
   ('revisao_bancaria_economia_moderada_pct', '5'),
   ('revisao_bancaria_prescricao_anos', '10'),        -- após a quitação
-  ('balladao_whatsapp', '')
+  ('balladao_whatsapp', ''),
+  ('revisao_aviso_whatsapp', '')                     -- quem recebe o aviso dos casos fortes/moderados
 ON CONFLICT (chave) DO NOTHING;
 
 -- Custo da Revisão Bancária (estimativa até o registro por tokens — item 13)
