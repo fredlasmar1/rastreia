@@ -116,4 +116,33 @@ Recobro Recuperação de Crédito | Anápolis-GO`;
   return { ok: true, messageId: info.messageId };
 }
 
-module.exports = { enviarLinkPagamento, configurado };
+// Laudo da Revisão de Contrato Bancário (link assinado, 30 dias)
+async function enviarLaudoRevisao({ para, nomeCliente, numeroPedido, link, veredito, economia, banco }) {
+  if (!para) throw new Error('Email do destinatário é obrigatório');
+  const transporter = obterTransporter();
+  const remetente = process.env.SMTP_FROM || process.env.SMTP_USER;
+  const protocolo = numeroPedido ? `#${numeroPedido}` : '';
+  const econ = Number(economia) > 0 ? fmtMoeda(economia) : null;
+  const html = `
+  <div style="font-family:Helvetica,Arial,sans-serif;max-width:560px;margin:0 auto;color:#111827">
+    <div style="background:#1a3a5c;color:#fff;padding:18px 22px;border-radius:8px 8px 0 0">
+      <div style="font-size:18px;font-weight:700">Laudo de Revisão de Contrato Bancário</div>
+      <div style="font-size:12px;opacity:0.85">Recobro Recuperação de Crédito · Balladão Advogados</div>
+    </div>
+    <div style="background:#fff;border:1px solid #e5e7eb;border-top:0;padding:24px;border-radius:0 0 8px 8px">
+      <p style="margin:0 0 14px;font-size:15px">Olá, ${escHtml(nomeCliente || 'cliente')}!</p>
+      <p style="margin:0 0 14px;font-size:14px;line-height:1.55">O laudo do seu contrato${banco ? ' com ' + escHtml(banco) : ''} está pronto${protocolo ? ' (protocolo ' + escHtml(protocolo) + ')' : ''}.</p>
+      <p style="margin:0 0 6px;font-size:14px">Viabilidade da revisão: <strong>${escHtml(veredito || '—')}</strong></p>
+      ${econ ? `<p style="margin:0 0 14px;font-size:14px">Economia estimada: <strong>${escHtml(econ)}</strong></p>` : ''}
+      <p style="text-align:center;margin:24px 0">
+        <a href="${escHtml(link)}" style="background:#1a3a5c;color:#fff;text-decoration:none;padding:13px 26px;border-radius:8px;font-weight:700;font-size:15px;display:inline-block">Abrir o laudo</a>
+      </p>
+      <p style="margin:14px 0 0;font-size:12px;color:#6b7280;line-height:1.55">O link vale por 30 dias. Não interrompa os pagamentos sem orientação jurídica.</p>
+    </div>
+  </div>`;
+  const texto = `Olá, ${nomeCliente || 'cliente'}!\n\nO laudo do seu contrato${banco ? ' com ' + banco : ''} está pronto${protocolo ? ' (protocolo ' + protocolo + ')' : ''}.\nViabilidade: ${veredito || '—'}${econ ? '\nEconomia estimada: ' + econ : ''}\n\nLaudo: ${link}\n\nNão interrompa os pagamentos sem orientação jurídica.\nRecobro Recuperação de Crédito | Anápolis-GO`;
+  const info = await transporter.sendMail({ from: remetente, to: para, subject: `Laudo de Revisão de Contrato Bancário${protocolo ? ' ' + protocolo : ''}`, text: texto, html });
+  return { ok: true, messageId: info.messageId };
+}
+
+module.exports = { enviarLinkPagamento, enviarLaudoRevisao, configurado };

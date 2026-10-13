@@ -154,6 +154,13 @@ async function calcularCustoPedido(rows) {
   // Boa Vista: uma cobrança por alvo (negativações e o add-on usam a mesma chamada em cache)
   const bvContada = new Set();
   for (const { fonte, dados } of parsed) {
+    // Revisão Bancária: custo REAL de cada chamada Claude (tokens × preço), gravado por chamada
+    if (fonte === 'custo_ia_revisao') {
+      const v = Number(dados && dados.custo_brl) || 0;
+      breakdown.push({ fonte, api: `claude_revisao_${(dados && dados.etapa) || 'ia'}`, valor_brl: Math.round(v * 10000) / 10000 });
+      total += v;
+      continue;
+    }
     // Upgrade: fonte reaproveitada do pedido de origem já foi paga lá
     const reaproveitado = !!(dados && dados.reaproveitado_de);
     if (!reaproveitado) for (const chave of chavesPorFonte(fonte, dados)) add(fonte, chave);

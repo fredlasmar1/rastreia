@@ -36,6 +36,7 @@ const renderers = {
   consulta_veicular_mediana: require('./consulta_veicular_dd').render,
   consulta_veicular_completa: require('./consulta_veicular_dd').render,
   consulta_restricoes: require('./consulta_restricoes').render,
+  revisao_contrato_bancario: require('./revisao_contrato_bancario').render,
 };
 
 const TIPOS_VEICULAR_PACOTES = new Set([
@@ -70,7 +71,7 @@ function gerarDossie(pedido, dadosDB) {
 
       // Consulta veicular não calcula score geral — próprio renderer lida
       let score, checklist;
-      if (pedido.tipo === 'consulta_veicular' || pedido.tipo === 'consulta_restricoes' || TIPOS_VEICULAR_PACOTES.has(pedido.tipo)) {
+      if (pedido.tipo === 'consulta_veicular' || pedido.tipo === 'consulta_restricoes' || pedido.tipo === 'revisao_contrato_bancario' || TIPOS_VEICULAR_PACOTES.has(pedido.tipo)) {
         score = { score: '-', classificacao: '-', alertas: [], contribuicoes: [] };
         checklist = [];
       } else {

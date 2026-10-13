@@ -273,7 +273,12 @@
         h += `<div class="alert alert-info" style="margin-top:12px;font-size:13px">Aguardando revisão jurídica. Somente o advogado revisor habilitado pelo admin aprova o laudo.${pia.resumo_cliente ? `<div style="margin-top:6px"><strong>Prévia (IA):</strong> ${esc(pia.resumo_cliente)}</div>` : ''}</div>`;
       }
     }
-    if (e.etapa === 'aprovado') h += `<div class="alert alert-success" style="margin-top:12px;font-size:13px">Laudo aprovado${e.revisado_em ? ' em ' + new Date(e.revisado_em).toLocaleString('pt-BR') : ''}.</div>`;
+    if (e.etapa === 'aprovado') {
+      const pronto = e.pedido.status === 'concluido' && e.pedido.relatorio_url;
+      h += `<div class="alert ${pronto ? 'alert-success' : 'alert-warning'}" style="margin-top:12px;font-size:13px">Laudo aprovado${e.revisado_em ? ' em ' + new Date(e.revisado_em).toLocaleString('pt-BR') : ''}.
+        ${pronto ? ` <a href="${esc(e.pedido.relatorio_url)}" target="_blank" rel="noopener" style="font-weight:700">Abrir o laudo (PDF)</a>`
+          : ` O PDF ainda não foi gerado. <button class="btn btn-sm btn-primary" id="rb-regerar" onclick="rbGerarLaudo(this)">Gerar o laudo de novo</button> <span id="rb-j-msg" style="font-size:13px"></span>`}</div>`;
+    }
     return h;
   }
   function rbParecerIa() {
@@ -303,6 +308,12 @@
     const { r, j } = await rbPost('devolver', { motivo: m });
     if (!r.ok) { rbMsg(j.erro || 'Erro', false); return; }
     await carregarRevisao(rbEstado.pedido.id);
+  }
+  async function rbGerarLaudo(btn) {
+    if (btn.disabled) return; btn.disabled = true; btn.textContent = 'Gerando…';
+    const { r, j } = await rbPost('gerar-laudo');
+    if (!r.ok) { btn.disabled = false; btn.textContent = 'Gerar o laudo de novo'; rbMsg(j.erro || 'Erro', false); return; }
+    location.reload();
   }
   async function rbRecalcular() { rbMsg('Recalculando…', true); const { r, j } = await rbPost('recalcular'); if (!r.ok) rbMsg(j.erro || 'Erro', false); await carregarRevisao(rbEstado.pedido.id); }
   async function rbTaxaManual() {

@@ -133,15 +133,15 @@ async function aprovar(pedidoId, revisor, parecerJuridico, parecerIaEditado) {
   const reg = await revisao.obter(pedidoId);
   if (!virou) {
     if (reg.etapa === 'aprovado') {
-      const p = (await pool.query('SELECT relatorio_url FROM pedidos WHERE id = $1', [pedidoId])).rows[0];
-      return { ok: true, ja_aprovado: true, url: p?.relatorio_url || null };
+      const p = (await pool.query('SELECT status, relatorio_url FROM pedidos WHERE id = $1', [pedidoId])).rows[0];
+      if (p && p.status === 'concluido' && p.relatorio_url) return { ok: true, ja_aprovado: true, url: p.relatorio_url };
+      // Aprovado mas o laudo não saiu (falha no PDF): tenta de novo, sem duplicar
+      const r2 = await require('./revisao_bancaria_laudo').concluirRevisao(pedidoId, revisor);
+      return { ...r2, ja_aprovado: true };
     }
     return { ok: false, erro: 'A revisão não está na etapa jurídica.' };
   }
-  let concluir = null;
-  try { concluir = require('./revisao_bancaria_laudo').concluirRevisao; } catch (_) { /* entrega 6 */ }
-  if (!concluir) return { ok: true, aprovado: true, laudo: 'pendente (entrega 6)' };
-  return concluir(pedidoId, revisor);
+  return require('./revisao_bancaria_laudo').concluirRevisao(pedidoId, revisor);
 }
 
 module.exports = { processarCalculo, informarTaxaManual, casoParaParecer, limiares, aprovar };

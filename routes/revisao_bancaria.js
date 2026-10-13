@@ -14,9 +14,10 @@ const router = express.Router();
 const { pool } = require('../db');
 const { autenticar } = require('./auth');
 const revisao = require('../services/revisao_bancaria');
+const { assinar } = require('../services/link_relatorio');
 
 async function carregarPedido(id) {
-  const r = await pool.query("SELECT id, numero, tipo, status, alvo_nome, alvo_documento, alvo_tipo FROM pedidos WHERE id = $1 AND deletado_em IS NULL", [id]);
+  const r = await pool.query("SELECT id, numero, tipo, status, relatorio_url, alvo_nome, alvo_documento, alvo_tipo FROM pedidos WHERE id = $1 AND deletado_em IS NULL", [id]);
   return r.rows[0] && r.rows[0].tipo === revisao.TIPO ? r.rows[0] : null;
 }
 
@@ -61,7 +62,7 @@ router.get('/:pedidoId', autenticar, async (req, res) => {
     const extr = reg.dados_extraidos || {};
     const u = (await pool.query('SELECT perfil, pode_revisar_juridico FROM usuarios WHERE id = $1', [req.usuario.id])).rows[0] || {};
     res.json({
-      pedido, etapa: reg.etapa, documentos: docs,
+      pedido: { ...pedido, relatorio_url: pedido.relatorio_url ? assinar(pedido.relatorio_url) : null }, etapa: reg.etapa, documentos: docs,
       campos: camposIniciais(reg, pedido),
       confianca: extr.confianca_por_campo || {},
       paginas: extr.paginas_relevantes || [],
@@ -192,8 +193,27 @@ router.post('/:pedidoId/aprovar', autenticar, async (req, res) => {
     const parecer = String((req.body || {}).parecer_juridico || '').trim();
     if (parecer.length < 30) return res.status(400).json({ erro: 'Escreva o parecer jurídico (mínimo de 30 caracteres).' });
     const out = await fluxo.aprovar(pedido.id, u, parecer, req.body.parecer_ia);
+    if (out.url) out.url = assinar(out.url);
     res.status(out.ok ? 200 : 409).json(out);
-  } catch (e) { console.error('[revisao-bancaria] aprovar:', e); res.status(500).json({ erro: 'Erro ao aprovar' }); }
+  } catch (e) {
+    console.error('[revisao-bancaria] aprovar:', e);
+    res.status(500).json({ erro: 'A aprovação foi registrada, mas o laudo não foi gerado. Use "Gerar o laudo de novo".' });
+  }
+});
+
+// Aprovado mas o laudo não saiu (falha no PDF): gera de novo, sem duplicar envios
+router.post('/:pedidoId/gerar-laudo', autenticar, async (req, res) => {
+  try {
+    const pedido = await carregarPedido(req.params.pedidoId);
+    if (!pedido) return res.status(404).json({ erro: 'Revisão não encontrada' });
+    const u = await usuarioDb(req.usuario.id);
+    if (!u.pode_revisar_juridico && u.perfil !== 'admin') return res.status(403).json({ erro: 'Somente o revisor jurídico ou o admin.' });
+    const reg = await revisao.obter(pedido.id);
+    if (!reg || reg.etapa !== 'aprovado') return res.status(400).json({ erro: 'O laudo só sai depois da aprovação jurídica.' });
+    const out = await require('../services/revisao_bancaria_laudo').concluirRevisao(pedido.id, { id: reg.revisor_id });
+    if (out.url) out.url = assinar(out.url);
+    res.status(out.ok ? 200 : 400).json(out);
+  } catch (e) { console.error('[revisao-bancaria] gerar-laudo:', e); res.status(500).json({ erro: 'Erro ao gerar o laudo' }); }
 });
 
 // Admin: habilitar advogado revisor e OAB

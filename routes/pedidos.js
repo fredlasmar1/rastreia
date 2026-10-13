@@ -938,6 +938,11 @@ router.post('/:id/concluir', autenticar, async (req, res) => {
       if (!rv || rv.etapa !== 'aprovado' || !rv.parecer_juridico || !rv.revisor_id) {
         return res.status(400).json({ erro: 'Laudo bloqueado: a Revisão de Contrato Bancário precisa de parecer jurídico aprovado por advogado revisor.' });
       }
+      // O laudo tem gerador próprio (PDF + WhatsApp + Balladão), idempotente
+      const out = await require('../services/revisao_bancaria_laudo').concluirRevisao(pedido.id, { id: rv.revisor_id });
+      if (!out.ok) return res.status(400).json({ erro: out.erro });
+      if (out.em_andamento) return res.status(409).json({ erro: 'O laudo já está sendo gerado.' });
+      return res.json({ ok: true, url: assinar(out.url) });
     }
     let dadosResult = await pool.query('SELECT * FROM dados_consulta WHERE pedido_id = $1', [pedido.id]);
 
