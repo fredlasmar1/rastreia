@@ -29,9 +29,9 @@ function camposIniciais(reg, pedido) {
   const op = ex.operacao || {};
   const doc = String(pedido.alvo_documento || '').replace(/\D/g, '');
   return {
-    pfpj: doc.length === 14 ? 'PJ' : 'PF',
-    tipo_operacao: inf.tipo_operacao || null,
-    subtipo: null,
+    pfpj: ex.classificacao?.pfpj || (doc.length === 14 ? 'PJ' : 'PF'),
+    tipo_operacao: inf.tipo_operacao || ex.classificacao?.tipo_operacao || null,
+    subtipo: ex.classificacao?.subtipo || null,
     situacao: inf.situacao || null,
     parcelas_pagas: inf.parcelas_pagas ?? null,
     instituicao: { nome: ex.instituicao?.nome || inf.banco || null, cnpj: ex.instituicao?.cnpj || null },
@@ -51,6 +51,99 @@ function camposIniciais(reg, pedido) {
     campos_editados: []
   };
 }
+
+// ── Análise rápida: sobe o contrato → IA lê → código calcula → veredito preliminar ──
+const crypto = require('crypto');
+const path = require('path');
+const fs = require('fs');
+const multer = require('multer');
+const analise = require('../services/revisao_analise');
+const { UPLOADS_DIR } = require('../services/storage_paths');
+const MIMES_ANALISE = new Set(['application/pdf', 'image/jpeg', 'image/jpg', 'image/png', 'image/webp']);
+// multer entrega o nome em latin1: "Certidão.pdf" vira "CertidÃ£o.pdf"
+const nomeUtf8 = (n) => { const t = Buffer.from(String(n || 'arquivo'), 'latin1').toString('utf8'); return /�/.test(t) ? String(n) : t; };
+const uploadAnalise = multer({
+  storage: multer.diskStorage({
+    destination: (req, file, cb) => {
+      const dir = path.join(UPLOADS_DIR, 'analises', req.analiseId);
+      try { fs.mkdirSync(dir, { recursive: true }); } catch (_) {}
+      cb(null, dir);
+    },
+    filename: (req, file, cb) => cb(null, `${Date.now()}_${nomeUtf8(file.originalname).replace(/[^A-Za-z0-9._-]/g, '_').slice(-120)}`)
+  }),
+  limits: { fileSize: 20 * 1024 * 1024, files: 10 },
+  fileFilter: (req, file, cb) => (MIMES_ANALISE.has((file.mimetype || '').toLowerCase()) ? cb(null, true) : cb(new Error('Use PDF, JPG ou PNG.')))
+});
+const resumoAnalise = (a) => {
+  if (!a) return a;
+  const c = a.calculo;
+  const leve = c ? { ...c, tabela_contratada: undefined, cenarios: Object.fromEntries(Object.entries(c.cenarios || {}).map(([k, v]) => [k, { ...v, tabela: undefined }])) } : null;
+  return { ...a, arquivos: (a.arquivos || []).map(f => ({ filename: f.filename, size_bytes: f.size_bytes })), calculo: leve };
+};
+
+router.post('/analises', autenticar, (req, res, next) => { req.analiseId = crypto.randomUUID(); next(); }, (req, res) => {
+  uploadAnalise.array('documentos', 10)(req, res, async (err) => {
+    if (err) return res.status(400).json({ erro: err.message });
+    try {
+      const files = req.files || [];
+      if (!files.length) return res.status(400).json({ erro: 'Anexe o contrato (PDF ou foto).' });
+      if (String((req.body || {}).consentimento) !== 'true') return res.status(400).json({ erro: 'Confirme que o contratante autorizou a análise do contrato.' });
+      const arquivos = files.map(f => ({ filename: nomeUtf8(f.originalname), filepath: f.path, mime_type: f.mimetype, size_bytes: f.size }));
+      await pool.query('INSERT INTO revisao_analises (id, status, arquivos, criado_por, consentimento_em) VALUES ($1, $2, $3, $4, now())',
+        [req.analiseId, 'lendo', JSON.stringify(arquivos), req.usuario.id]);
+      res.json({ id: req.analiseId, status: 'lendo' });
+      setImmediate(() => analise.processar(req.analiseId).catch(e => console.error('[revisao-analise]', e.message)));
+    } catch (e) { console.error('[revisao-analise] criar:', e); res.status(500).json({ erro: 'Erro ao iniciar a análise' }); }
+  });
+});
+
+router.get('/analises', autenticar, async (req, res) => {
+  try {
+    const r = await pool.query(
+      `SELECT a.id, a.status, a.veredito, a.economia_estimada, a.pedido_id, a.criado_em, a.erro,
+              a.dados->'instituicao'->>'nome' AS banco, a.dados->'contratante'->>'nome' AS contratante,
+              a.dados->>'tipo_operacao' AS tipo_operacao, u.nome AS criado_por_nome, p.numero AS pedido_numero
+         FROM revisao_analises a LEFT JOIN usuarios u ON u.id = a.criado_por LEFT JOIN pedidos p ON p.id = a.pedido_id
+        ORDER BY a.criado_em DESC LIMIT 50`);
+    res.json({ analises: r.rows });
+  } catch (e) { console.error('[revisao-analise] lista:', e); res.status(500).json({ erro: 'Erro ao listar as análises' }); }
+});
+
+router.get('/analises/:id', autenticar, async (req, res) => {
+  try {
+    let a = await analise.obter(req.params.id);
+    if (!a) return res.status(404).json({ erro: 'Análise não encontrada' });
+    // Servidor reiniciou no meio da leitura: não deixa a tela esperando para sempre
+    if (a.status === 'lendo' && Date.now() - new Date(a.atualizado_em).getTime() > 10 * 60 * 1000) {
+      await analise.salvar(a.id, { status: 'erro', erro: 'A leitura foi interrompida. Clique em "Ler de novo".' });
+      a = await analise.obter(a.id);
+    }
+    res.json(resumoAnalise(a));
+  } catch (e) { res.status(400).json({ erro: 'Análise inválida' }); }
+});
+
+// Operador corrige os dados lidos → veredito refeito na hora (sem IA)
+router.put('/analises/:id/dados', autenticar, async (req, res) => {
+  try {
+    const a = await analise.obter(req.params.id);
+    if (!a) return res.status(404).json({ erro: 'Análise não encontrada' });
+    if (!req.body || typeof req.body.dados !== 'object') return res.status(400).json({ erro: 'Envie os dados.' });
+    const out = await analise.recalcular(a.id, req.body.dados, Array.isArray(req.body.campos_editados) ? req.body.campos_editados : []);
+    res.json(resumoAnalise(out));
+  } catch (e) { console.error('[revisao-analise] recalcular:', e); res.status(500).json({ erro: 'Erro ao recalcular' }); }
+});
+
+// Ler o contrato de novo (nova chamada da IA)
+router.post('/analises/:id/reler', autenticar, async (req, res) => {
+  try {
+    const a = await analise.obter(req.params.id);
+    if (!a) return res.status(404).json({ erro: 'Análise não encontrada' });
+    if (a.status === 'lendo') return res.json({ id: a.id, status: 'lendo' });
+    await analise.salvar(a.id, { status: 'lendo', erro: null });
+    res.json({ id: a.id, status: 'lendo' });
+    setImmediate(() => analise.processar(a.id).catch(e => console.error('[revisao-analise]', e.message)));
+  } catch (e) { res.status(500).json({ erro: 'Erro ao reler' }); }
+});
 
 // Lista da aba "Revisão de Contratos" (módulo à parte do Rastreia)
 router.get('/', autenticar, async (req, res) => {

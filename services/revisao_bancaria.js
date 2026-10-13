@@ -110,6 +110,11 @@ async function iniciarAposPagamento(pedidoId) {
     await atualizar(pedidoId, { etapa: 'aguardando_documentos', acao: 'Revisão bancária: aguardando contrato', detalhes: 'Pagamento confirmado sem contrato anexado' });
     return { ok: true, etapa: 'aguardando_documentos' };
   }
+  // Veio da análise rápida: o contrato já foi lido — vai direto para a conferência
+  if (reg.dados_extraidos) {
+    await atualizar(pedidoId, { etapa: 'conferencia_operador', acao: 'Revisão bancária: conferência', detalhes: 'Contrato já lido na análise rápida — sem nova leitura da IA' });
+    return { ok: true, etapa: 'conferencia_operador' };
+  }
   let extrair = null;
   try { extrair = require('./revisao_bancaria_ia').extrairContrato; } catch (_) { /* etapa 4 */ }
   if (!extrair) {

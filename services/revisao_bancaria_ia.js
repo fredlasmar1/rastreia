@@ -37,6 +37,14 @@ const TOOL_EXTRACAO = {
   input_schema: {
     type: 'object',
     properties: {
+      classificacao: {
+        type: 'object', description: 'Classificação da operação para escolher a série da taxa média do Banco Central.',
+        properties: {
+          tipo_operacao: { type: ['string', 'null'], enum: ['financiamento_veiculo', 'emprestimo_pessoal', 'consignado', 'ccb_capital_giro', 'cartao_credito', 'cheque_especial', 'financiamento_imobiliario', 'outro', null] },
+          subtipo: { type: ['string', 'null'], enum: ['inss', 'publico', 'privado', 'parcelado', 'ate_365', null], description: 'Consignado: inss/publico/privado; cartão: parcelado; capital de giro até 365 dias: ate_365.' },
+          pfpj: { type: ['string', 'null'], enum: ['PF', 'PJ', null] }
+        }
+      },
       instituicao: { type: 'object', properties: { nome: s, cnpj: s } },
       contratante: { type: 'object', properties: { nome: s, cpf_cnpj: s } },
       operacao: {
@@ -63,7 +71,7 @@ const TOOL_EXTRACAO = {
   }
 };
 
-const SYSTEM_EXTRACAO = 'Você é um analista de contratos bancários brasileiros. Sua tarefa é EXTRAIR dados do contrato exatamente como estão escritos, sem calcular, sem opinar e sem completar lacunas. Se um campo não estiver no documento, use null e registre em alertas_leitura. Transcreva em "trecho" a frase exata do contrato que sustenta cada tarifa, seguro, cláusula de capitalização e encargo de mora. Valores em reais como número (1234.56). Taxas em percentual como número (2.19 para 2,19%). Datas no formato AAAA-MM-DD. Identifique a página de onde tirou cada dado. Responda sempre em português do Brasil usando a ferramenta.';
+const SYSTEM_EXTRACAO = 'Você é um analista de contratos bancários brasileiros. Sua tarefa é EXTRAIR dados do contrato exatamente como estão escritos, sem calcular, sem opinar e sem completar lacunas. Se um campo não estiver no documento, use null e registre em alertas_leitura. Transcreva em "trecho" a frase exata do contrato que sustenta cada tarifa, seguro, cláusula de capitalização e encargo de mora. Valores em reais como número (1234.56). Taxas em percentual como número (2.19 para 2,19%). Datas no formato AAAA-MM-DD. Identifique a página de onde tirou cada dado. Em classificacao, diga o tipo da operação (veículo, empréstimo pessoal, consignado, capital de giro etc.) e se o contratante é pessoa física (PF) ou jurídica (PJ). Responda sempre em português do Brasil usando a ferramenta.';
 
 function bloco(doc) {
   const data = fs.readFileSync(doc.filepath).toString('base64');
@@ -88,14 +96,41 @@ async function chamarFerramenta({ system, tool, conteudo, maxTokens = 16000 }) {
 }
 
 // Custo da chamada em R$ (cotação em configuracoes.usd_brl, padrão 5,50)
+async function custoDaChamada(etapa, r) {
+  const [pin, pout] = PRECO_USD[r.model] || PRECO_USD[Object.keys(PRECO_USD).find(k => String(r.model).startsWith(k))] || [4, 20];
+  const usd = (r.usage.input_tokens * pin + r.usage.output_tokens * pout) / 1e6;
+  const cambio = await revisao.configNum('usd_brl', 5.5);
+  return { etapa, modelo: r.model, ...r.usage, custo_usd: usd, custo_brl: usd * cambio, cambio, em: new Date().toISOString() };
+}
 async function registrarCusto(pedidoId, etapa, r) {
   try {
-    const [pin, pout] = PRECO_USD[Object.keys(PRECO_USD).find(k => String(r.model).startsWith(k))] || PRECO_USD['claude-opus-5-5'];
-    const usd = (r.usage.input_tokens * pin + r.usage.output_tokens * pout) / 1e6;
-    const cambio = await revisao.configNum('usd_brl', 5.5);
     await pool.query("INSERT INTO dados_consulta (pedido_id, fonte, dados) VALUES ($1, 'custo_ia_revisao', $2)",
-      [pedidoId, JSON.stringify({ etapa, modelo: r.model, ...r.usage, custo_usd: usd, custo_brl: usd * cambio, cambio, em: new Date().toISOString() })]);
+      [pedidoId, JSON.stringify(await custoDaChamada(etapa, r))]);
   } catch (e) { console.warn('[revisao-ia] custo não registrado:', e.message); }
+}
+
+/**
+ * Lê uma lista de documentos ({ filename, filepath, mime_type, size_bytes })
+ * com a ferramenta de extração. Até ~24 MB por requisição; o que passar vira
+ * alerta. Devolve { dados, r, usados }.
+ */
+async function lerDocumentos(docs) {
+  const usados = []; const fora = []; let total = 0;
+  for (const d of docs) {
+    if (!fs.existsSync(d.filepath)) { fora.push(`${d.filename} (arquivo não encontrado no servidor)`); continue; }
+    const tam = Number(d.size_bytes) || fs.statSync(d.filepath).size;
+    if (total + tam * 1.37 > LIMITE_BYTES) { fora.push(`${d.filename} (limite de tamanho por análise)`); continue; }
+    total += tam * 1.37; usados.push(d);
+  }
+  if (!usados.length) throw new Error('Nenhum documento legível: ' + fora.join('; '));
+  const conteudo = [
+    ...usados.map(bloco),
+    { type: 'text', text: `Documentos recebidos, na ordem: ${usados.map((d, i) => `[${i}] ${d.filename}`).join('; ')}. Use a ferramenta extrair_contrato_bancario para registrar os dados (inclua documentos_classificados com o índice e o tipo de cada um).` }
+  ];
+  const r = await chamarFerramenta({ system: SYSTEM_EXTRACAO, tool: TOOL_EXTRACAO, conteudo });
+  const dados = r.input;
+  if (fora.length) dados.alertas_leitura = [...(dados.alertas_leitura || []), ...fora.map(f => `Não analisado: ${f}`)];
+  return { dados, r, usados };
 }
 
 /**
@@ -119,22 +154,8 @@ async function extrairContrato(pedidoId, { forcar = false, usuarioId = null } = 
   }
   await revisao.atualizar(pedidoId, { etapa: 'extraindo', usuarioId, acao: 'Revisão bancária: extração IA iniciada', detalhes: `${docs.length} documento(s)` });
 
-  // Até ~24 MB por requisição: o que passar fica de fora e vira alerta
-  const usados = []; const fora = []; let total = 0;
-  for (const d of docs) {
-    const tam = Number(d.size_bytes) || (fs.existsSync(d.filepath) ? fs.statSync(d.filepath).size : 0);
-    if (!fs.existsSync(d.filepath)) { fora.push(`${d.filename} (arquivo não encontrado no servidor)`); continue; }
-    if (total + tam * 1.37 > LIMITE_BYTES) { fora.push(`${d.filename} (limite de tamanho por análise)`); continue; }
-    total += tam * 1.37; usados.push(d);
-  }
-  const conteudo = [
-    ...usados.map(bloco),
-    { type: 'text', text: `Documentos recebidos, na ordem: ${usados.map((d, i) => `[${i}] ${d.filename}`).join('; ')}. Use a ferramenta extrair_contrato_bancario para registrar os dados (inclua documentos_classificados com o índice e o tipo de cada um).` }
-  ];
   try {
-    const r = await chamarFerramenta({ system: SYSTEM_EXTRACAO, tool: TOOL_EXTRACAO, conteudo });
-    const dados = r.input;
-    if (fora.length) dados.alertas_leitura = [...(dados.alertas_leitura || []), ...fora.map(f => `Não analisado: ${f}`)];
+    const { dados, r, usados } = await lerDocumentos(docs);
     for (const c of dados.documentos_classificados || []) {
       const d = usados[c.indice];
       if (d && c.tipo) await pool.query('UPDATE pedido_documentos SET tipo = $1 WHERE id = $2', [c.tipo, d.id]);
@@ -183,4 +204,4 @@ async function gerarParecer(pedidoId, caso) {
   }
 }
 
-module.exports = { extrairContrato, gerarParecer, chamarFerramenta, registrarCusto, disponivel, modelo, TOOL_EXTRACAO, SYSTEM_EXTRACAO, TOOL_PARECER, SYSTEM_PARECER };
+module.exports = { lerDocumentos, custoDaChamada, extrairContrato, gerarParecer, chamarFerramenta, registrarCusto, disponivel, modelo, TOOL_EXTRACAO, SYSTEM_EXTRACAO, TOOL_PARECER, SYSTEM_PARECER };

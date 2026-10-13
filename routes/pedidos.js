@@ -376,6 +376,10 @@ router.post('/', autenticar, async (req, res) => {
       [pedido.id, req.usuario.id, 'Pedido criado', `Finalidade: ${finalidade} | IP: ${ip}`]);
     if (tipo === 'revisao_contrato_bancario') {
       await revisaoBancaria.criarRegistro(pedido.id, revisaoInformados, !!consentimento_revisao);
+      if (req.body.revisao_analise_id) {
+        const v = await require('../services/revisao_analise').vincularAoPedido(String(req.body.revisao_analise_id), pedido.id, UPLOADS_ROOT, req.usuario.id);
+        if (!v.ok) console.warn('[revisao] vínculo com a análise falhou:', v.erro);
+      }
       await pool.query('INSERT INTO logs (pedido_id, usuario_id, acao, detalhes) VALUES ($1, $2, $3, $4)',
         [pedido.id, req.usuario.id, 'Revisão bancária: consentimento LGPD', `Aceite do tratamento do contrato bancário | IP: ${ip}`]);
     }

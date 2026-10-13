@@ -22,6 +22,18 @@
     .rc-filtros button { border:1px solid #cbd5e1; background:#fff; border-radius:99px; padding:5px 12px; font-size:12px; cursor:pointer; }
     .rc-filtros button.on { background:#1e3a8a; color:#fff; border-color:#1e3a8a; }
     @media (max-width: 760px) { .rc-oculta { display:none; } }
+    .an-drop { border:2px dashed #93c5fd; background:#eff6ff; border-radius:14px; padding:22px; text-align:center; cursor:pointer; transition:background .15s; }
+    .an-drop.sobre { background:#dbeafe; }
+    .an-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(170px,1fr)); gap:8px; }
+    .an-box { border:1px solid #e5e7eb; border-radius:10px; padding:12px; background:#fff; }
+    .an-box .r { font-size:11px; color:#6b7280; }
+    .an-box .v { font-size:18px; font-weight:800; margin-top:2px; }
+    .an-box .d { font-size:12px; color:#374151; margin-top:2px; }
+    .an-campos { display:grid; grid-template-columns:repeat(auto-fit,minmax(190px,1fr)); gap:8px; }
+    .an-campos label { font-size:11px; color:#6b7280; display:block; }
+    .an-campos input, .an-campos select { width:100%; padding:7px 9px; border:1px solid #cbd5e1; border-radius:8px; font-size:13px; }
+    .an-campos .baixa input, .an-campos .baixa select { background:#fefce8; border-color:#facc15; }
+    .an-tese { border:1px solid #e5e7eb; border-radius:8px; padding:8px 10px; margin-top:6px; font-size:13px; }
   </style>
 </head>
 <body>
@@ -45,6 +57,29 @@
     <button class="btn btn-primary" onclick="abrirForm()">+ Nova revisão</button>
   </div>
   <div id="alerta"></div>
+
+  <!-- Análise rápida: veredito antes de cadastrar cliente e valor -->
+  <div class="card" id="an-card">
+    <div class="card-header"><span class="card-title">Analisar contrato</span><span style="font-size:12px;color:#6b7280">veredito preliminar em 1–2 min · só a leitura da IA (≈ R$ 2)</span></div>
+    <div id="an-upload">
+      <label class="an-drop" id="an-drop">
+        <div style="font-size:28px">📄</div>
+        <div style="font-weight:700;margin-top:4px">Solte aqui o contrato (PDF ou foto) ou clique para escolher</div>
+        <div style="font-size:12px;color:#6b7280;margin-top:2px">Até 10 arquivos: contrato, extrato, carnê, boletos, cálculo do banco</div>
+        <input type="file" id="an-arquivos" accept=".pdf,.jpg,.jpeg,.png,.webp" multiple style="display:none" onchange="anEscolher(this.files)">
+      </label>
+      <div id="an-lista" style="margin-top:8px"></div>
+      <label style="display:flex;gap:8px;align-items:flex-start;margin-top:10px;font-size:12px;color:#374151">
+        <input type="checkbox" id="an-consent" style="margin-top:2px">
+        <span>O contratante me enviou este contrato e autorizou a análise (LGPD, art. 7º, V e VI).</span>
+      </label>
+      <div style="display:flex;gap:8px;align-items:center;margin-top:10px;flex-wrap:wrap">
+        <button class="btn btn-primary" id="an-btn" onclick="anEnviar(this)">Analisar contrato</button>
+        <span id="an-msg" style="font-size:13px;color:#6b7280"></span>
+      </div>
+    </div>
+    <div id="an-resultado" hidden></div>
+  </div>
 
   <!-- Nova revisão -->
   <div class="card" id="rc-form" hidden>
@@ -85,7 +120,8 @@
         <div class="form-group"><label>Situação</label>
           <select id="rev_situacao"><option value="">—</option><option value="em_dia">Em dia</option><option value="atrasado">Atrasado</option><option value="busca_apreensao">Busca e apreensão</option><option value="executado">Executado</option><option value="quitado">Quitado</option></select></div>
       </div>
-      <div style="margin-top:12px">
+      <div id="form-da-analise" hidden class="alert alert-success" style="margin-top:12px;font-size:13px"></div>
+      <div style="margin-top:12px" id="form-docs">
         <label style="font-weight:600;font-size:13px">Documentos (até 10) — contrato obrigatório; extratos, boletos, carnê e cálculo do banco ajudam</label>
         <div id="docs-lista" style="margin:8px 0"></div>
         <label class="btn btn-outline" style="cursor:pointer;display:flex;align-items:center;justify-content:center;width:100%;padding:16px;border:2px dashed #cbd5e1;background:#f8fafc;color:#475569;text-transform:none;font-weight:500">
@@ -112,6 +148,11 @@
         <span id="form-msg" style="font-size:13px;color:#6b7280"></span>
       </div>
     </div>
+  </div>
+
+  <div class="card">
+    <div class="card-header"><span class="card-title">Análises recentes</span><span style="font-size:12px;color:#6b7280">veredito preliminar — ainda não é revisão</span></div>
+    <div id="an-recentes"><div class="loading"><div class="spinner"></div>Carregando...</div></div>
   </div>
 
   <div class="rc-kpis" id="kpis"></div>
@@ -209,7 +250,8 @@
 
   // ── Nova revisão ──
   let docs = [];
-  function abrirForm() { const f = document.getElementById('rc-form'); f.hidden = false; f.scrollIntoView({ behavior: 'smooth' }); document.getElementById('cli_nome').focus(); }
+  let ANALISE_FORM = null;
+  function abrirForm() { ANALISE_FORM = null; document.getElementById('form-da-analise').hidden = true; document.getElementById('form-docs').hidden = false; const f = document.getElementById('rc-form'); f.hidden = false; f.scrollIntoView({ behavior: 'smooth' }); document.getElementById('cli_nome').focus(); }
   function fecharForm() { document.getElementById('rc-form').hidden = true; }
   function adicionarDocs(files) {
     for (const f of Array.from(files || [])) {
@@ -230,7 +272,7 @@
     const valor = num('valor');
     if (!cliente_nome) return msg('Informe o nome do cliente.', true);
     if (valor == null || valor < 0) return msg('Informe o valor cobrado (0 para cortesia).', true);
-    if (!docs.length) return msg('Anexe o contrato bancário (PDF ou foto).', true);
+    if (!docs.length && !ANALISE_FORM) return msg('Anexe o contrato bancário (PDF ou foto) ou use "Analisar contrato".', true);
     if (!document.getElementById('consentimento').checked) return msg('Marque o consentimento LGPD.', true);
     if (btn.disabled) return;
     btn.disabled = true; msg('Criando…');
@@ -246,6 +288,7 @@
       alvo_tipo: document.getElementById('alvo_tipo').value,
       finalidade: 'Revisão de contrato bancário: análise de juros, tarifas e encargos para orientação jurídica do próprio contratante',
       aceite_termos: true, consentimento_revisao: true, valor_customizado: valor,
+      revisao_analise_id: ANALISE_FORM || undefined,
       revisao: {
         tipo_operacao: document.getElementById('rev_tipo_operacao').value || null,
         banco: document.getElementById('rev_banco').value.trim() || null,
@@ -262,10 +305,12 @@
       const j = await r.json().catch(() => ({}));
       if (!r.ok) { btn.disabled = false; return msg(j.erro || 'Erro ao criar', true); }
       const id = j.id;
-      msg('Enviando o contrato…');
-      const fd = new FormData(); docs.forEach(d => fd.append('documentos', d, d.name));
-      const up = await fetch(`/api/pedidos/${id}/documentos`, { method: 'POST', headers: auth, body: fd });
-      if (!up.ok) console.warn('upload do contrato falhou: envie de novo na tela da revisão');
+      if (docs.length) {
+        msg('Enviando o contrato…');
+        const fd = new FormData(); docs.forEach(d => fd.append('documentos', d, d.name));
+        const up = await fetch(`/api/pedidos/${id}/documentos`, { method: 'POST', headers: auth, body: fd });
+        if (!up.ok) console.warn('upload do contrato falhou: envie de novo na tela da revisão');
+      }
       if (forma === 'dinheiro') {
         await fetch(`/api/pedidos/${id}/pagamento-alternativo`, { method: 'POST', headers: { ...auth, 'Content-Type': 'application/json' }, body: JSON.stringify({ forma: 'dinheiro' }) });
       } else if (forma === 'mercadopago') {
@@ -275,8 +320,178 @@
     } catch (e) { btn.disabled = false; msg('Erro de conexão.', true); }
   }
 
-  if (new URLSearchParams(location.search).get('nova') === '1') abrirForm();
+  // ═══════ Análise rápida ═══════
+  const auth = () => ({ Authorization: `Bearer ${token}` });
+  const pct = (v, d = 2) => v == null ? '—' : (Number(v) * 100).toFixed(d).replace('.', ',') + '%';
+  const RES = { aplicavel: ['Aplicável', '#dcfce7', '#14532d'], verificar: ['Verificar', '#fef9c3', '#713f12'], nao_aplicavel: ['Não aplicável', '#f3f4f6', '#4b5563'] };
+  let anArquivos = [], ANALISE = null, anTimer = null;
+
+  const drop = document.getElementById('an-drop');
+  ['dragenter', 'dragover'].forEach(ev => drop.addEventListener(ev, e => { e.preventDefault(); drop.classList.add('sobre'); }));
+  ['dragleave', 'drop'].forEach(ev => drop.addEventListener(ev, e => { e.preventDefault(); drop.classList.remove('sobre'); }));
+  drop.addEventListener('drop', e => anEscolher(e.dataTransfer.files));
+
+  function anEscolher(files) {
+    for (const f of Array.from(files || [])) {
+      if (anArquivos.length >= 10) break;
+      if (!/\.(pdf|jpe?g|png|webp)$/i.test(f.name)) { anMsg(`${f.name}: use PDF ou foto.`, true); continue; }
+      if (f.size > 20 * 1024 * 1024) { anMsg(`${f.name}: acima de 20 MB.`, true); continue; }
+      anArquivos.push(f);
+    }
+    document.getElementById('an-arquivos').value = '';
+    document.getElementById('an-lista').innerHTML = anArquivos.map((f, i) => `<div style="display:flex;justify-content:space-between;align-items:center;font-size:13px;padding:6px 8px;border:1px solid #e5e7eb;border-radius:6px;margin-bottom:4px;background:#fff"><span>📄 ${esc(f.name)} <span style="color:#9ca3af">(${(f.size / 1024 / 1024).toFixed(1)} MB)</span></span><button type="button" class="btn btn-sm btn-outline" onclick="anArquivos.splice(${i},1);anEscolher([])">remover</button></div>`).join('');
+  }
+  function anMsg(t, erro) { const m = document.getElementById('an-msg'); m.style.color = erro ? '#b91c1c' : '#6b7280'; m.textContent = t; }
+
+  async function anEnviar(btn) {
+    if (!anArquivos.length) return anMsg('Escolha o contrato.', true);
+    if (!document.getElementById('an-consent').checked) return anMsg('Confirme a autorização do contratante.', true);
+    if (btn.disabled) return; btn.disabled = true; anMsg('Enviando…');
+    const fd = new FormData(); anArquivos.forEach(f => fd.append('documentos', f, f.name)); fd.append('consentimento', 'true');
+    try {
+      const r = await fetch('/api/revisao-bancaria/analises', { method: 'POST', headers: auth(), body: fd });
+      const j = await r.json().catch(() => ({}));
+      btn.disabled = false;
+      if (!r.ok) return anMsg(j.erro || 'Erro ao enviar', true);
+      anArquivos = []; anEscolher([]); document.getElementById('an-consent').checked = false; anMsg('');
+      anAbrir(j.id);
+    } catch (e) { btn.disabled = false; anMsg('Erro de conexão.', true); }
+  }
+
+  async function anAbrir(id) {
+    clearTimeout(anTimer);
+    history.replaceState(null, '', `?analise=${id}`);
+    const r = await fetch(`/api/revisao-bancaria/analises/${id}`, { headers: auth() });
+    if (r.status === 401) return logout();
+    const a = await r.json().catch(() => null);
+    if (!r.ok || !a) { anMsg((a && a.erro) || 'Análise não encontrada', true); return; }
+    ANALISE = a;
+    anRender();
+    if (a.status === 'lendo') anTimer = setTimeout(() => anAbrir(id), 3000);
+    else carregarAnalises();
+    document.getElementById('an-card').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+  function anFechar() { clearTimeout(anTimer); ANALISE = null; history.replaceState(null, '', location.pathname); document.getElementById('an-resultado').hidden = true; document.getElementById('an-upload').hidden = false; }
+
+  // Campos que o operador pode corrigir (o veredito é refeito pelo cálculo)
+  const AN_CAMPOS = [
+    ['instituicao.nome', 'Banco'], ['tipo_operacao', 'Tipo de operação', 'select', [['financiamento_veiculo', 'Veículo'], ['emprestimo_pessoal', 'Empréstimo pessoal'], ['consignado', 'Consignado'], ['ccb_capital_giro', 'Capital de giro / CCB'], ['cartao_credito', 'Cartão'], ['cheque_especial', 'Cheque especial'], ['financiamento_imobiliario', 'Imobiliário'], ['outro', 'Outro']]],
+    ['pfpj', 'Pessoa', 'select', [['PF', 'Física'], ['PJ', 'Jurídica']]],
+    ['subtipo', 'Subtipo', 'select', [['', '—'], ['inss', 'Consignado INSS'], ['publico', 'Consignado público'], ['privado', 'Consignado privado'], ['parcelado', 'Cartão parcelado'], ['ate_365', 'Giro até 365 dias']]],
+    ['operacao.data_contratacao', 'Data da contratação', 'date'], ['operacao.data_primeiro_vencimento', '1º vencimento', 'date'],
+    ['operacao.valor_financiado_total', 'Valor financiado (R$)', 'num'], ['operacao.valor_parcela', 'Parcela (R$)', 'num'],
+    ['operacao.prazo_meses', 'Prazo (meses)', 'num'], ['parcelas_pagas', 'Parcelas pagas', 'num'],
+    ['operacao.taxa_juros_mensal_declarada', 'Taxa mensal no contrato (%)', 'num'],
+    ['operacao.sistema_amortizacao', 'Sistema', 'select', [['price', 'Price'], ['sac', 'SAC'], ['nao_informado', 'Não informado'], ['outro', 'Outro']]],
+    ['situacao', 'Situação', 'select', [['', '—'], ['em_dia', 'Em dia'], ['atrasado', 'Atrasado'], ['busca_apreensao', 'Busca e apreensão'], ['executado', 'Executado'], ['quitado', 'Quitado']]]
+  ];
+  const getP = (o, p) => p.split('.').reduce((x, k) => (x == null ? x : x[k]), o);
+  const setP = (o, p, v) => { const ks = p.split('.'); let x = o; ks.slice(0, -1).forEach(k => { if (x[k] == null || typeof x[k] !== 'object') x[k] = {}; x = x[k]; }); x[ks[ks.length - 1]] = v; };
+
+  function anRender() {
+    const a = ANALISE, box = document.getElementById('an-resultado');
+    document.getElementById('an-upload').hidden = true; box.hidden = false;
+    const topo = `<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:10px">
+      <div style="font-size:13px;color:#6b7280">${(a.arquivos || []).map(f => '📄 ' + esc(f.filename)).join(' · ')}</div>
+      <div style="display:flex;gap:6px"><button class="btn btn-sm btn-outline" onclick="anFechar()">+ Outro contrato</button></div></div>`;
+    if (a.status === 'lendo') { box.innerHTML = topo + `<div class="loading" style="padding:30px"><div class="spinner"></div>A IA está lendo o contrato e o sistema vai calcular… (1 a 2 minutos)</div>`; return; }
+    if (a.status === 'erro') { box.innerHTML = topo + `<div class="alert alert-error">Não consegui analisar: ${esc(a.erro || 'erro')}</div><button class="btn btn-outline" onclick="anReler()">↻ Ler de novo</button>`; return; }
+    const c = a.calculo || {}, d = a.dados || {}, tx = a.taxa_media_bacen || {};
+    const v = VER[a.veredito] || VER.inviavel;
+    const cp = c.cenario_principal ? (c.cenarios || {})[c.cenario_principal] : null;
+    const conf = (a.dados_extraidos || {}).confianca_por_campo || {};
+    const baixa = (k) => ['baixa'].includes(conf[k] || conf[k.split('.').pop()]);
+    let h = topo;
+    h += `<div class="an-grid">
+      <div class="an-box" style="background:${v[1]};color:${v[2]};border-color:${v[1]}"><div class="r" style="color:${v[2]};font-weight:700">VEREDITO PRELIMINAR</div><div class="v" style="font-size:24px">${v[0]}</div><div class="d" style="color:${v[2]}">${esc(c.veredito?.economia_pct != null ? `economia de ${c.veredito.economia_pct.toFixed(1).replace('.', ',')}% do financiado` : (c.veredito?.motivo || ''))}</div></div>
+      <div class="an-box"><div class="r">Taxa real do contrato</div><div class="v">${pct(c.taxa?.efetiva_am, 2)} a.m.</div><div class="d">${pct(c.taxa?.efetiva_aa)} a.a.${c.taxa?.declarada_am != null ? ` · no papel ${pct(c.taxa.declarada_am, 2)}` : ''}</div></div>
+      <div class="an-box"><div class="r">Média do Banco Central${tx.mes_referencia ? ' ' + esc(tx.mes_referencia.split('-').reverse().join('/')) : ''}</div><div class="v">${c.bacen ? pct(c.bacen.am, 2) + ' a.m.' : '—'}</div><div class="d">${c.razao != null ? `contrato = ${c.razao.toFixed(2).replace('.', ',')}× a média` : esc(tx.erro || '')}${tx.olinda?.banco ? ` · ${esc(tx.olinda.banco.nome)} ${tx.olinda.banco.posicao}º de ${tx.olinda.total_instituicoes}` : ''}</div></div>
+      <div class="an-box"><div class="r">Economia estimada</div><div class="v">${brl(a.economia_estimada)}</div><div class="d">${cp ? `já pago a mais ${brl(cp.total_pago_a_mais)} · a vencer ${brl(cp.economia_futura)}` : 'sem cenário de revisão'}</div></div>
+    </div>`;
+    const alertas = [...((a.dados_extraidos || {}).alertas_leitura || []), ...(c.alertas || [])];
+    if (alertas.length) h += `<div class="alert alert-warning" style="font-size:12px;margin-top:10px">${alertas.map(esc).join('<br>')}</div>`;
+    const ts = (a.teses?.teses || []).filter(t => t.resultado !== 'nao_aplicavel');
+    if (ts.length) h += `<div style="font-weight:700;margin-top:12px">O que pode ser questionado</div>` + ts.map(t => { const r = RES[t.resultado]; return `<div class="an-tese"><span class="rc-pill" style="background:${r[1]};color:${r[2]}">${r[0]}</span> <strong>${esc(t.nome)}</strong><div style="font-size:12px;margin-top:3px">${esc(t.detalhe)}</div>${t.trecho_contrato ? `<div style="font-size:12px;color:#6b7280">“${esc(t.trecho_contrato)}”</div>` : ''}</div>`; }).join('');
+    h += `<div style="font-weight:700;margin-top:14px">Dados lidos pela IA <span style="font-weight:400;font-size:12px;color:#6b7280">— corrija o que estiver errado (amarelo = leitura incerta) e recalcule</span></div>
+      <div class="an-campos" style="margin-top:6px">${AN_CAMPOS.map(([k, rot, tipo, ops]) => {
+        const val = getP(d, k);
+        const ctl = tipo === 'select'
+          ? `<select data-k="${k}">${ops.map(([o, t]) => `<option value="${o}" ${String(val ?? '') === o ? 'selected' : ''}>${t}</option>`).join('')}</select>`
+          : `<input data-k="${k}" type="${tipo === 'date' ? 'date' : 'text'}" ${tipo === 'num' ? 'inputmode="decimal"' : ''} value="${esc(val == null ? '' : (tipo === 'num' ? String(val).replace('.', ',') : val))}">`;
+        const est = k === 'parcelas_pagas' && d.parcelas_pagas_estimadas ? ' (estimadas)' : '';
+        return `<div class="${baixa(k) ? 'baixa' : ''}"><label>${rot}${est}</label>${ctl}</div>`;
+      }).join('')}</div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px;align-items:center">
+        <button class="btn btn-outline" onclick="anRecalcular(this)">↻ Recalcular com as correções</button>
+        ${a.pedido_id ? `<a class="btn btn-primary" href="/pedido.html?id=${a.pedido_id}">Ver a revisão #${esc(a.pedido_numero || '')}</a>` : `<button class="btn btn-primary" onclick="anAbrirRevisao()">⚖ Abrir revisão (laudo do advogado)</button>`}
+        <button class="btn btn-outline" onclick="anReler()">Ler o contrato de novo</button>
+        <span id="an-res-msg" style="font-size:13px"></span>
+      </div>
+      <div style="font-size:11px;color:#6b7280;margin-top:8px">Preliminar: a IA só leu o contrato; taxas, cenários e economia são calculados pelo sistema. O laudo final passa pela conferência do operador e pela assinatura do advogado.</div>`;
+    box.innerHTML = h;
+  }
+
+  async function anRecalcular(btn) {
+    const d = JSON.parse(JSON.stringify(ANALISE.dados || {}));
+    const editados = [];
+    document.querySelectorAll('#an-resultado [data-k]').forEach(el => {
+      const k = el.dataset.k; const antes = getP(d, k);
+      let v = el.value.trim();
+      const tipo = (AN_CAMPOS.find(c => c[0] === k) || [])[2];
+      if (tipo === 'num') { v = v === '' ? null : Number(v.replace(/\./g, '').replace(',', '.')); if (v != null && !Number.isFinite(v)) v = null; }
+      else if (v === '') v = null;
+      if (String(antes ?? '') !== String(v ?? '')) { setP(d, k, v); editados.push(k); }
+    });
+    btn.disabled = true; const m = document.getElementById('an-res-msg'); m.style.color = '#6b7280'; m.textContent = 'Recalculando…';
+    const r = await fetch(`/api/revisao-bancaria/analises/${ANALISE.id}/dados`, { method: 'PUT', headers: { ...auth(), 'Content-Type': 'application/json' }, body: JSON.stringify({ dados: d, campos_editados: editados }) });
+    const j = await r.json().catch(() => ({}));
+    btn.disabled = false;
+    if (!r.ok) { m.style.color = '#b91c1c'; m.textContent = j.erro || 'Erro'; return; }
+    ANALISE = j; anRender(); carregarAnalises();
+  }
+  async function anReler() {
+    if (!ANALISE) return;
+    await fetch(`/api/revisao-bancaria/analises/${ANALISE.id}/reler`, { method: 'POST', headers: auth() });
+    anAbrir(ANALISE.id);
+  }
+  // Leva a análise para a revisão completa: cliente, valor e pagamento; arquivos e leitura vão junto
+  function anAbrirRevisao() {
+    const a = ANALISE, d = a.dados || {}, op = d.operacao || {};
+    abrirForm();
+    ANALISE_FORM = a.id;
+    document.getElementById('form-docs').hidden = true;
+    const fa = document.getElementById('form-da-analise'); fa.hidden = false;
+    fa.innerHTML = `Usando a análise de ${esc((a.arquivos || []).map(f => f.filename).join(', '))} — veredito preliminar <strong>${esc((VER[a.veredito] || ['—'])[0])}</strong>. O contrato não será lido de novo.`;
+    const put = (id, v) => { if (v != null && v !== '') document.getElementById(id).value = v; };
+    put('alvo_nome', d.contratante?.nome); put('alvo_doc', d.contratante?.cpf_cnpj); put('alvo_tipo', d.pfpj);
+    put('rev_tipo_operacao', d.tipo_operacao); put('rev_banco', d.instituicao?.nome); put('rev_data', op.data_contratacao);
+    put('rev_valor', op.valor_financiado_total != null ? String(op.valor_financiado_total).replace('.', ',') : null);
+    put('rev_parcela', op.valor_parcela != null ? String(op.valor_parcela).replace('.', ',') : null);
+    put('rev_prazo', op.prazo_meses); put('rev_pagas', d.parcelas_pagas); put('rev_situacao', d.situacao);
+    document.getElementById('consentimento').checked = true;
+  }
+
+  async function carregarAnalises() {
+    const r = await fetch('/api/revisao-bancaria/analises', { headers: auth() });
+    const j = await r.json().catch(() => ({}));
+    const el = document.getElementById('an-recentes');
+    if (!r.ok) { el.innerHTML = `<div style="padding:12px;color:#b91c1c">${esc(j.erro || 'Erro')}</div>`; return; }
+    const ls = j.analises || [];
+    if (!ls.length) { el.innerHTML = `<div style="padding:18px;text-align:center;color:#6b7280">Nenhuma análise ainda. Suba um contrato acima.</div>`; return; }
+    el.innerHTML = `<div style="overflow-x:auto"><table class="rc-tab"><thead><tr><th>Quando</th><th>Contratante / banco</th><th>Veredito</th><th class="rc-num">Economia</th><th class="rc-oculta">Situação</th></tr></thead><tbody>${ls.map(a => {
+      const v = VER[a.veredito];
+      const sit = a.status === 'lendo' ? 'lendo…' : a.status === 'erro' ? 'erro' : a.pedido_id ? `virou revisão #${a.pedido_numero}` : 'só análise';
+      return `<tr class="lin" onclick="anAbrir('${a.id}')"><td style="white-space:nowrap">${new Date(a.criado_em).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}</td>
+        <td><strong>${esc(a.contratante || '—')}</strong><div style="font-size:12px;color:#6b7280">${esc(a.banco || '')}${a.tipo_operacao ? ' · ' + esc(TIPO_OP[a.tipo_operacao] || a.tipo_operacao) : ''}</div></td>
+        <td>${v ? pill(v[0], v[1], v[2]) : '—'}</td><td class="rc-num">${a.economia_estimada != null ? brl(a.economia_estimada) : '—'}</td><td class="rc-oculta" style="font-size:12px;color:#6b7280">${esc(sit)}</td></tr>`;
+    }).join('')}</tbody></table></div>`;
+  }
+
+  const _q = new URLSearchParams(location.search);
+  if (_q.get('nova') === '1') abrirForm();
+  if (_q.get('analise')) anAbrir(_q.get('analise'));
   carregar();
+  carregarAnalises();
 </script>
 </body>
 </html>

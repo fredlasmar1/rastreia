@@ -207,5 +207,26 @@ teste('TAC após 30/04/2008 é aplicável; antes, não', () => {
   assert.strictEqual(T.aplicarTeses(d, null).teses.find(t => t.id === 'tac_tec').resultado, 'nao_aplicavel');
 });
 
+console.log('\n8) Análise rápida (leitura da IA → dados do cálculo)');
+const AN = require('../services/revisao_analise');
+teste('Parcelas pagas estimadas pelos meses desde o 1º vencimento', () => {
+  const hoje = new Date(2026, 9, 13);   // 13/10/2026
+  assert.strictEqual(AN.estimarPagas({ data_primeiro_vencimento: '2026-06-10', prazo_meses: 48 }, hoje), 5);   // jun..out
+  assert.strictEqual(AN.estimarPagas({ data_primeiro_vencimento: '2026-06-20', prazo_meses: 48 }, hoje), 4);   // out ainda não venceu
+  assert.strictEqual(AN.estimarPagas({ data_primeiro_vencimento: '2020-01-10', prazo_meses: 24 }, hoje), 24);  // limitado ao prazo
+  assert.strictEqual(AN.estimarPagas({ prazo_meses: 24 }, hoje), null);
+});
+teste('montarDados usa a classificação da IA e marca as parcelas como estimadas', () => {
+  const d = AN.montarDados({ classificacao: { tipo_operacao: 'consignado', subtipo: 'inss', pfpj: 'PF' }, instituicao: { nome: 'Banco X' }, operacao: { valor_financiado_total: 10000, valor_parcela: 400, prazo_meses: 36, data_primeiro_vencimento: '2025-01-05' }, tarifas: [{ nome: 'TAC', valor: 500 }] });
+  assert.strictEqual(d.tipo_operacao, 'consignado'); assert.strictEqual(d.subtipo, 'inss'); assert.strictEqual(d.pfpj, 'PF');
+  assert.ok(d.parcelas_pagas > 0 && d.parcelas_pagas_estimadas === true);
+  const calc = C.calcular(d, { taxaMediaBacenAM: 1.8, questionaveis: T.itensQuestionaveis(d) });
+  assert.ok(calc.taxa.efetiva_am > 0 && calc.veredito.nivel);
+});
+teste('Sem classificação: CNPJ vira PJ e operação "outro"', () => {
+  const d = AN.montarDados({ contratante: { cpf_cnpj: '12.345.678/0001-90' }, operacao: {} });
+  assert.strictEqual(d.pfpj, 'PJ'); assert.strictEqual(d.tipo_operacao, 'outro'); assert.strictEqual(d.parcelas_pagas, null);
+});
+
 console.log(`\n${ok} passaram, ${falhas} falharam.`);
 process.exit(falhas ? 1 : 0);

@@ -471,3 +471,27 @@ INSERT INTO api_custos (chave, rotulo, valor_brl, fonte, confianca) VALUES
   ('claude_revisao_parecer',  'Claude — Parecer explicativo da revisão (IA)', 0.5000, 'Estimativa: JSON do cálculo → texto', 'estimado'),
   ('bacen_sgs',               'Banco Central — SGS/Olinda (taxa média)',     0.0000, 'API pública gratuita', 'oficial')
 ON CONFLICT (chave) DO NOTHING;
+
+-- ==========================================================================
+-- Análise rápida de contrato (13/10/2026) — ver db/migrations/004_revisao_analises.sql
+-- ==========================================================================
+CREATE TABLE IF NOT EXISTS revisao_analises (
+  id UUID PRIMARY KEY,
+  status TEXT NOT NULL DEFAULT 'lendo',   -- lendo | pronto | erro
+  arquivos JSONB NOT NULL DEFAULT '[]',   -- [{ filename, filepath, mime_type, size_bytes }]
+  dados_extraidos JSONB,                  -- saída bruta da IA
+  dados JSONB,                            -- dados usados no cálculo (editáveis na tela)
+  taxa_media_bacen JSONB,
+  calculo JSONB,
+  teses JSONB,
+  veredito TEXT,
+  economia_estimada NUMERIC(14,2),
+  erro TEXT,
+  custo_ia JSONB,
+  pedido_id UUID REFERENCES pedidos(id) ON DELETE SET NULL,
+  criado_por UUID REFERENCES usuarios(id),
+  consentimento_em TIMESTAMPTZ,
+  criado_em TIMESTAMPTZ DEFAULT now(),
+  atualizado_em TIMESTAMPTZ DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_revisao_analises_criado ON revisao_analises(criado_em DESC);
