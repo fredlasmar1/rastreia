@@ -6,36 +6,141 @@
   <title>Revisão de Contratos</title>
   <link rel="stylesheet" href="/css/style.css">
   <style>
-    .rc-kpis { display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:10px; margin-bottom:18px; }
-    .rc-kpi { background:#fff; border:1px solid #e5e7eb; border-radius:12px; padding:14px; }
-    .rc-kpi .r { font-size:11px; color:#6b7280; font-weight:700; text-transform:uppercase; letter-spacing:.04em; }
-    .rc-kpi .v { font-size:24px; font-weight:800; color:#0f172a; margin-top:4px; }
-    .rc-tab { width:100%; border-collapse:collapse; font-size:13px; }
-    .rc-tab th { text-align:left; font-size:11px; color:#6b7280; text-transform:uppercase; padding:8px; border-bottom:1px solid #e5e7eb; }
-    .rc-tab td { padding:10px 8px; border-bottom:1px solid #f1f5f9; vertical-align:top; }
-    .rc-tab tr.lin { cursor:pointer; }
-    .rc-tab tr.lin:hover td { background:#f8fafc; }
-    .rc-pill { display:inline-block; font-size:11px; font-weight:700; padding:2px 9px; border-radius:99px; white-space:nowrap; }
-    .rc-num { text-align:right; font-variant-numeric:tabular-nums; white-space:nowrap; }
-    #rc-form[hidden] { display:none; }
-    .rc-filtros { display:flex; gap:6px; flex-wrap:wrap; }
-    .rc-filtros button { border:1px solid #cbd5e1; background:#fff; border-radius:99px; padding:5px 12px; font-size:12px; cursor:pointer; }
-    .rc-filtros button.on { background:#1e3a8a; color:#fff; border-color:#1e3a8a; }
-    @media (max-width: 760px) { .rc-oculta { display:none; } }
-    .rc-check { display:flex !important; gap:8px; align-items:flex-start; text-transform:none; letter-spacing:0; font-weight:400; font-size:12px; color:#374151; }
-    .rc-check input { width:auto; flex:none; margin-top:2px; }
-    .an-drop { display:block; text-transform:none; letter-spacing:0; font-weight:400; font-size:14px; color:#1f2937; border:2px dashed #93c5fd; background:#eff6ff; border-radius:14px; padding:22px; text-align:center; cursor:pointer; transition:background .15s; }
-    .an-drop.sobre { background:#dbeafe; }
-    .an-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(170px,1fr)); gap:8px; }
-    .an-box { border:1px solid #e5e7eb; border-radius:10px; padding:12px; background:#fff; }
-    .an-box .r { font-size:11px; color:#6b7280; }
-    .an-box .v { font-size:18px; font-weight:800; margin-top:2px; }
-    .an-box .d { font-size:12px; color:#374151; margin-top:2px; }
-    .an-campos { display:grid; grid-template-columns:repeat(auto-fit,minmax(190px,1fr)); gap:8px; }
-    .an-campos label { font-size:11px; color:#6b7280; display:block; }
-    .an-campos input, .an-campos select { width:100%; padding:7px 9px; border:1px solid #cbd5e1; border-radius:8px; font-size:13px; }
-    .an-campos .baixa input, .an-campos .baixa select { background:#fefce8; border-color:#facc15; }
-    .an-tese { border:1px solid #e5e7eb; border-radius:8px; padding:8px 10px; margin-top:6px; font-size:13px; }
+    :root {
+      --rc-tinta: #0f172a; --rc-texto: #334155; --rc-suave: #64748b; --rc-linha: #e2e8f0; --rc-fundo: #f1f5f9;
+      --rc-azul: #1e3a8a; --rc-azul2: #2563eb; --rc-azul-claro: #eff6ff;
+      --rc-verde: #15803d; --rc-verde-f: #dcfce7; --rc-ambar: #a16207; --rc-ambar-f: #fef9c3;
+      --rc-laranja: #c2410c; --rc-laranja-f: #ffedd5; --rc-cinza-f: #e5e7eb;
+    }
+    body { background: var(--rc-fundo); }
+    .rc { max-width: 1180px; margin: 0 auto; padding: 26px 20px 40px; }
+    .rc *, .rc-modal * { box-sizing: border-box; }
+    /* o style.css global deixa todo <label> em caixa alta e todo input com 100% */
+    .rc label, .rc-modal label { text-transform: none; letter-spacing: 0; }
+    .rc input[type=checkbox], .rc-modal input[type=checkbox] { width: auto; flex: none; }
+
+    .rc-topo { display: flex; justify-content: space-between; align-items: flex-end; gap: 16px; flex-wrap: wrap; margin-bottom: 18px; }
+    .rc-eyebrow { font-size: 11px; font-weight: 800; letter-spacing: .12em; color: var(--rc-azul2); text-transform: uppercase; }
+    .rc-topo h1 { font-size: 28px; line-height: 1.15; margin: 4px 0 4px; color: var(--rc-tinta); letter-spacing: -.02em; }
+    .rc-topo p { margin: 0; color: var(--rc-suave); font-size: 14px; }
+
+    .rc-kpis { display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; margin-bottom: 18px; }
+    .rc-kpi { background: #fff; border: 1px solid var(--rc-linha); border-radius: 14px; padding: 14px 16px; position: relative; overflow: hidden; }
+    .rc-kpi::before { content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 4px; background: var(--c, var(--rc-azul2)); }
+    .rc-kpi .r { font-size: 11px; color: var(--rc-suave); font-weight: 700; text-transform: uppercase; letter-spacing: .05em; }
+    .rc-kpi .v { font-size: 24px; font-weight: 800; color: var(--rc-tinta); margin-top: 4px; font-variant-numeric: tabular-nums; }
+
+    .rc-painel { background: #fff; border: 1px solid var(--rc-linha); border-radius: 18px; box-shadow: 0 1px 2px rgba(15,23,42,.04), 0 8px 24px rgba(15,23,42,.05); margin-bottom: 18px; overflow: hidden; }
+
+    /* Analisar contrato — estado inicial */
+    .an-hero { display: grid; grid-template-columns: 5fr 7fr; }
+    .an-lado { background: linear-gradient(160deg, #1e3a8a 0%, #172554 100%); color: #fff; padding: 28px; }
+    .an-lado h2 { font-size: 22px; margin: 0 0 6px; line-height: 1.2; color: #fff; }
+    .an-lado .sub { font-size: 13px; opacity: .8; margin-bottom: 20px; }
+    .an-passo { display: flex; gap: 12px; margin-bottom: 14px; }
+    .an-passo .n { flex: none; width: 26px; height: 26px; border-radius: 50%; background: rgba(255,255,255,.15); font-weight: 800; font-size: 13px; display: flex; align-items: center; justify-content: center; }
+    .an-passo b { display: block; font-size: 14px; }
+    .an-passo span { font-size: 12px; opacity: .75; }
+    .an-custo { margin-top: 18px; font-size: 12px; opacity: .7; border-top: 1px solid rgba(255,255,255,.15); padding-top: 12px; }
+    .an-envio { padding: 24px; display: flex; flex-direction: column; gap: 12px; }
+    .an-drop { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; min-height: 190px; border: 2px dashed #93c5fd; background: var(--rc-azul-claro); border-radius: 14px; padding: 20px; text-align: center; cursor: pointer; transition: background .15s, border-color .15s; color: var(--rc-tinta); font-size: 14px; font-weight: 400; }
+    .an-drop:hover, .an-drop.sobre { background: #dbeafe; border-color: var(--rc-azul2); }
+    .an-drop .ic { width: 48px; height: 48px; border-radius: 12px; background: #fff; display: flex; align-items: center; justify-content: center; font-size: 24px; box-shadow: 0 2px 6px rgba(37,99,235,.15); }
+    .an-drop strong { font-size: 15px; }
+    .an-drop small { color: var(--rc-suave); font-size: 12px; }
+    .an-chip { display: flex; justify-content: space-between; align-items: center; gap: 8px; font-size: 13px; padding: 8px 10px; border: 1px solid var(--rc-linha); border-radius: 10px; background: #fff; }
+    .an-chip button { border: 0; background: none; color: #b91c1c; cursor: pointer; font-size: 12px; }
+    .rc-check { display: flex; gap: 8px; align-items: flex-start; font-size: 12px; color: var(--rc-texto); font-weight: 400; }
+    .rc-check input { margin-top: 2px; }
+    .rc-btn-grande { width: 100%; padding: 13px; font-size: 15px; border-radius: 12px; }
+
+    /* Resultado */
+    .an-banner { display: grid; grid-template-columns: 1fr auto; gap: 18px; align-items: center; padding: 22px 26px; }
+    .an-banner .rot { font-size: 11px; font-weight: 800; letter-spacing: .12em; text-transform: uppercase; opacity: .85; }
+    .an-banner .ver { font-size: 38px; font-weight: 900; letter-spacing: -.02em; line-height: 1.05; margin: 2px 0 4px; }
+    .an-banner .mot { font-size: 13px; opacity: .9; max-width: 520px; }
+    .an-banner .eco { text-align: right; }
+    .an-banner .eco .val { font-size: 32px; font-weight: 900; font-variant-numeric: tabular-nums; }
+    .an-banner .eco .det { font-size: 12px; opacity: .85; }
+    .an-arquivos { display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; padding: 10px 26px; border-bottom: 1px solid var(--rc-linha); font-size: 12px; color: var(--rc-suave); background: #f8fafc; }
+    .an-corpo { padding: 22px 26px; }
+    .an-metricas { display: grid; grid-template-columns: 1.4fr 1fr; gap: 14px; margin-bottom: 18px; }
+    .an-card { border: 1px solid var(--rc-linha); border-radius: 14px; padding: 16px; background: #fff; }
+    .an-card h3 { font-size: 12px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; color: var(--rc-suave); margin: 0 0 12px; }
+    .an-barra { margin-bottom: 10px; }
+    .an-barra .t { display: flex; justify-content: space-between; font-size: 13px; color: var(--rc-texto); margin-bottom: 4px; }
+    .an-barra .t b { font-variant-numeric: tabular-nums; color: var(--rc-tinta); }
+    .an-barra .trilho { height: 12px; background: #f1f5f9; border-radius: 99px; overflow: hidden; }
+    .an-barra .enche { height: 100%; border-radius: 99px; }
+    .an-razao { font-size: 13px; color: var(--rc-texto); margin-top: 6px; }
+    .an-linha { display: flex; justify-content: space-between; gap: 10px; padding: 7px 0; border-bottom: 1px dashed var(--rc-linha); font-size: 13px; }
+    .an-linha:last-child { border-bottom: 0; }
+    .an-linha b { font-variant-numeric: tabular-nums; color: var(--rc-tinta); white-space: nowrap; }
+    .an-duas { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+    .an-tese { border: 1px solid var(--rc-linha); border-left: 4px solid var(--c); border-radius: 10px; padding: 10px 12px; margin-bottom: 8px; font-size: 13px; }
+    .an-tese .tt { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; font-weight: 700; color: var(--rc-tinta); }
+    .an-tese .dd { margin-top: 4px; color: var(--rc-texto); }
+    .an-tese .tr { margin-top: 4px; color: var(--rc-suave); font-size: 12px; font-style: italic; }
+    .an-campos { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 10px; }
+    .an-campos label { font-size: 11px; color: var(--rc-suave); display: block; margin-bottom: 2px; font-weight: 600; }
+    .an-campos input, .an-campos select { width: 100%; padding: 8px 10px; border: 1px solid #cbd5e1; border-radius: 8px; font-size: 13px; }
+    .an-campos .baixa input, .an-campos .baixa select { background: #fefce8; border-color: #facc15; }
+    .an-avisos { background: #fffbeb; border: 1px solid #fde68a; border-radius: 12px; padding: 10px 14px; font-size: 12px; color: #78350f; margin-bottom: 16px; }
+    .an-avisos li { margin: 2px 0; }
+    .an-acoes { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; padding: 16px 26px; border-top: 1px solid var(--rc-linha); background: #f8fafc; }
+    .an-nota { font-size: 11px; color: var(--rc-suave); flex-basis: 100%; }
+
+    /* Listas em abas */
+    .rc-abas { display: flex; gap: 4px; padding: 8px 10px 0; border-bottom: 1px solid var(--rc-linha); align-items: flex-end; flex-wrap: wrap; }
+    .rc-aba { border: 0; background: none; padding: 10px 14px; font-size: 14px; font-weight: 700; color: var(--rc-suave); border-bottom: 3px solid transparent; cursor: pointer; }
+    .rc-aba.on { color: var(--rc-azul); border-bottom-color: var(--rc-azul2); }
+    .rc-aba .q { display: inline-block; min-width: 20px; padding: 0 6px; margin-left: 4px; border-radius: 99px; background: #e2e8f0; color: var(--rc-texto); font-size: 11px; }
+    .rc-filtros { display: flex; gap: 6px; flex-wrap: wrap; padding: 12px 16px 0; }
+    .rc-filtros button { border: 1px solid #cbd5e1; background: #fff; border-radius: 99px; padding: 5px 12px; font-size: 12px; cursor: pointer; color: var(--rc-texto); }
+    .rc-filtros button.on { background: var(--rc-azul); color: #fff; border-color: var(--rc-azul); }
+    .rc-tab { width: 100%; border-collapse: collapse; font-size: 13px; }
+    .rc-tab th { text-align: left; font-size: 11px; color: var(--rc-suave); text-transform: uppercase; letter-spacing: .04em; padding: 12px 16px 8px; }
+    .rc-tab td { padding: 12px 16px; border-top: 1px solid #f1f5f9; vertical-align: middle; }
+    .rc-tab tr.lin { cursor: pointer; }
+    .rc-tab tr.lin:hover td { background: #f8fafc; }
+    .rc-tab .sub { font-size: 12px; color: var(--rc-suave); }
+    .rc-pill { display: inline-block; font-size: 11px; font-weight: 800; padding: 3px 10px; border-radius: 99px; white-space: nowrap; letter-spacing: .02em; }
+    .rc-num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+    .rc-vazio { padding: 34px 16px; text-align: center; color: var(--rc-suave); font-size: 14px; }
+
+    /* Janela: nova revisão */
+    .rc-modal { position: fixed; inset: 0; background: rgba(15,23,42,.55); display: flex; align-items: flex-start; justify-content: center; padding: 30px 16px; overflow-y: auto; z-index: 50; }
+    .rc-modal[hidden] { display: none; }
+    .rc-janela { background: #fff; border-radius: 18px; width: 100%; max-width: 820px; box-shadow: 0 20px 60px rgba(0,0,0,.25); }
+    .rc-janela-topo { display: flex; justify-content: space-between; align-items: center; padding: 18px 22px; border-bottom: 1px solid var(--rc-linha); }
+    .rc-janela-topo h2 { margin: 0; font-size: 18px; color: var(--rc-tinta); }
+    .rc-fechar { border: 0; background: #f1f5f9; width: 32px; height: 32px; border-radius: 50%; cursor: pointer; font-size: 16px; }
+    .rc-janela-corpo { padding: 18px 22px; }
+    .rc-sec { margin-bottom: 18px; }
+    .rc-sec-t { display: flex; align-items: center; gap: 8px; font-weight: 800; color: var(--rc-tinta); font-size: 14px; margin-bottom: 10px; }
+    .rc-sec-t .n { width: 22px; height: 22px; border-radius: 50%; background: var(--rc-azul); color: #fff; font-size: 12px; display: flex; align-items: center; justify-content: center; }
+    .rc-sec-t small { font-weight: 400; color: var(--rc-suave); font-size: 12px; }
+    .rc-grade { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+    .rc-grade .c2 { grid-column: span 2; }
+    .rc-grade label { display: block; font-size: 11px; color: var(--rc-suave); font-weight: 700; margin-bottom: 3px; }
+    .rc-grade input, .rc-grade select { padding: 9px 11px; font-size: 14px; }
+    .rc-janela-pe { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; padding: 16px 22px; border-top: 1px solid var(--rc-linha); background: #f8fafc; border-radius: 0 0 18px 18px; }
+    .rc-da-analise { background: var(--rc-verde-f); color: #14532d; border-radius: 12px; padding: 12px 14px; font-size: 13px; margin-bottom: 16px; }
+
+    @media (max-width: 900px) {
+      .rc-kpis { grid-template-columns: repeat(2, 1fr); }
+      .an-hero, .an-metricas, .an-duas { grid-template-columns: 1fr; }
+      .an-banner { grid-template-columns: 1fr; }
+      .an-banner .eco { text-align: left; }
+      .rc-grade { grid-template-columns: 1fr 1fr; }
+      .rc-oculta { display: none; }
+    }
+    @media (max-width: 560px) {
+      .rc-topo h1 { font-size: 23px; }
+      .an-campos, .rc-grade { grid-template-columns: 1fr; }
+      .rc-grade .c2 { grid-column: auto; }
+      .an-banner .ver { font-size: 30px; }
+    }
   </style>
 </head>
 <body>
@@ -50,121 +155,134 @@
   <div class="nav-user" id="nav-user"></div>
 </nav>
 
-<div class="container">
-  <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:16px">
+<div class="rc">
+  <div class="rc-topo">
     <div>
-      <h1 style="font-size:22px;margin:0">Revisão de Contratos Bancários</h1>
-      <div style="font-size:13px;color:#6b7280">O banco cobrou a mais? A IA lê o contrato, o sistema calcula e o advogado assina o laudo.</div>
+      <div class="rc-eyebrow">Recobro · Balladão Advogados</div>
+      <h1>Revisão de Contratos Bancários</h1>
+      <p>A IA lê o contrato, o sistema calcula e o advogado assina o laudo.</p>
     </div>
-    <button class="btn btn-primary" onclick="abrirForm()">+ Nova revisão</button>
+    <button class="btn btn-outline" onclick="abrirForm()">+ Revisão sem análise</button>
   </div>
   <div id="alerta"></div>
 
-  <!-- Análise rápida: veredito antes de cadastrar cliente e valor -->
-  <div class="card" id="an-card">
-    <div class="card-header"><span class="card-title">Analisar contrato</span><span style="font-size:12px;color:#6b7280">veredito preliminar em 1–2 min · só a leitura da IA (≈ R$ 2)</span></div>
-    <div id="an-upload">
-      <label class="an-drop" id="an-drop">
-        <div style="font-size:28px">📄</div>
-        <div style="font-weight:700;margin-top:4px">Solte aqui o contrato (PDF ou foto) ou clique para escolher</div>
-        <div style="font-size:12px;color:#6b7280;margin-top:2px">Até 10 arquivos: contrato, extrato, carnê, boletos, cálculo do banco</div>
-        <input type="file" id="an-arquivos" accept=".pdf,.jpg,.jpeg,.png,.webp" multiple style="display:none" onchange="anEscolher(this.files)">
-      </label>
-      <div id="an-lista" style="margin-top:8px"></div>
-      <label class="rc-check" style="margin-top:10px;font-size:12px;color:#374151">
-        <input type="checkbox" id="an-consent" style="margin-top:2px">
-        <span>O contratante me enviou este contrato e autorizou a análise (LGPD, art. 7º, V e VI).</span>
-      </label>
-      <div style="display:flex;gap:8px;align-items:center;margin-top:10px;flex-wrap:wrap">
-        <button class="btn btn-primary" id="an-btn" onclick="anEnviar(this)">Analisar contrato</button>
-        <span id="an-msg" style="font-size:13px;color:#6b7280"></span>
+  <div class="rc-kpis" id="kpis"></div>
+
+  <!-- Analisar contrato -->
+  <div class="rc-painel" id="an-card">
+    <div class="an-hero" id="an-upload">
+      <div class="an-lado">
+        <h2>O banco cobrou a mais?</h2>
+        <div class="sub">Veredito em 1 a 2 minutos, antes de cadastrar cliente ou valor.</div>
+        <div class="an-passo"><div class="n">1</div><div><b>Suba o contrato</b><span>PDF ou foto; extrato e carnê ajudam</span></div></div>
+        <div class="an-passo"><div class="n">2</div><div><b>A IA lê, o sistema calcula</b><span>taxa real × média do Banco Central, tarifas e seguros</span></div></div>
+        <div class="an-passo"><div class="n">3</div><div><b>Veja o veredito</b><span>forte, moderada, fraca ou inviável — e quanto dá para recuperar</span></div></div>
+        <div class="an-custo">Custo: só a leitura da IA (≈ R$ 2). Se valer a pena, vira revisão com laudo do advogado.</div>
+      </div>
+      <div class="an-envio">
+        <label class="an-drop" id="an-drop">
+          <div class="ic">📄</div>
+          <strong>Solte o contrato aqui ou clique para escolher</strong>
+          <small>Até 10 arquivos · PDF, JPG ou PNG · 20 MB cada</small>
+          <input type="file" id="an-arquivos" accept=".pdf,.jpg,.jpeg,.png,.webp" multiple style="display:none" onchange="anEscolher(this.files)">
+        </label>
+        <div id="an-lista" style="display:flex;flex-direction:column;gap:6px"></div>
+        <label class="rc-check"><input type="checkbox" id="an-consent"><span>O contratante me enviou este contrato e autorizou a análise (LGPD, art. 7º, V e VI).</span></label>
+        <button class="btn btn-primary rc-btn-grande" id="an-btn" onclick="anEnviar(this)">Analisar contrato</button>
+        <div id="an-msg" style="font-size:13px;color:#64748b;text-align:center"></div>
       </div>
     </div>
     <div id="an-resultado" hidden></div>
   </div>
 
-  <!-- Nova revisão -->
-  <div class="card" id="rc-form" hidden>
-    <div class="card-header"><span class="card-title">Nova revisão</span><button class="btn btn-sm btn-outline" onclick="fecharForm()">Fechar</button></div>
-    <div style="padding:4px 0">
-      <div style="font-weight:700;margin:4px 0 8px">Cliente (quem recebe o laudo)</div>
-      <div class="form-grid">
-        <div class="form-group"><label>Nome *</label><input type="text" id="cli_nome"></div>
-        <div class="form-group"><label>WhatsApp</label><input type="text" id="cli_wpp" inputmode="tel" placeholder="(62) 99999-0000"></div>
-        <div class="form-group"><label>E-mail</label><input type="email" id="cli_email"></div>
+  <!-- Listas -->
+  <div class="rc-painel">
+    <div class="rc-abas">
+      <button class="rc-aba on" id="aba-analises" onclick="trocarAba('analises')">Análises <span class="q" id="q-analises">0</span></button>
+      <button class="rc-aba" id="aba-revisoes" onclick="trocarAba('revisoes')">Revisões <span class="q" id="q-revisoes">0</span></button>
+    </div>
+    <div id="painel-analises"><div id="an-recentes"><div class="loading"><div class="spinner"></div>Carregando...</div></div></div>
+    <div id="painel-revisoes" hidden>
+      <div class="rc-filtros" id="filtros"></div>
+      <div id="lista"><div class="loading"><div class="spinner"></div>Carregando...</div></div>
+    </div>
+  </div>
+</div>
+
+<!-- Janela: nova revisão (cliente, valor, pagamento) -->
+<div class="rc-modal" id="rc-form" hidden onclick="if (event.target === this) fecharForm()">
+  <div class="rc-janela">
+    <div class="rc-janela-topo"><h2>Abrir revisão</h2><button class="rc-fechar" onclick="fecharForm()" aria-label="Fechar">✕</button></div>
+    <div class="rc-janela-corpo">
+      <div id="form-da-analise" class="rc-da-analise" hidden></div>
+
+      <div class="rc-sec">
+        <div class="rc-sec-t"><span class="n">1</span> Cliente <small>quem recebe o laudo</small></div>
+        <div class="rc-grade">
+          <div><label>Nome *</label><input type="text" id="cli_nome"></div>
+          <div><label>WhatsApp</label><input type="text" id="cli_wpp" inputmode="tel" placeholder="(62) 99999-0000"></div>
+          <div><label>E-mail</label><input type="email" id="cli_email"></div>
+        </div>
       </div>
-      <div style="font-weight:700;margin:14px 0 8px">Contratante (titular do contrato)</div>
-      <div class="form-grid">
-        <div class="form-group"><label>Nome</label><input type="text" id="alvo_nome" placeholder="Se vazio, usa o nome do cliente"></div>
-        <div class="form-group"><label>CPF/CNPJ</label><input type="text" id="alvo_doc" inputmode="numeric"></div>
-        <div class="form-group"><label>Pessoa</label><select id="alvo_tipo"><option value="PF">Física</option><option value="PJ">Jurídica</option></select></div>
+
+      <div class="rc-sec">
+        <div class="rc-sec-t"><span class="n">2</span> Cobrança deste caso</div>
+        <div class="rc-grade">
+          <div><label>Valor cobrado (R$) *</label><input type="text" id="valor" inputmode="decimal" placeholder="0 = cortesia"></div>
+          <div class="c2"><label>Como o cliente paga</label>
+            <select id="forma">
+              <option value="mercadopago">Link Mercado Pago (Pix, cartão ou boleto)</option>
+              <option value="dinheiro">Já recebido (dinheiro ou Pix direto)</option>
+              <option value="pendente">Só registrar — cobrar depois</option>
+            </select></div>
+        </div>
       </div>
-      <div style="font-weight:700;margin:14px 0 4px">Contrato <span style="font-weight:400;font-size:12px;color:#6b7280">— tudo opcional: a IA lê do contrato e o operador confere</span></div>
-      <div class="form-grid">
-        <div class="form-group"><label>Tipo de operação</label>
-          <select id="rev_tipo_operacao">
-            <option value="">— a IA identifica —</option>
-            <option value="financiamento_veiculo">Financiamento de veículo</option>
-            <option value="emprestimo_pessoal">Empréstimo pessoal</option>
-            <option value="consignado">Consignado</option>
-            <option value="ccb_capital_giro">CCB / capital de giro</option>
-            <option value="cartao_credito">Cartão de crédito</option>
-            <option value="cheque_especial">Cheque especial</option>
-            <option value="financiamento_imobiliario">Financiamento imobiliário</option>
-            <option value="outro">Outro</option>
-          </select></div>
-        <div class="form-group"><label>Banco credor</label><input type="text" id="rev_banco" placeholder="Ex: Banco Pan"></div>
-        <div class="form-group"><label>Data da contratação</label><input type="date" id="rev_data"></div>
-        <div class="form-group"><label>Valor financiado (R$)</label><input type="text" id="rev_valor" inputmode="decimal"></div>
-        <div class="form-group"><label>Parcela (R$)</label><input type="text" id="rev_parcela" inputmode="decimal"></div>
-        <div class="form-group"><label>Prazo (meses)</label><input type="number" id="rev_prazo" min="1" max="480"></div>
-        <div class="form-group"><label>Parcelas pagas</label><input type="number" id="rev_pagas" min="0" max="480"></div>
-        <div class="form-group"><label>Situação</label>
-          <select id="rev_situacao"><option value="">—</option><option value="em_dia">Em dia</option><option value="atrasado">Atrasado</option><option value="busca_apreensao">Busca e apreensão</option><option value="executado">Executado</option><option value="quitado">Quitado</option></select></div>
+
+      <div class="rc-sec">
+        <div class="rc-sec-t"><span class="n">3</span> Contratante e contrato <small>opcional — a IA lê do contrato</small></div>
+        <div class="rc-grade">
+          <div class="c2"><label>Contratante (titular)</label><input type="text" id="alvo_nome" placeholder="Se vazio, usa o nome do cliente"></div>
+          <div><label>Pessoa</label><select id="alvo_tipo"><option value="PF">Física</option><option value="PJ">Jurídica</option></select></div>
+          <div><label>CPF/CNPJ</label><input type="text" id="alvo_doc" inputmode="numeric"></div>
+          <div><label>Banco credor</label><input type="text" id="rev_banco"></div>
+          <div><label>Tipo de operação</label>
+            <select id="rev_tipo_operacao">
+              <option value="">— a IA identifica —</option>
+              <option value="financiamento_veiculo">Financiamento de veículo</option>
+              <option value="emprestimo_pessoal">Empréstimo pessoal</option>
+              <option value="consignado">Consignado</option>
+              <option value="ccb_capital_giro">CCB / capital de giro</option>
+              <option value="cartao_credito">Cartão de crédito</option>
+              <option value="cheque_especial">Cheque especial</option>
+              <option value="financiamento_imobiliario">Financiamento imobiliário</option>
+              <option value="outro">Outro</option>
+            </select></div>
+          <div><label>Data da contratação</label><input type="date" id="rev_data"></div>
+          <div><label>Valor financiado (R$)</label><input type="text" id="rev_valor" inputmode="decimal"></div>
+          <div><label>Parcela (R$)</label><input type="text" id="rev_parcela" inputmode="decimal"></div>
+          <div><label>Prazo (meses)</label><input type="number" id="rev_prazo" min="1" max="480"></div>
+          <div><label>Parcelas pagas</label><input type="number" id="rev_pagas" min="0" max="480"></div>
+          <div><label>Situação</label>
+            <select id="rev_situacao"><option value="">—</option><option value="em_dia">Em dia</option><option value="atrasado">Atrasado</option><option value="busca_apreensao">Busca e apreensão</option><option value="executado">Executado</option><option value="quitado">Quitado</option></select></div>
+        </div>
       </div>
-      <div id="form-da-analise" hidden class="alert alert-success" style="margin-top:12px;font-size:13px"></div>
-      <div style="margin-top:12px" id="form-docs">
-        <label style="font-weight:600;font-size:13px">Documentos (até 10) — contrato obrigatório; extratos, boletos, carnê e cálculo do banco ajudam</label>
-        <div id="docs-lista" style="margin:8px 0"></div>
-        <label class="btn btn-outline" style="cursor:pointer;display:flex;align-items:center;justify-content:center;width:100%;padding:16px;border:2px dashed #cbd5e1;background:#f8fafc;color:#475569;text-transform:none;font-weight:500">
-          📎 Anexar contrato e documentos (PDF ou foto)
+
+      <div class="rc-sec" id="form-docs">
+        <div class="rc-sec-t"><span class="n">4</span> Documentos <small>contrato obrigatório; extrato, carnê e boletos ajudam</small></div>
+        <div id="docs-lista" style="display:flex;flex-direction:column;gap:6px;margin-bottom:8px"></div>
+        <label class="an-drop" style="min-height:90px">
+          <strong>📎 Anexar contrato e documentos</strong><small>PDF ou foto · até 10</small>
           <input type="file" accept=".pdf,.jpg,.jpeg,.png,.webp" multiple style="display:none" onchange="adicionarDocs(this.files); this.value=''">
         </label>
       </div>
-      <div style="font-weight:700;margin:16px 0 8px">Cobrança deste caso</div>
-      <div class="form-grid">
-        <div class="form-group"><label>Valor cobrado (R$) *</label><input type="text" id="valor" inputmode="decimal" placeholder="Ex: 1.200,00 — 0 para cortesia"></div>
-        <div class="form-group"><label>Como o cliente paga</label>
-          <select id="forma">
-            <option value="mercadopago">Link Mercado Pago (Pix/cartão/boleto)</option>
-            <option value="dinheiro">Já recebido (dinheiro/Pix direto)</option>
-            <option value="pendente">Só registrar — cobrar depois</option>
-          </select></div>
-      </div>
-      <label class="rc-check" style="margin-top:12px;font-size:12px;color:#374151">
-        <input type="checkbox" id="consentimento" style="margin-top:2px">
-        <span>O contratante autoriza a Recobro e o Balladão Advogados a tratar o contrato bancário e os documentos enviados exclusivamente para a revisão do contrato e a orientação jurídica, conforme a <a href="/privacidade.html#revisao-bancaria" target="_blank">Política de Privacidade</a> e os <a href="/termos.html#revisao-bancaria" target="_blank">Termos de Uso</a> (LGPD, art. 7º, V e VI).</span>
-      </label>
-      <div style="display:flex;gap:8px;margin-top:14px;align-items:center;flex-wrap:wrap">
-        <button class="btn btn-primary" id="btn-criar" onclick="criar(this)">Criar revisão</button>
-        <span id="form-msg" style="font-size:13px;color:#6b7280"></span>
-      </div>
+
+      <label class="rc-check"><input type="checkbox" id="consentimento"><span>O contratante autoriza a Recobro e o Balladão Advogados a tratar o contrato bancário e os documentos enviados exclusivamente para a revisão do contrato e a orientação jurídica, conforme a <a href="/privacidade.html#revisao-bancaria" target="_blank">Política de Privacidade</a> e os <a href="/termos.html#revisao-bancaria" target="_blank">Termos de Uso</a> (LGPD, art. 7º, V e VI).</span></label>
     </div>
-  </div>
-
-  <div class="card">
-    <div class="card-header"><span class="card-title">Análises recentes</span><span style="font-size:12px;color:#6b7280">veredito preliminar — ainda não é revisão</span></div>
-    <div id="an-recentes"><div class="loading"><div class="spinner"></div>Carregando...</div></div>
-  </div>
-
-  <div class="rc-kpis" id="kpis"></div>
-
-  <div class="card">
-    <div class="card-header" style="flex-wrap:wrap;gap:8px">
-      <span class="card-title">Revisões</span>
-      <div class="rc-filtros" id="filtros"></div>
+    <div class="rc-janela-pe">
+      <button class="btn btn-primary" id="btn-criar" onclick="criar(this)">Criar revisão</button>
+      <button class="btn btn-outline" onclick="fecharForm()">Cancelar</button>
+      <span id="form-msg" style="font-size:13px;color:#64748b"></span>
     </div>
-    <div id="lista"><div class="loading"><div class="spinner"></div>Carregando...</div></div>
   </div>
 </div>
 
@@ -183,7 +301,10 @@
   function logout() { localStorage.removeItem('rastreia_token'); localStorage.removeItem('rastreia_usuario'); window.location.href = '/'; }
   function esc(s) { const d = document.createElement('div'); d.textContent = s == null ? '' : String(s); return d.innerHTML; }
   const brl = (v) => v == null ? '—' : 'R$ ' + Number(v).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const brl0 = (v) => v == null ? '—' : 'R$ ' + Number(v).toLocaleString('pt-BR', { maximumFractionDigits: 0 });
+  const pct = (v, d = 2) => v == null ? '—' : (Number(v) * 100).toFixed(d).replace('.', ',') + '%';
   const num = (id) => { const v = document.getElementById(id).value.replace(/[^\d,.]/g, ''); if (v === '') return null; const n = v.includes(',') ? Number(v.replace(/\./g, '').replace(',', '.')) : Number(v); return Number.isFinite(n) ? n : null; };
+  const auth = () => ({ Authorization: `Bearer ${token}` });
   function alerta(msg, tipo) { document.getElementById('alerta').innerHTML = `<div class="alert alert-${tipo === 'error' ? 'error' : 'success'}">${esc(msg)}</div>`; window.scrollTo(0, 0); }
 
   // Onde cada caso está (etapa da revisão; antes do pagamento vale o status do pedido)
@@ -191,27 +312,44 @@
     aguardando_pagamento: ['Aguardando pagamento', '#fef3c7', '#92400e'],
     aguardando_documentos: ['Aguardando documentos', '#fef3c7', '#92400e'],
     extraindo: ['IA lendo o contrato', '#e0e7ff', '#3730a3'],
-    conferencia_operador: ['Conferência do operador', '#ffedd5', '#9a3412'],
-    calculando: ['Calculando / taxa manual', '#ffedd5', '#9a3412'],
-    revisao_juridica: ['Revisão jurídica', '#ede9fe', '#5b21b6'],
+    conferencia_operador: ['Conferência', '#ffedd5', '#9a3412'],
+    calculando: ['Calculando', '#ffedd5', '#9a3412'],
+    revisao_juridica: ['No jurídico', '#ede9fe', '#5b21b6'],
     reprovado_juridico: ['Devolvido pelo jurídico', '#fee2e2', '#991b1b'],
     aprovado: ['Laudo aprovado', '#dcfce7', '#14532d'],
     concluido: ['Laudo entregue', '#dcfce7', '#14532d'],
     cancelado: ['Cancelado', '#e5e7eb', '#374151']
   };
-  const VER = { forte: ['FORTE', '#dcfce7', '#14532d'], moderada: ['MODERADA', '#fef9c3', '#713f12'], fraca: ['FRACA', '#ffedd5', '#7c2d12'], inviavel: ['INVIÁVEL', '#e5e7eb', '#1f2937'] };
+  // [rótulo, fundo, texto, cor forte, frase]
+  const VER = {
+    forte: ['FORTE', '#dcfce7', '#14532d', '#16a34a', 'Há base sólida para revisar o contrato.'],
+    moderada: ['MODERADA', '#fef9c3', '#713f12', '#ca8a04', 'Há pontos questionáveis; vale a análise do advogado.'],
+    fraca: ['FRACA', '#ffedd5', '#7c2d12', '#ea580c', 'O contrato está perto do praticado no mercado.'],
+    inviavel: ['INVIÁVEL', '#e5e7eb', '#1f2937', '#6b7280', 'Não dá para sustentar a revisão com estes dados.']
+  };
   const TIPO_OP = { financiamento_veiculo: 'Veículo', emprestimo_pessoal: 'Empréstimo pessoal', consignado: 'Consignado', ccb_capital_giro: 'Capital de giro', cartao_credito: 'Cartão', cheque_especial: 'Cheque especial', financiamento_imobiliario: 'Imobiliário', outro: 'Outro' };
+  const RES = { aplicavel: ['Aplicável', '#dcfce7', '#14532d', '#16a34a'], verificar: ['Verificar', '#fef9c3', '#713f12', '#ca8a04'] };
   const situacao = (r) => r.status === 'cancelado' ? 'cancelado' : r.status === 'aguardando_pagamento' ? 'aguardando_pagamento' : r.status === 'concluido' ? 'concluido' : (r.etapa || 'aguardando_documentos');
   const pill = (t, f, c) => `<span class="rc-pill" style="background:${f};color:${c}">${esc(t)}</span>`;
 
+  // ═══════ Abas ═══════
+  function trocarAba(a) {
+    ['analises', 'revisoes'].forEach(k => {
+      document.getElementById('aba-' + k).classList.toggle('on', k === a);
+      document.getElementById('painel-' + k).hidden = k !== a;
+    });
+    try { localStorage.setItem('rc_aba', a); } catch (_) {}
+  }
+
+  // ═══════ Revisões ═══════
   let REVISOES = [], filtro = 'abertas';
   const FILTROS = [['abertas', 'Em andamento'], ['revisao_juridica', 'No jurídico'], ['concluido', 'Entregues'], ['todas', 'Todas']];
 
   async function carregar() {
-    const r = await fetch('/api/revisao-bancaria', { headers: { Authorization: `Bearer ${token}` } });
+    const r = await fetch('/api/revisao-bancaria', { headers: auth() });
     if (r.status === 401) return logout();
     const j = await r.json().catch(() => ({}));
-    if (!r.ok) { document.getElementById('lista').innerHTML = `<div style="padding:16px;color:#b91c1c">${esc(j.erro || 'Erro ao carregar')}</div>`; return; }
+    if (!r.ok) { document.getElementById('lista').innerHTML = `<div class="rc-vazio" style="color:#b91c1c">${esc(j.erro || 'Erro ao carregar')}</div>`; return; }
     REVISOES = j.revisoes || [];
     render();
   }
@@ -223,58 +361,66 @@
     const entreguesMes = s.filter(r => r.sit === 'concluido' && r.concluido_em && new Date(r.concluido_em) >= mes);
     const fortes = s.filter(r => ['forte', 'moderada'].includes(r.veredito) && r.sit !== 'cancelado');
     document.getElementById('kpis').innerHTML = [
-      ['Em andamento', abertas.length],
-      ['No jurídico', s.filter(r => r.sit === 'revisao_juridica').length],
-      ['Entregues no mês', entreguesMes.length],
-      ['Casos fortes/moderados', fortes.length],
-      ['Economia apontada', brl(fortes.reduce((t, r) => t + Number(r.economia_estimada || 0), 0))]
-    ].map(([r, v]) => `<div class="rc-kpi"><div class="r">${r}</div><div class="v">${v}</div></div>`).join('');
+      ['Em andamento', abertas.length, '#2563eb'],
+      ['No jurídico', s.filter(r => r.sit === 'revisao_juridica').length, '#7c3aed'],
+      ['Entregues no mês', entreguesMes.length, '#16a34a'],
+      ['Fortes / moderados', fortes.length, '#ca8a04'],
+      ['Economia apontada', brl0(fortes.reduce((t, r) => t + Number(r.economia_estimada || 0), 0)), '#0f172a']
+    ].map(([r, v, c]) => `<div class="rc-kpi" style="--c:${c}"><div class="r">${r}</div><div class="v">${v}</div></div>`).join('');
+    document.getElementById('q-revisoes').textContent = abertas.length;
 
     document.getElementById('filtros').innerHTML = FILTROS.map(([k, t]) => `<button class="${filtro === k ? 'on' : ''}" onclick="filtro='${k}';render()">${t}</button>`).join('');
     const vis = s.filter(r => filtro === 'todas' ? true : filtro === 'abertas' ? !['concluido', 'cancelado'].includes(r.sit) : r.sit === filtro);
-    if (!vis.length) { document.getElementById('lista').innerHTML = `<div style="padding:24px;text-align:center;color:#6b7280">Nenhuma revisão aqui.</div>`; return; }
+    if (!vis.length) { document.getElementById('lista').innerHTML = `<div class="rc-vazio">Nenhuma revisão aqui.</div>`; return; }
     document.getElementById('lista').innerHTML = `<div style="overflow-x:auto"><table class="rc-tab"><thead><tr>
-        <th>#</th><th>Cliente / contratante</th><th class="rc-oculta">Banco</th><th>Onde está</th><th>Veredito</th><th class="rc-num">Economia</th><th class="rc-num rc-oculta">Valor</th><th class="rc-oculta">Criada</th></tr></thead><tbody>
+        <th>#</th><th>Cliente</th><th class="rc-oculta">Banco</th><th>Onde está</th><th>Veredito</th><th class="rc-num">Economia</th><th class="rc-num rc-oculta">Valor</th></tr></thead><tbody>
       ${vis.map(r => {
         const e = ETAPA[r.sit] || [r.sit, '#e5e7eb', '#374151'];
         const v = VER[r.veredito];
         return `<tr class="lin" onclick="location.href='/pedido.html?id=${r.id}'">
-          <td>${r.numero}</td>
-          <td><strong>${esc(r.cliente_nome)}</strong>${r.alvo_nome && r.alvo_nome !== r.cliente_nome ? `<div style="font-size:12px;color:#6b7280">${esc(r.alvo_nome)}</div>` : ''}</td>
-          <td class="rc-oculta">${esc(r.banco || '—')}${r.tipo_operacao ? `<div style="font-size:12px;color:#6b7280">${esc(TIPO_OP[r.tipo_operacao] || r.tipo_operacao)}</div>` : ''}</td>
+          <td style="color:#64748b">${r.numero}</td>
+          <td><strong>${esc(r.cliente_nome)}</strong><div class="sub">${r.alvo_nome && r.alvo_nome !== r.cliente_nome ? esc(r.alvo_nome) + ' · ' : ''}${new Date(r.criado_em).toLocaleDateString('pt-BR')}</div></td>
+          <td class="rc-oculta">${esc(r.banco || '—')}${r.tipo_operacao ? `<div class="sub">${esc(TIPO_OP[r.tipo_operacao] || r.tipo_operacao)}</div>` : ''}</td>
           <td>${pill(e[0], e[1], e[2])}</td>
-          <td>${v ? pill(v[0], v[1], v[2]) : '<span style="color:#9ca3af">—</span>'}</td>
-          <td class="rc-num">${r.economia_estimada != null ? brl(r.economia_estimada) : '—'}</td>
-          <td class="rc-num rc-oculta">${Number(r.valor) > 0 ? brl(r.valor) : 'cortesia'}</td>
-          <td class="rc-oculta" style="white-space:nowrap">${new Date(r.criado_em).toLocaleDateString('pt-BR')}</td></tr>`;
+          <td>${v ? pill(v[0], v[1], v[2]) : '<span style="color:#94a3b8">—</span>'}</td>
+          <td class="rc-num"><strong>${r.economia_estimada != null ? brl(r.economia_estimada) : '—'}</strong></td>
+          <td class="rc-num rc-oculta">${Number(r.valor) > 0 ? brl(r.valor) : 'cortesia'}</td></tr>`;
       }).join('')}</tbody></table></div>`;
   }
 
-  // ── Nova revisão ──
+  // ═══════ Abrir revisão (janela) ═══════
   let docs = [];
   let ANALISE_FORM = null;
-  function abrirForm() { ANALISE_FORM = null; document.getElementById('form-da-analise').hidden = true; document.getElementById('form-docs').hidden = false; const f = document.getElementById('rc-form'); f.hidden = false; f.scrollIntoView({ behavior: 'smooth' }); document.getElementById('cli_nome').focus(); }
-  function fecharForm() { document.getElementById('rc-form').hidden = true; }
+  function abrirForm() {
+    ANALISE_FORM = null;
+    document.getElementById('form-da-analise').hidden = true;
+    document.getElementById('form-docs').hidden = false;
+    document.getElementById('rc-form').hidden = false;
+    document.body.style.overflow = 'hidden';
+    setTimeout(() => document.getElementById('cli_nome').focus(), 50);
+  }
+  function fecharForm() { document.getElementById('rc-form').hidden = true; document.body.style.overflow = ''; }
+  document.addEventListener('keydown', e => { if (e.key === 'Escape' && !document.getElementById('rc-form').hidden) fecharForm(); });
   function adicionarDocs(files) {
     for (const f of Array.from(files || [])) {
-      if (docs.length >= 10) { alerta('Máximo de 10 documentos.', 'error'); break; }
-      if (f.size > 20 * 1024 * 1024) { alerta(`${f.name}: acima de 20 MB.`, 'error'); continue; }
+      if (docs.length >= 10) { msg('Máximo de 10 documentos.', true); break; }
+      if (f.size > 20 * 1024 * 1024) { msg(`${f.name}: acima de 20 MB.`, true); continue; }
       docs.push(f);
     }
     renderDocs();
   }
   function removerDoc(i) { docs.splice(i, 1); renderDocs(); }
   function renderDocs() {
-    document.getElementById('docs-lista').innerHTML = docs.map((d, i) => `<div style="display:flex;justify-content:space-between;align-items:center;font-size:13px;padding:6px 8px;border:1px solid #e5e7eb;border-radius:6px;margin-bottom:4px"><span>📄 ${esc(d.name)} <span style="color:#9ca3af">(${(d.size / 1024 / 1024).toFixed(1)} MB)</span></span><button type="button" class="btn btn-sm btn-outline" onclick="removerDoc(${i})">remover</button></div>`).join('');
+    document.getElementById('docs-lista').innerHTML = docs.map((d, i) => `<div class="an-chip"><span>📄 ${esc(d.name)} <span style="color:#94a3b8">(${(d.size / 1024 / 1024).toFixed(1)} MB)</span></span><button type="button" onclick="removerDoc(${i})">remover</button></div>`).join('');
   }
-  function msg(t, erro) { const m = document.getElementById('form-msg'); m.style.color = erro ? '#b91c1c' : '#6b7280'; m.textContent = t; }
+  function msg(t, erro) { const m = document.getElementById('form-msg'); m.style.color = erro ? '#b91c1c' : '#64748b'; m.textContent = t; }
 
   async function criar(btn) {
     const cliente_nome = document.getElementById('cli_nome').value.trim();
     const valor = num('valor');
     if (!cliente_nome) return msg('Informe o nome do cliente.', true);
     if (valor == null || valor < 0) return msg('Informe o valor cobrado (0 para cortesia).', true);
-    if (!docs.length && !ANALISE_FORM) return msg('Anexe o contrato bancário (PDF ou foto) ou use "Analisar contrato".', true);
+    if (!docs.length && !ANALISE_FORM) return msg('Anexe o contrato bancário (PDF ou foto).', true);
     if (!document.getElementById('consentimento').checked) return msg('Marque o consentimento LGPD.', true);
     if (btn.disabled) return;
     btn.disabled = true; msg('Criando…');
@@ -301,33 +447,28 @@
         situacao: document.getElementById('rev_situacao').value || null
       }
     };
-    const auth = { Authorization: `Bearer ${token}` };
     try {
-      const r = await fetch('/api/pedidos', { method: 'POST', headers: { ...auth, 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+      const r = await fetch('/api/pedidos', { method: 'POST', headers: { ...auth(), 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
       const j = await r.json().catch(() => ({}));
       if (!r.ok) { btn.disabled = false; return msg(j.erro || 'Erro ao criar', true); }
       const id = j.id;
       if (docs.length) {
         msg('Enviando o contrato…');
         const fd = new FormData(); docs.forEach(d => fd.append('documentos', d, d.name));
-        const up = await fetch(`/api/pedidos/${id}/documentos`, { method: 'POST', headers: auth, body: fd });
+        const up = await fetch(`/api/pedidos/${id}/documentos`, { method: 'POST', headers: auth(), body: fd });
         if (!up.ok) console.warn('upload do contrato falhou: envie de novo na tela da revisão');
       }
       if (forma === 'dinheiro') {
-        await fetch(`/api/pedidos/${id}/pagamento-alternativo`, { method: 'POST', headers: { ...auth, 'Content-Type': 'application/json' }, body: JSON.stringify({ forma: 'dinheiro' }) });
+        await fetch(`/api/pedidos/${id}/pagamento-alternativo`, { method: 'POST', headers: { ...auth(), 'Content-Type': 'application/json' }, body: JSON.stringify({ forma: 'dinheiro' }) });
       } else if (forma === 'mercadopago') {
-        await fetch(`/api/pedidos/${id}/pagamento`, { method: 'POST', headers: { ...auth, 'Content-Type': 'application/json' } });
+        await fetch(`/api/pedidos/${id}/pagamento`, { method: 'POST', headers: { ...auth(), 'Content-Type': 'application/json' } });
       }
       location.href = `/pedido.html?id=${id}`;
     } catch (e) { btn.disabled = false; msg('Erro de conexão.', true); }
   }
 
   // ═══════ Análise rápida ═══════
-  const auth = () => ({ Authorization: `Bearer ${token}` });
-  const pct = (v, d = 2) => v == null ? '—' : (Number(v) * 100).toFixed(d).replace('.', ',') + '%';
-  const RES = { aplicavel: ['Aplicável', '#dcfce7', '#14532d'], verificar: ['Verificar', '#fef9c3', '#713f12'], nao_aplicavel: ['Não aplicável', '#f3f4f6', '#4b5563'] };
   let anArquivos = [], ANALISE = null, anTimer = null;
-
   const drop = document.getElementById('an-drop');
   ['dragenter', 'dragover'].forEach(ev => drop.addEventListener(ev, e => { e.preventDefault(); drop.classList.add('sobre'); }));
   ['dragleave', 'drop'].forEach(ev => drop.addEventListener(ev, e => { e.preventDefault(); drop.classList.remove('sobre'); }));
@@ -341,9 +482,9 @@
       anArquivos.push(f);
     }
     document.getElementById('an-arquivos').value = '';
-    document.getElementById('an-lista').innerHTML = anArquivos.map((f, i) => `<div style="display:flex;justify-content:space-between;align-items:center;font-size:13px;padding:6px 8px;border:1px solid #e5e7eb;border-radius:6px;margin-bottom:4px;background:#fff"><span>📄 ${esc(f.name)} <span style="color:#9ca3af">(${(f.size / 1024 / 1024).toFixed(1)} MB)</span></span><button type="button" class="btn btn-sm btn-outline" onclick="anArquivos.splice(${i},1);anEscolher([])">remover</button></div>`).join('');
+    document.getElementById('an-lista').innerHTML = anArquivos.map((f, i) => `<div class="an-chip"><span>📄 ${esc(f.name)} <span style="color:#94a3b8">(${(f.size / 1024 / 1024).toFixed(1)} MB)</span></span><button type="button" onclick="anArquivos.splice(${i},1);anEscolher([])">remover</button></div>`).join('');
   }
-  function anMsg(t, erro) { const m = document.getElementById('an-msg'); m.style.color = erro ? '#b91c1c' : '#6b7280'; m.textContent = t; }
+  function anMsg(t, erro) { const m = document.getElementById('an-msg'); m.style.color = erro ? '#b91c1c' : '#64748b'; m.textContent = t; }
 
   async function anEnviar(btn) {
     if (!anArquivos.length) return anMsg('Escolha o contrato.', true);
@@ -367,11 +508,12 @@
     if (r.status === 401) return logout();
     const a = await r.json().catch(() => null);
     if (!r.ok || !a) { anMsg((a && a.erro) || 'Análise não encontrada', true); return; }
+    const primeira = !ANALISE || ANALISE.id !== a.id;
     ANALISE = a;
     anRender();
     if (a.status === 'lendo') anTimer = setTimeout(() => anAbrir(id), 3000);
     else carregarAnalises();
-    document.getElementById('an-card').scrollIntoView({ behavior: 'smooth', block: 'start' });
+    if (primeira) document.getElementById('an-card').scrollIntoView({ behavior: 'smooth', block: 'start' });
   }
   function anFechar() { clearTimeout(anTimer); ANALISE = null; history.replaceState(null, '', location.pathname); document.getElementById('an-resultado').hidden = true; document.getElementById('an-upload').hidden = false; }
 
@@ -393,43 +535,75 @@
   function anRender() {
     const a = ANALISE, box = document.getElementById('an-resultado');
     document.getElementById('an-upload').hidden = true; box.hidden = false;
-    const topo = `<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:10px">
-      <div style="font-size:13px;color:#6b7280">${(a.arquivos || []).map(f => '📄 ' + esc(f.filename)).join(' · ')}</div>
-      <div style="display:flex;gap:6px"><button class="btn btn-sm btn-outline" onclick="anFechar()">+ Outro contrato</button></div></div>`;
-    if (a.status === 'lendo') { box.innerHTML = topo + `<div class="loading" style="padding:30px"><div class="spinner"></div>A IA está lendo o contrato e o sistema vai calcular… (1 a 2 minutos)</div>`; return; }
-    if (a.status === 'erro') { box.innerHTML = topo + `<div class="alert alert-error">Não consegui analisar: ${esc(a.erro || 'erro')}</div><button class="btn btn-outline" onclick="anReler()">↻ Ler de novo</button>`; return; }
+    const arquivos = `<div class="an-arquivos"><span>${(a.arquivos || []).map(f => '📄 ' + esc(f.filename)).join(' &nbsp; ')}</span><button class="btn btn-sm btn-outline" onclick="anFechar()">+ Analisar outro contrato</button></div>`;
+    if (a.status === 'lendo') {
+      box.innerHTML = arquivos + `<div style="padding:50px 20px;text-align:center"><div class="spinner" style="margin:0 auto 14px"></div><div style="font-weight:700;color:#0f172a">Lendo o contrato…</div><div style="font-size:13px;color:#64748b;margin-top:4px">A IA está lendo; em seguida o sistema busca a taxa do Banco Central e calcula. Leva de 1 a 2 minutos.</div></div>`;
+      return;
+    }
+    if (a.status === 'erro') {
+      box.innerHTML = arquivos + `<div style="padding:30px 26px"><div class="alert alert-error">Não consegui analisar: ${esc(a.erro || 'erro')}</div><button class="btn btn-outline" onclick="anReler()">↻ Ler de novo</button></div>`;
+      return;
+    }
     const c = a.calculo || {}, d = a.dados || {}, tx = a.taxa_media_bacen || {};
     const v = VER[a.veredito] || VER.inviavel;
     const cp = c.cenario_principal ? (c.cenarios || {})[c.cenario_principal] : null;
     const conf = (a.dados_extraidos || {}).confianca_por_campo || {};
-    const baixa = (k) => ['baixa'].includes(conf[k] || conf[k.split('.').pop()]);
-    let h = topo;
-    h += `<div class="an-grid">
-      <div class="an-box" style="background:${v[1]};color:${v[2]};border-color:${v[1]}"><div class="r" style="color:${v[2]};font-weight:700">VEREDITO PRELIMINAR</div><div class="v" style="font-size:24px">${v[0]}</div><div class="d" style="color:${v[2]}">${esc(c.veredito?.economia_pct != null ? `economia de ${c.veredito.economia_pct.toFixed(1).replace('.', ',')}% do financiado` : (c.veredito?.motivo || ''))}</div></div>
-      <div class="an-box"><div class="r">Taxa real do contrato</div><div class="v">${pct(c.taxa?.efetiva_am, 2)} a.m.</div><div class="d">${pct(c.taxa?.efetiva_aa)} a.a.${c.taxa?.declarada_am != null ? ` · no papel ${pct(c.taxa.declarada_am, 2)}` : ''}</div></div>
-      <div class="an-box"><div class="r">Média do Banco Central${tx.mes_referencia ? ' ' + esc(tx.mes_referencia.split('-').reverse().join('/')) : ''}</div><div class="v">${c.bacen ? pct(c.bacen.am, 2) + ' a.m.' : '—'}</div><div class="d">${c.razao != null ? `contrato = ${c.razao.toFixed(2).replace('.', ',')}× a média` : esc(tx.erro || '')}${tx.olinda?.banco ? ` · ${esc(tx.olinda.banco.nome)} ${tx.olinda.banco.posicao}º de ${tx.olinda.total_instituicoes}` : ''}</div></div>
-      <div class="an-box"><div class="r">Economia estimada</div><div class="v">${brl(a.economia_estimada)}</div><div class="d">${cp ? `já pago a mais ${brl(cp.total_pago_a_mais)} · a vencer ${brl(cp.economia_futura)}` : 'sem cenário de revisão'}</div></div>
-    </div>`;
-    const alertas = [...((a.dados_extraidos || {}).alertas_leitura || []), ...(c.alertas || [])];
-    if (alertas.length) h += `<div class="alert alert-warning" style="font-size:12px;margin-top:10px">${alertas.map(esc).join('<br>')}</div>`;
-    const ts = (a.teses?.teses || []).filter(t => t.resultado !== 'nao_aplicavel');
-    if (ts.length) h += `<div style="font-weight:700;margin-top:12px">O que pode ser questionado</div>` + ts.map(t => { const r = RES[t.resultado]; return `<div class="an-tese"><span class="rc-pill" style="background:${r[1]};color:${r[2]}">${r[0]}</span> <strong>${esc(t.nome)}</strong><div style="font-size:12px;margin-top:3px">${esc(t.detalhe)}</div>${t.trecho_contrato ? `<div style="font-size:12px;color:#6b7280">“${esc(t.trecho_contrato)}”</div>` : ''}</div>`; }).join('');
-    h += `<div style="font-weight:700;margin-top:14px">Dados lidos pela IA <span style="font-weight:400;font-size:12px;color:#6b7280">— corrija o que estiver errado (amarelo = leitura incerta) e recalcule</span></div>
-      <div class="an-campos" style="margin-top:6px">${AN_CAMPOS.map(([k, rot, tipo, ops]) => {
-        const val = getP(d, k);
-        const ctl = tipo === 'select'
-          ? `<select data-k="${k}">${ops.map(([o, t]) => `<option value="${o}" ${String(val ?? '') === o ? 'selected' : ''}>${t}</option>`).join('')}</select>`
-          : `<input data-k="${k}" type="${tipo === 'date' ? 'date' : 'text'}" ${tipo === 'num' ? 'inputmode="decimal"' : ''} value="${esc(val == null ? '' : (tipo === 'num' ? String(val).replace('.', ',') : val))}">`;
-        const est = k === 'parcelas_pagas' && d.parcelas_pagas_estimadas ? ' (estimadas)' : '';
-        return `<div class="${baixa(k) ? 'baixa' : ''}"><label>${rot}${est}</label>${ctl}</div>`;
-      }).join('')}</div>
-      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px;align-items:center">
-        <button class="btn btn-outline" onclick="anRecalcular(this)">↻ Recalcular com as correções</button>
-        ${a.pedido_id ? `<a class="btn btn-primary" href="/pedido.html?id=${a.pedido_id}">Ver a revisão #${esc(a.pedido_numero || '')}</a>` : `<button class="btn btn-primary" onclick="anAbrirRevisao()">⚖ Abrir revisão (laudo do advogado)</button>`}
-        <button class="btn btn-outline" onclick="anReler()">Ler o contrato de novo</button>
-        <span id="an-res-msg" style="font-size:13px"></span>
+    const baixa = (k) => (conf[k] || conf[k.split('.').pop()]) === 'baixa';
+
+    // 1) Banner do veredito
+    let h = `<div class="an-banner" style="background:${v[1]};color:${v[2]}">
+      <div><div class="rot">Veredito preliminar</div><div class="ver">${v[0]}</div><div class="mot">${esc(v[4])}${c.veredito?.economia_pct != null ? ` Economia de ${c.veredito.economia_pct.toFixed(1).replace('.', ',')}% do valor financiado.` : ''}</div></div>
+      <div class="eco"><div class="rot">Economia estimada</div><div class="val">${brl(a.economia_estimada)}</div><div class="det">${cp ? `${esc(cp.nome)}` : 'sem cenário de revisão'}</div></div>
+    </div>` + arquivos;
+
+    // 2) Taxas (barras) + dinheiro
+    const efet = c.taxa?.efetiva_am, med = c.bacen?.am;
+    const maior = Math.max(efet || 0, med || 0, 0.0001);
+    const barra = (rot, val, cor, extra) => `<div class="an-barra"><div class="t"><span>${rot}</span><b>${val != null ? pct(val, 2) + ' a.m.' : '—'}</b></div><div class="trilho"><div class="enche" style="width:${val != null ? Math.max(4, val / maior * 100) : 0}%;background:${cor}"></div></div>${extra ? `<div style="font-size:11px;color:#64748b;margin-top:3px">${extra}</div>` : ''}</div>`;
+    h += `<div class="an-corpo"><div class="an-metricas">
+      <div class="an-card"><h3>Juros: contrato × mercado</h3>
+        ${barra('Taxa real do contrato', efet, v[3], `${pct(c.taxa?.efetiva_aa)} ao ano${c.taxa?.declarada_am != null ? ` · no papel: ${pct(c.taxa.declarada_am, 2)} a.m.` : ''}`)}
+        ${barra(`Média do Banco Central${tx.mes_referencia ? ' (' + esc(tx.mes_referencia.split('-').reverse().join('/')) + ')' : ''}`, med, '#94a3b8', tx.ok === false ? esc(tx.erro || 'indisponível') : (tx.nome_serie ? esc(tx.nome_serie) : ''))}
+        <div class="an-razao">${c.razao != null ? `O contrato cobra <b>${c.razao.toFixed(2).replace('.', ',')}×</b> a média do mercado.` : ''}${tx.olinda?.banco ? ` O ${esc(tx.olinda.banco.nome)} era o <b>${tx.olinda.banco.posicao}º de ${tx.olinda.total_instituicoes}</b> bancos (do mais barato ao mais caro).` : ''}</div>
       </div>
-      <div style="font-size:11px;color:#6b7280;margin-top:8px">Preliminar: a IA só leu o contrato; taxas, cenários e economia são calculados pelo sistema. O laudo final passa pela conferência do operador e pela assinatura do advogado.</div>`;
+      <div class="an-card"><h3>Dinheiro em jogo</h3>
+        <div class="an-linha"><span>Parcela hoje</span><b>${cp ? brl(cp.parcela_contratada) : brl(d.operacao?.valor_parcela)}</b></div>
+        <div class="an-linha"><span>Parcela revisada</span><b>${cp ? brl(cp.parcela_revisada) : '—'}</b></div>
+        <div class="an-linha"><span>Já pago a mais</span><b>${cp ? brl(cp.total_pago_a_mais) : '—'}</b></div>
+        <div class="an-linha"><span>Economia nas parcelas a vencer</span><b>${cp ? brl(cp.economia_futura) : '—'}</b></div>
+        <div class="an-linha"><span>Restituição em dobro (referência)</span><b>${cp ? brl(cp.repeticao_dobro) : '—'}</b></div>
+      </div>
+    </div>`;
+
+    // 3) Avisos
+    const alertas = [...((a.dados_extraidos || {}).alertas_leitura || []), ...(c.alertas || [])];
+    if (alertas.length) h += `<div class="an-avisos"><b>Atenção</b><ul style="margin:4px 0 0 18px;padding:0">${alertas.map(x => `<li>${esc(x)}</li>`).join('')}</ul></div>`;
+
+    // 4) Teses × dados lidos
+    const ts = (a.teses?.teses || []).filter(t => t.resultado !== 'nao_aplicavel').sort((x, y) => (x.resultado === 'aplicavel' ? -1 : 1) - (y.resultado === 'aplicavel' ? -1 : 1));
+    h += `<div class="an-duas">
+      <div class="an-card"><h3>O que pode ser questionado</h3>${ts.length ? ts.map(t => { const r = RES[t.resultado] || RES.verificar; return `<div class="an-tese" style="--c:${r[3]}"><div class="tt">${esc(t.nome)} <span class="rc-pill" style="background:${r[1]};color:${r[2]}">${r[0]}</span></div><div class="dd">${esc(t.detalhe)}</div>${t.trecho_contrato ? `<div class="tr">“${esc(t.trecho_contrato)}”</div>` : ''}</div>`; }).join('') : '<div style="color:#64748b;font-size:13px">Nenhum ponto questionável encontrado.</div>'}</div>
+      <div class="an-card"><h3>Dados lidos pela IA</h3>
+        <div style="font-size:12px;color:#64748b;margin:-6px 0 10px">Corrija o que estiver errado e recalcule. <span style="background:#fefce8;border:1px solid #facc15;padding:0 6px;border-radius:4px">amarelo</span> = leitura incerta.</div>
+        <div class="an-campos">${AN_CAMPOS.map(([k, rot, tipo, ops]) => {
+          const val = getP(d, k);
+          const ctl = tipo === 'select'
+            ? `<select data-k="${k}">${ops.map(([o, t]) => `<option value="${o}" ${String(val ?? '') === o ? 'selected' : ''}>${t}</option>`).join('')}</select>`
+            : `<input data-k="${k}" type="${tipo === 'date' ? 'date' : 'text'}" ${tipo === 'num' ? 'inputmode="decimal"' : ''} value="${esc(val == null ? '' : (tipo === 'num' ? String(val).replace('.', ',') : val))}">`;
+          const est = k === 'parcelas_pagas' && d.parcelas_pagas_estimadas ? ' · estimadas' : '';
+          return `<div class="${baixa(k) ? 'baixa' : ''}"><label>${rot}${est}</label>${ctl}</div>`;
+        }).join('')}</div>
+        <button class="btn btn-outline" style="margin-top:12px;width:100%" onclick="anRecalcular(this)">↻ Recalcular com as correções</button>
+      </div>
+    </div></div>`;
+
+    // 5) Ações
+    h += `<div class="an-acoes">
+      ${a.pedido_id ? `<a class="btn btn-primary" href="/pedido.html?id=${a.pedido_id}">Ver a revisão #${esc(a.pedido_numero || '')}</a>` : `<button class="btn btn-primary" onclick="anAbrirRevisao()">⚖ Abrir revisão com laudo do advogado</button>`}
+      <button class="btn btn-outline" onclick="anReler()">Ler o contrato de novo</button>
+      <span id="an-res-msg" style="font-size:13px"></span>
+      <div class="an-nota">Preliminar: a IA só leu o contrato; taxas, cenários e economia são calculados pelo sistema. O laudo final passa pela conferência do operador e pela assinatura do advogado.</div>
+    </div>`;
     box.innerHTML = h;
   }
 
@@ -444,11 +618,10 @@
       else if (v === '') v = null;
       if (String(antes ?? '') !== String(v ?? '')) { setP(d, k, v); editados.push(k); }
     });
-    btn.disabled = true; const m = document.getElementById('an-res-msg'); m.style.color = '#6b7280'; m.textContent = 'Recalculando…';
+    btn.disabled = true; btn.textContent = 'Recalculando…';
     const r = await fetch(`/api/revisao-bancaria/analises/${ANALISE.id}/dados`, { method: 'PUT', headers: { ...auth(), 'Content-Type': 'application/json' }, body: JSON.stringify({ dados: d, campos_editados: editados }) });
     const j = await r.json().catch(() => ({}));
-    btn.disabled = false;
-    if (!r.ok) { m.style.color = '#b91c1c'; m.textContent = j.erro || 'Erro'; return; }
+    if (!r.ok) { btn.disabled = false; btn.textContent = '↻ Recalcular com as correções'; const m = document.getElementById('an-res-msg'); m.style.color = '#b91c1c'; m.textContent = j.erro || 'Erro'; return; }
     ANALISE = j; anRender(); carregarAnalises();
   }
   async function anReler() {
@@ -463,7 +636,7 @@
     ANALISE_FORM = a.id;
     document.getElementById('form-docs').hidden = true;
     const fa = document.getElementById('form-da-analise'); fa.hidden = false;
-    fa.innerHTML = `Usando a análise de ${esc((a.arquivos || []).map(f => f.filename).join(', '))} — veredito preliminar <strong>${esc((VER[a.veredito] || ['—'])[0])}</strong>. O contrato não será lido de novo.`;
+    fa.innerHTML = `✓ Usando a análise de <b>${esc((a.arquivos || []).map(f => f.filename).join(', '))}</b> — veredito preliminar <b>${esc((VER[a.veredito] || ['—'])[0])}</b>, economia ${brl(a.economia_estimada)}. O contrato não será lido de novo.`;
     const put = (id, v) => { if (v != null && v !== '') document.getElementById(id).value = v; };
     put('alvo_nome', d.contratante?.nome); put('alvo_doc', d.contratante?.cpf_cnpj); put('alvo_tipo', d.pfpj);
     put('rev_tipo_operacao', d.tipo_operacao); put('rev_banco', d.instituicao?.nome); put('rev_data', op.data_contratacao);
@@ -477,19 +650,24 @@
     const r = await fetch('/api/revisao-bancaria/analises', { headers: auth() });
     const j = await r.json().catch(() => ({}));
     const el = document.getElementById('an-recentes');
-    if (!r.ok) { el.innerHTML = `<div style="padding:12px;color:#b91c1c">${esc(j.erro || 'Erro')}</div>`; return; }
+    if (!r.ok) { el.innerHTML = `<div class="rc-vazio" style="color:#b91c1c">${esc(j.erro || 'Erro')}</div>`; return; }
     const ls = j.analises || [];
-    if (!ls.length) { el.innerHTML = `<div style="padding:18px;text-align:center;color:#6b7280">Nenhuma análise ainda. Suba um contrato acima.</div>`; return; }
-    el.innerHTML = `<div style="overflow-x:auto"><table class="rc-tab"><thead><tr><th>Quando</th><th>Contratante / banco</th><th>Veredito</th><th class="rc-num">Economia</th><th class="rc-oculta">Situação</th></tr></thead><tbody>${ls.map(a => {
+    document.getElementById('q-analises').textContent = ls.filter(a => !a.pedido_id).length;
+    if (!ls.length) { el.innerHTML = `<div class="rc-vazio">Nenhuma análise ainda. Suba um contrato acima para ver o veredito.</div>`; return; }
+    el.innerHTML = `<div style="overflow-x:auto"><table class="rc-tab"><thead><tr><th>Contratante</th><th class="rc-oculta">Banco</th><th>Veredito</th><th class="rc-num">Economia</th><th class="rc-oculta">Situação</th></tr></thead><tbody>${ls.map(a => {
       const v = VER[a.veredito];
-      const sit = a.status === 'lendo' ? 'lendo…' : a.status === 'erro' ? 'erro' : a.pedido_id ? `virou revisão #${a.pedido_numero}` : 'só análise';
-      return `<tr class="lin" onclick="anAbrir('${a.id}')"><td style="white-space:nowrap">${new Date(a.criado_em).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}</td>
-        <td><strong>${esc(a.contratante || '—')}</strong><div style="font-size:12px;color:#6b7280">${esc(a.banco || '')}${a.tipo_operacao ? ' · ' + esc(TIPO_OP[a.tipo_operacao] || a.tipo_operacao) : ''}</div></td>
-        <td>${v ? pill(v[0], v[1], v[2]) : '—'}</td><td class="rc-num">${a.economia_estimada != null ? brl(a.economia_estimada) : '—'}</td><td class="rc-oculta" style="font-size:12px;color:#6b7280">${esc(sit)}</td></tr>`;
+      const sit = a.status === 'lendo' ? pill('Lendo…', '#e0e7ff', '#3730a3') : a.status === 'erro' ? pill('Erro', '#fee2e2', '#991b1b') : a.pedido_id ? pill(`Revisão #${a.pedido_numero}`, '#dcfce7', '#14532d') : '<span class="sub">só análise</span>';
+      return `<tr class="lin" onclick="anAbrir('${a.id}')">
+        <td><strong>${esc(a.contratante || 'Contrato sem nome')}</strong><div class="sub">${new Date(a.criado_em).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}${a.criado_por_nome ? ' · ' + esc(a.criado_por_nome) : ''}</div></td>
+        <td class="rc-oculta">${esc(a.banco || '—')}${a.tipo_operacao ? `<div class="sub">${esc(TIPO_OP[a.tipo_operacao] || a.tipo_operacao)}</div>` : ''}</td>
+        <td>${v ? pill(v[0], v[1], v[2]) : '<span style="color:#94a3b8">—</span>'}</td>
+        <td class="rc-num"><strong>${a.economia_estimada != null ? brl(a.economia_estimada) : '—'}</strong></td>
+        <td class="rc-oculta">${sit}</td></tr>`;
     }).join('')}</tbody></table></div>`;
   }
 
   const _q = new URLSearchParams(location.search);
+  try { const ab = localStorage.getItem('rc_aba'); if (ab) trocarAba(ab); } catch (_) {}
   if (_q.get('nova') === '1') abrirForm();
   if (_q.get('analise')) anAbrir(_q.get('analise'));
   carregar();
