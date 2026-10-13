@@ -314,6 +314,7 @@
               <button class="btn-sm" onclick='abrirEdicao(${dadosUsuario})'>Editar</button>
               <button class="btn-sm" onclick='abrirSenha(${dadosUsuario})'>Senha</button>
               <button class="btn-sm" onclick='abrirPlano(${dadosUsuario})' style="background:#ede9fe;border-color:#c4b5fd;color:#5b21b6">Plano</button>
+              <button class="btn-sm" onclick="alternarRevisor('${u.id}', ${!u.pode_revisar_juridico}, '${esc(u.oab || '')}')" title="Pode aprovar laudos da Revisão Bancária" style="${u.pode_revisar_juridico ? 'background:#dcfce7;border-color:#86efac;color:#14532d' : ''}">${u.pode_revisar_juridico ? '⚖ Revisor' + (u.oab ? ' · ' + esc(u.oab) : '') : '⚖ Tornar revisor'}</button>
               ${ehEuMesmo ? '' : `<button class="btn-sm btn-danger-sm" onclick="alternarAtivo('${u.id}', ${!u.ativo})">${u.ativo ? 'Desativar' : 'Reativar'}</button>`}
               ${ehEuMesmo ? '' : `<button class="btn-sm btn-danger-sm" onclick='abrirExclusao(${dadosUsuario})'>Excluir</button>`}
             </div>
@@ -347,6 +348,25 @@
 
   // Plano: abrir modal
   let idPlanoEdit = null;
+  // Revisão Bancária: só quem o admin habilita (com OAB) aprova o laudo.
+  async function alternarRevisor(id, ligar, oabAtual) {
+    const linha = document.getElementById('row-' + id);
+    let oab = oabAtual;
+    if (ligar) {
+      const campo = document.getElementById('oab-' + id);
+      if (!campo) {
+        linha.querySelector('.acoes').insertAdjacentHTML('beforeend', `<span id="oab-box-${id}" style="display:inline-flex;gap:4px"><input id="oab-${id}" placeholder="OAB/UF nº" value="${esc(oabAtual)}" style="width:110px;font-size:12px"><button class="btn-sm" onclick="alternarRevisor('${id}', true, '')">Salvar</button></span>`);
+        return;
+      }
+      oab = campo.value.trim();
+      if (!oab) { campo.focus(); return; }
+    }
+    const r = await fetch('/api/revisao-bancaria/revisores/' + id, { method: 'PATCH', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + localStorage.getItem('rastreia_token') }, body: JSON.stringify({ pode_revisar_juridico: ligar, oab: ligar ? oab : undefined }) });
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok) { linha.querySelector('.acoes').insertAdjacentHTML('beforeend', `<span style="color:#b91c1c;font-size:12px">${esc(j.erro || 'Erro')}</span>`); return; }
+    carregar();
+  }
+
   async function abrirPlano(u) {
     idPlanoEdit = u.id;
     document.getElementById('plano-sub').textContent = `${u.nome} (${u.email})`;

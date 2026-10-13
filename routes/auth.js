@@ -55,7 +55,7 @@ router.post('/usuarios', autenticar, admin, async (req, res) => {
 router.get('/usuarios', autenticar, admin, async (req, res) => {
   try {
     const r = await pool.query(
-      'SELECT id, nome, email, perfil, ativo, criado_em FROM usuarios ORDER BY criado_em DESC'
+      'SELECT id, nome, email, perfil, ativo, criado_em, pode_revisar_juridico, oab FROM usuarios ORDER BY criado_em DESC'
     );
     res.json({ usuarios: r.rows });
   } catch (e) {

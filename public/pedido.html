@@ -221,6 +221,97 @@
     await carregarRevisao(rbEstado.pedido.id);
   }
 
+  // Resultado do cálculo + revisão jurídica (entrega 5)
+  const rbBrl = (v) => v == null ? '—' : 'R$ ' + Number(v).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const rbPct = (v, d = 2) => v == null ? '—' : (Number(v) * 100).toFixed(d).replace('.', ',') + '%';
+  const RB_VER = { forte: ['#dcfce7', '#14532d', 'FORTE'], moderada: ['#fef9c3', '#713f12', 'MODERADA'], fraca: ['#ffedd5', '#7c2d12', 'FRACA'], inviavel: ['#e5e7eb', '#1f2937', 'INVIÁVEL'] };
+  const RB_RES = { aplicavel: ['#dcfce7', '#14532d', 'Aplicável'], verificar: ['#fef9c3', '#713f12', 'Verificar'], nao_aplicavel: ['#f3f4f6', '#4b5563', 'Não aplicável'] };
+  function renderRevisaoResultado(e) {
+    let h = '';
+    const tx = e.taxa_media_bacen;
+    if (e.etapa === 'calculando' && tx && tx.aguardando_taxa_manual) {
+      h += `<div class="alert alert-warning" style="margin-top:12px;font-size:14px"><strong>O Banco Central não respondeu.</strong> ${esc(tx.erro || '')}<br>Informe a taxa média do mês da contratação (site do BACEN) para seguir; o laudo mostrará a origem "manual".
+        <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px"><input id="rb-tx-v" placeholder="% a.m. (ex 2,08)" inputmode="decimal" style="width:130px"><input id="rb-tx-m" placeholder="mês AAAA-MM" style="width:120px"><input id="rb-tx-f" placeholder="fonte (série/URL)" style="flex:1;min-width:160px"><button class="btn btn-primary btn-sm" onclick="rbTaxaManual()">Usar esta taxa</button></div></div>`;
+    }
+    const c = e.calculo;
+    if (c && ['revisao_juridica', 'aprovado'].includes(e.etapa)) {
+      const v = RB_VER[c.veredito?.nivel] || RB_VER.inviavel;
+      const cp = c.cenario_principal ? c.cenarios[c.cenario_principal] : null;
+      h += `<div style="margin-top:14px;display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:8px">
+        <div style="background:${v[0]};color:${v[1]};border-radius:10px;padding:12px"><div style="font-size:11px;font-weight:700">VEREDITO</div><div style="font-size:22px;font-weight:800">${v[2]}</div><div style="font-size:12px">${esc(c.veredito?.motivo || '')}</div></div>
+        <div style="border:1px solid #e5e7eb;border-radius:10px;padding:12px"><div style="font-size:11px;color:#6b7280">Taxa contratada (efetiva)</div><div style="font-size:18px;font-weight:700">${rbPct(c.taxa.efetiva_am, 4)} a.m.</div><div style="font-size:12px">${rbPct(c.taxa.efetiva_aa)} a.a.${c.taxa.declarada_am != null ? ` · declarada ${rbPct(c.taxa.declarada_am, 4)}` : ''}</div></div>
+        <div style="border:1px solid #e5e7eb;border-radius:10px;padding:12px"><div style="font-size:11px;color:#6b7280">Média BACEN ${esc(tx?.mes_referencia || '')} ${tx?.origem === 'manual' ? '(manual)' : `(série ${tx?.serie_am || '?'})`}</div><div style="font-size:18px;font-weight:700">${c.bacen ? rbPct(c.bacen.am, 4) : '—'} a.m.</div><div style="font-size:12px">razão ${c.razao != null ? c.razao.toFixed(2).replace('.', ',') + '×' : '—'}${tx?.olinda?.banco ? ` · ${esc(tx.olinda.banco.nome)} ${tx.olinda.banco.posicao}º de ${tx.olinda.total_instituicoes}` : ''}</div></div>
+        <div style="border:1px solid #e5e7eb;border-radius:10px;padding:12px"><div style="font-size:11px;color:#6b7280">Economia estimada (cenário ${esc(c.cenario_principal || '—')})</div><div style="font-size:18px;font-weight:700">${rbBrl(c.economia_estimada)}</div><div style="font-size:12px">${c.veredito?.economia_pct != null ? c.veredito.economia_pct.toFixed(1).replace('.', ',') + '% do financiado' : ''}</div></div>
+      </div>`;
+      if (c.alertas?.length) h += `<div class="alert alert-warning" style="font-size:13px;margin-top:8px">${c.alertas.map(esc).join('<br>')}</div>`;
+      const cen = Object.entries(c.cenarios || {});
+      if (cen.length) {
+        const linhas = [['Parcela contratada', 'parcela_contratada'], ['Parcela revisada', 'parcela_revisada'], ['Total pago a mais', 'total_pago_a_mais'], ['Saldo contratual', 'saldo_devedor_contratual'], ['Saldo revisado', 'saldo_devedor_revisado'], ['Economia futura', 'economia_futura'], ['Economia total', 'economia_total'], ['Repetição simples', 'repeticao_simples'], ['Repetição em dobro (ref.)', 'repeticao_dobro']];
+        h += `<div style="overflow-x:auto;margin-top:10px"><table style="width:100%;font-size:13px;border-collapse:collapse"><thead><tr><th style="text-align:left;padding:4px">Cobrado × devido</th>${cen.map(([k, x]) => `<th style="text-align:right;padding:4px">${k}: ${esc(x.nome)}</th>`).join('')}</tr></thead><tbody>${linhas.map(([rot, k]) => `<tr style="border-top:1px solid #f3f4f6"><td style="padding:4px">${rot}</td>${cen.map(([, x]) => `<td style="text-align:right;padding:4px;font-variant-numeric:tabular-nums">${rbBrl(x[k])}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`;
+      }
+      if (e.teses?.teses) h += `<div style="margin-top:12px;font-weight:700">Checklist de teses</div>` + e.teses.teses.map(t => { const r = RB_RES[t.resultado] || RB_RES.verificar; return `<div style="border:1px solid #e5e7eb;border-radius:8px;padding:8px;margin-top:6px"><span style="background:${r[0]};color:${r[1]};font-size:11px;font-weight:700;padding:2px 8px;border-radius:99px">${r[2]}</span> <strong style="font-size:13px">${esc(t.nome)}</strong><div style="font-size:12px;margin-top:4px">${esc(t.detalhe)}</div>${t.trecho_contrato ? `<div style="font-size:12px;color:#6b7280;margin-top:2px">Contrato: “${esc(t.trecho_contrato)}”</div>` : ''}<div style="font-size:11px;color:#6b7280;margin-top:2px">${esc(t.fundamento)}</div></div>`; }).join('');
+    }
+    if (e.etapa === 'revisao_juridica') {
+      let pia = {}; try { pia = JSON.parse(e.parecer_ia || '{}'); } catch (_) {}
+      const lista = (a) => (a || []).join('\n');
+      if (e.pode_revisar_juridico) {
+        h += `<div style="margin-top:16px;border-top:2px solid #1e3a8a;padding-top:12px"><div style="font-weight:800">Revisão jurídica</div>
+          <div style="font-size:12px;color:#6b7280">Parecer da IA (editável — use só os números do cálculo acima):</div>
+          <label style="font-size:12px;display:block;margin-top:6px">Resumo para o cliente<textarea id="rb-p-resumo" rows="4" style="width:100%">${esc(pia.resumo_cliente || '')}</textarea></label>
+          <label style="font-size:12px;display:block">Pontos encontrados (um por linha)<textarea id="rb-p-pontos" rows="4" style="width:100%">${esc(lista(pia.pontos_encontrados))}</textarea></label>
+          <label style="font-size:12px;display:block">Análise técnica<textarea id="rb-p-tecnica" rows="5" style="width:100%">${esc(pia.analise_tecnica || '')}</textarea></label>
+          <label style="font-size:12px;display:block">Próximos passos (um por linha)<textarea id="rb-p-passos" rows="3" style="width:100%">${esc(lista(pia.proximos_passos))}</textarea></label>
+          <label style="font-size:12px;display:block">Ressalvas (uma por linha)<textarea id="rb-p-ressalvas" rows="3" style="width:100%">${esc(lista(pia.ressalvas))}</textarea></label>
+          <label style="font-size:13px;display:block;margin-top:8px;font-weight:700">Parecer jurídico (obrigatório)<textarea id="rb-pj" rows="7" style="width:100%">${esc(e.parecer_juridico || '')}</textarea></label>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px">
+            <button class="btn btn-outline" onclick="rbSalvarParecer()">Salvar rascunho</button>
+            <button class="btn btn-primary" id="rb-aprovar" onclick="rbAprovar(this)">✓ Aprovar e gerar laudo</button>
+            <button class="btn btn-outline" onclick="rbDevolver()">↩ Devolver para conferência</button>
+            <button class="btn btn-outline" onclick="rbRecalcular()">↻ Recalcular</button>
+            <span id="rb-j-msg" style="font-size:13px;align-self:center"></span></div></div>`;
+      } else {
+        h += `<div class="alert alert-info" style="margin-top:12px;font-size:13px">Aguardando revisão jurídica. Somente o advogado revisor habilitado pelo admin aprova o laudo.${pia.resumo_cliente ? `<div style="margin-top:6px"><strong>Prévia (IA):</strong> ${esc(pia.resumo_cliente)}</div>` : ''}</div>`;
+      }
+    }
+    if (e.etapa === 'aprovado') h += `<div class="alert alert-success" style="margin-top:12px;font-size:13px">Laudo aprovado${e.revisado_em ? ' em ' + new Date(e.revisado_em).toLocaleString('pt-BR') : ''}.</div>`;
+    return h;
+  }
+  function rbParecerIa() {
+    const ln = (id) => document.getElementById(id).value.split('\n').map(x => x.trim()).filter(Boolean);
+    return { resumo_cliente: document.getElementById('rb-p-resumo').value.trim(), pontos_encontrados: ln('rb-p-pontos'), analise_tecnica: document.getElementById('rb-p-tecnica').value.trim(), proximos_passos: ln('rb-p-passos'), ressalvas: ln('rb-p-ressalvas') };
+  }
+  async function rbPost(caminho, corpo, metodo = 'POST') {
+    const r = await fetch(`/api/revisao-bancaria/${rbEstado.pedido.id}/${caminho}`, { method: metodo, headers: { Authorization: `Bearer ${localStorage.getItem('rastreia_token')}`, 'Content-Type': 'application/json' }, body: JSON.stringify(corpo || {}) });
+    return { r, j: await r.json().catch(() => ({})) };
+  }
+  function rbMsg(t, ok) { const m = document.getElementById('rb-j-msg'); if (m) { m.style.color = ok ? '#15803d' : '#b91c1c'; m.textContent = t; } }
+  async function rbSalvarParecer() { const { r, j } = await rbPost('parecer', { parecer_ia: rbParecerIa(), parecer_juridico: document.getElementById('rb-pj').value }, 'PUT'); rbMsg(r.ok ? 'Rascunho salvo.' : (j.erro || 'Erro'), r.ok); }
+  async function rbAprovar(btn) {
+    if (btn.disabled) return; btn.disabled = true; btn.textContent = 'Gerando laudo…';
+    const { r, j } = await rbPost('aprovar', { parecer_ia: rbParecerIa(), parecer_juridico: document.getElementById('rb-pj').value });
+    if (!r.ok) { btn.disabled = false; btn.textContent = '✓ Aprovar e gerar laudo'; rbMsg(j.erro || 'Erro ao aprovar', false); return; }
+    location.reload();
+  }
+  async function rbDevolver() {
+    const campo = document.getElementById('rb-pj');
+    const m = (document.getElementById('rb-dev-motivo') || {}).value;
+    if (!document.getElementById('rb-dev-motivo')) {
+      campo.insertAdjacentHTML('afterend', `<div id="rb-dev" style="margin-top:8px"><input id="rb-dev-motivo" placeholder="Motivo da devolução (obrigatório)" style="width:100%"><button class="btn btn-sm btn-outline" style="margin-top:4px" onclick="rbDevolver()">Confirmar devolução</button></div>`);
+      return;
+    }
+    if (!m || !m.trim()) { rbMsg('Informe o motivo.', false); return; }
+    const { r, j } = await rbPost('devolver', { motivo: m });
+    if (!r.ok) { rbMsg(j.erro || 'Erro', false); return; }
+    await carregarRevisao(rbEstado.pedido.id);
+  }
+  async function rbRecalcular() { rbMsg('Recalculando…', true); const { r, j } = await rbPost('recalcular'); if (!r.ok) rbMsg(j.erro || 'Erro', false); await carregarRevisao(rbEstado.pedido.id); }
+  async function rbTaxaManual() {
+    const v = Number(String(document.getElementById('rb-tx-v').value).replace(',', '.'));
+    const { r, j } = await rbPost('taxa-manual', { valor_am: v, mes_referencia: document.getElementById('rb-tx-m').value.trim(), fonte: document.getElementById('rb-tx-f').value.trim() });
+    if (!r.ok) mostrarAlerta(j.erro || 'Erro ao usar a taxa', 'error');
+    await carregarRevisao(rbEstado.pedido.id);
+  }
+
   // Aprovação de Inquilino: aluguel/encargos/renda comprovada (o veredito do PDF depende deles)
   function renderLocacao(p) {
     const box = document.getElementById('locacao-box');

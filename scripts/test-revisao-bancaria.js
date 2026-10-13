@@ -157,5 +157,55 @@ teste('Quitado há mais tempo que a prescrição ⇒ inviável', () => {
   assert.strictEqual(r.veredito.nivel, 'inviavel');
 });
 
+console.log('\n7) Teses + cálculo (contrato realista de veículo)');
+const T = require('../services/revisao_bancaria_teses');
+const contratoPan = () => ({
+  pfpj: 'PF', tipo_operacao: 'financiamento_veiculo', situacao: 'busca_apreensao', parcelas_pagas: 14,
+  instituicao: { nome: 'Banco Pan' },
+  operacao: { data_contratacao: '2023-05-10', valor_financiado_total: 45000, valor_parcela: 1580, prazo_meses: 48, taxa_juros_mensal_declarada: 2.19, taxa_juros_anual_declarada: 29.68, capitalizacao_expressa: true },
+  tarifas: [
+    { nome: 'Tarifa de cadastro', valor: 800, financiada: true, trecho: 'Tarifa de cadastro R$ 800,00' },
+    { nome: 'Serviços de terceiros', valor: 700, financiada: true, trecho: 'Serviços de terceiros R$ 700,00' },
+    { nome: 'Tarifa de avaliação do bem', valor: 450, financiada: true }
+  ],
+  seguros: [{ tipo: 'prestamista', valor: 1200, financiado: true, havia_opcao_recusar: false, trecho: 'Seguro prestamista contratado com a seguradora parceira' }],
+  iof: { valor: 1100, financiado: true },
+  encargos_mora: { juros_mora: 1, multa_percentual: 2, comissao_permanencia: false }
+});
+teste('Itens questionáveis = serviços de terceiros + seguro (cadastro e avaliação ficam "verificar")', () => {
+  const q = T.itensQuestionaveis(contratoPan());
+  assert.deepStrictEqual(q.map(x => `${x.origem}:${x.indice}`).sort(), ['seguro:0', 'tarifa:1']);
+});
+teste('Fluxo completo: taxa implícita > declarada, teses e veredito coerentes', () => {
+  const d = contratoPan();
+  const calc = C.calcular(d, { taxaMediaBacenAM: 2.08, questionaveis: T.itensQuestionaveis(d) });
+  const ts = T.aplicarTeses(d, calc);
+  const res = Object.fromEntries(ts.teses.map(t => [t.id, t.resultado]));
+  assert.strictEqual(res.capitalizacao, 'nao_aplicavel');           // pactuada expressamente
+  assert.strictEqual(res.seguro_venda_casada, 'aplicavel');
+  assert.strictEqual(res.avaliacao_registro_terceiros, 'aplicavel');
+  assert.strictEqual(res.tac_tec, 'verificar');                     // só cadastro
+  assert.strictEqual(res.taxa_maior_declarada, 'aplicavel');        // implícita > 2,19%
+  assert.strictEqual(res.repeticao_dobro, 'verificar');
+  assert.ok(calc.cenarios.B && calc.cenarios.C, 'cenários B e C');
+  perto(calc.cenarios.B.principal, 45000 - 1900 - 1100 * 1900 / (45000 - 1100), 1e-9, 'principal B');
+  assert.ok(['forte', 'moderada', 'fraca'].includes(calc.veredito.nivel));
+  console.log(`      (razão ${calc.razao.toFixed(2)}, economia C R$ ${calc.economia_estimada.toFixed(2)}, veredito ${calc.veredito.nivel}, ${ts.aplicaveis} teses aplicáveis)`);
+});
+teste('Juros 1,6× a média + busca e apreensão ⇒ juros abusivos e mora descaracterizada aplicáveis', () => {
+  const d = contratoPan();
+  const calc = C.calcular(d, { taxaMediaBacenAM: 1.5, questionaveis: [] });
+  const res = Object.fromEntries(T.aplicarTeses(d, calc).teses.map(t => [t.id, t.resultado]));
+  assert.ok(calc.razao >= 1.5);
+  assert.strictEqual(res.juros_abusivos, 'aplicavel');
+  assert.strictEqual(res.encargos_mora, 'aplicavel');
+});
+teste('TAC após 30/04/2008 é aplicável; antes, não', () => {
+  const d = contratoPan(); d.tarifas = [{ nome: 'TAC - Tarifa de Abertura de Crédito', valor: 500, financiada: true }];
+  assert.strictEqual(T.aplicarTeses(d, null).teses.find(t => t.id === 'tac_tec').resultado, 'aplicavel');
+  d.operacao.data_contratacao = '2007-06-01';
+  assert.strictEqual(T.aplicarTeses(d, null).teses.find(t => t.id === 'tac_tec').resultado, 'nao_aplicavel');
+});
+
 console.log(`\n${ok} passaram, ${falhas} falharam.`);
 process.exit(falhas ? 1 : 0);

@@ -123,4 +123,89 @@ router.put('/:pedidoId/conferencia', autenticar, async (req, res) => {
   }
 });
 
+// ── Entrega 5: cálculo, taxa manual, revisão jurídica ─────────────────────
+const fluxo = require('../services/revisao_bancaria_fluxo');
+async function usuarioDb(id) {
+  return (await pool.query('SELECT id, nome, perfil, pode_revisar_juridico, oab FROM usuarios WHERE id = $1', [id])).rows[0] || {};
+}
+
+router.post('/:pedidoId/recalcular', autenticar, async (req, res) => {
+  try {
+    const pedido = await carregarPedido(req.params.pedidoId);
+    if (!pedido) return res.status(404).json({ erro: 'Revisão não encontrada' });
+    const reg = await revisao.obter(pedido.id);
+    if (reg.etapa === 'aprovado') return res.status(409).json({ erro: 'Laudo já aprovado.' });
+    const out = await fluxo.processarCalculo(pedido.id, req.usuario.id);
+    res.status(out.ok ? 200 : 422).json(out);
+  } catch (e) { console.error('[revisao-bancaria] recalcular:', e); res.status(500).json({ erro: 'Erro no cálculo' }); }
+});
+
+router.post('/:pedidoId/taxa-manual', autenticar, async (req, res) => {
+  try {
+    const pedido = await carregarPedido(req.params.pedidoId);
+    if (!pedido) return res.status(404).json({ erro: 'Revisão não encontrada' });
+    const { valor_am, mes_referencia, fonte } = req.body || {};
+    const out = await fluxo.informarTaxaManual(pedido.id, { valorAm: valor_am, mesReferencia: mes_referencia, fonte }, await usuarioDb(req.usuario.id));
+    res.status(out.ok ? 200 : 422).json(out);
+  } catch (e) { console.error('[revisao-bancaria] taxa-manual:', e); res.status(500).json({ erro: 'Erro ao registrar a taxa' }); }
+});
+
+// Rascunho do revisor: parecer IA editado e parecer jurídico
+router.put('/:pedidoId/parecer', autenticar, async (req, res) => {
+  try {
+    const pedido = await carregarPedido(req.params.pedidoId);
+    if (!pedido) return res.status(404).json({ erro: 'Revisão não encontrada' });
+    const u = await usuarioDb(req.usuario.id);
+    if (!u.pode_revisar_juridico) return res.status(403).json({ erro: 'Somente advogado revisor habilitado pelo admin.' });
+    const reg = await revisao.obter(pedido.id);
+    if (reg.etapa !== 'revisao_juridica') return res.status(409).json({ erro: 'A revisão não está na etapa jurídica.' });
+    const campos = {};
+    if (req.body.parecer_ia && typeof req.body.parecer_ia === 'object') campos.parecer_ia = JSON.stringify(req.body.parecer_ia);
+    if (typeof req.body.parecer_juridico === 'string') campos.parecer_juridico = req.body.parecer_juridico.slice(0, 20000);
+    await revisao.atualizar(pedido.id, { campos, usuarioId: u.id, acao: 'Revisão bancária: parecer salvo (rascunho)' });
+    res.json({ ok: true });
+  } catch (e) { console.error('[revisao-bancaria] parecer:', e); res.status(500).json({ erro: 'Erro ao salvar o parecer' }); }
+});
+
+router.post('/:pedidoId/devolver', autenticar, async (req, res) => {
+  try {
+    const pedido = await carregarPedido(req.params.pedidoId);
+    if (!pedido) return res.status(404).json({ erro: 'Revisão não encontrada' });
+    const u = await usuarioDb(req.usuario.id);
+    if (!u.pode_revisar_juridico) return res.status(403).json({ erro: 'Somente advogado revisor habilitado pelo admin.' });
+    const motivo = String((req.body || {}).motivo || '').trim();
+    if (!motivo) return res.status(400).json({ erro: 'Informe o motivo da devolução.' });
+    const reg = await revisao.obter(pedido.id);
+    if (reg.etapa !== 'revisao_juridica') return res.status(409).json({ erro: 'A revisão não está na etapa jurídica.' });
+    await revisao.atualizar(pedido.id, { etapa: 'conferencia_operador', usuarioId: u.id, acao: 'Revisão bancária: reprovado pelo jurídico — devolvido para conferência', detalhes: motivo });
+    res.json({ ok: true });
+  } catch (e) { console.error('[revisao-bancaria] devolver:', e); res.status(500).json({ erro: 'Erro ao devolver' }); }
+});
+
+// Aprovar e gerar o laudo — idempotente (clique duplo não gera dois PDFs nem dois envios)
+router.post('/:pedidoId/aprovar', autenticar, async (req, res) => {
+  try {
+    const pedido = await carregarPedido(req.params.pedidoId);
+    if (!pedido) return res.status(404).json({ erro: 'Revisão não encontrada' });
+    const u = await usuarioDb(req.usuario.id);
+    if (!u.pode_revisar_juridico) return res.status(403).json({ erro: 'Somente advogado revisor habilitado pelo admin.' });
+    const parecer = String((req.body || {}).parecer_juridico || '').trim();
+    if (parecer.length < 30) return res.status(400).json({ erro: 'Escreva o parecer jurídico (mínimo de 30 caracteres).' });
+    const out = await fluxo.aprovar(pedido.id, u, parecer, req.body.parecer_ia);
+    res.status(out.ok ? 200 : 409).json(out);
+  } catch (e) { console.error('[revisao-bancaria] aprovar:', e); res.status(500).json({ erro: 'Erro ao aprovar' }); }
+});
+
+// Admin: habilitar advogado revisor e OAB
+router.patch('/revisores/:usuarioId', autenticar, async (req, res) => {
+  try {
+    if (req.usuario.perfil !== 'admin') return res.status(403).json({ erro: 'Somente admin.' });
+    const { pode_revisar_juridico, oab } = req.body || {};
+    const r = await pool.query('UPDATE usuarios SET pode_revisar_juridico = $1, oab = $2 WHERE id = $3 RETURNING id, nome, pode_revisar_juridico, oab',
+      [!!pode_revisar_juridico, oab ? String(oab).slice(0, 30) : null, req.params.usuarioId]);
+    if (!r.rows.length) return res.status(404).json({ erro: 'Usuário não encontrado' });
+    res.json(r.rows[0]);
+  } catch (e) { console.error('[revisao-bancaria] revisor:', e); res.status(500).json({ erro: 'Erro ao atualizar o revisor' }); }
+});
+
 module.exports = router;

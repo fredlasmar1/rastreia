@@ -150,4 +150,37 @@ async function extrairContrato(pedidoId, { forcar = false, usuarioId = null } = 
   }
 }
 
-module.exports = { extrairContrato, chamarFerramenta, registrarCusto, disponivel, modelo, TOOL_EXTRACAO, SYSTEM_EXTRACAO };
+// ── Parecer explicativo (item 9): recebe SOMENTE o JSON do caso ─────────────
+const TOOL_PARECER = {
+  name: 'redigir_parecer',
+  description: 'Registra o parecer explicativo da revisão do contrato bancário.',
+  input_schema: {
+    type: 'object',
+    properties: {
+      resumo_cliente: { type: 'string', description: 'Até 6 frases curtas, sem juridiquês.' },
+      pontos_encontrados: { type: 'array', items: { type: 'string' } },
+      analise_tecnica: { type: 'string', description: 'Para o advogado revisor.' },
+      proximos_passos: { type: 'array', items: { type: 'string' }, description: 'Sempre condicionados à validação do advogado.' },
+      ressalvas: { type: 'array', items: { type: 'string' } }
+    },
+    required: ['resumo_cliente', 'pontos_encontrados', 'analise_tecnica', 'proximos_passos', 'ressalvas']
+  }
+};
+const SYSTEM_PARECER = 'Você é um analista financeiro que explica revisões de contrato bancário para clientes leigos e para o advogado revisor. Use APENAS os números fornecidos no JSON; nunca recalcule, arredonde de outro jeito ou crie valores. Escreva em português do Brasil, frases curtas, sem juridiquês no resumo do cliente. Nunca prometa resultado: use "estimativa", "potencial" e "depende de análise judicial". Não diga que o banco agiu de má-fé. Não recomende parar de pagar as parcelas. Para cada tese aplicável, cite o trecho do contrato que a sustenta. Gere: (1) resumo_cliente com até 6 frases; (2) pontos_encontrados em lista; (3) analise_tecnica para o advogado; (4) proximos_passos sugeridos, sempre condicionados à validação do advogado; (5) ressalvas. Use a ferramenta redigir_parecer.';
+
+async function gerarParecer(pedidoId, caso) {
+  if (!disponivel()) return { ok: false, erro: 'ia_indisponivel' };
+  try {
+    const r = await chamarFerramenta({
+      system: SYSTEM_PARECER, tool: TOOL_PARECER, maxTokens: 8000,
+      conteudo: [{ type: 'text', text: 'JSON do caso (use somente estes números, já formatados em numeros_formatados):\n' + JSON.stringify(caso) }]
+    });
+    await registrarCusto(pedidoId, 'parecer', r);
+    return { ok: true, parecer: r.input, modelo: r.model };
+  } catch (e) {
+    console.error('[revisao-ia] parecer falhou:', e.message);
+    return { ok: false, erro: e.message };
+  }
+}
+
+module.exports = { extrairContrato, gerarParecer, chamarFerramenta, registrarCusto, disponivel, modelo, TOOL_EXTRACAO, SYSTEM_EXTRACAO, TOOL_PARECER, SYSTEM_PARECER };
