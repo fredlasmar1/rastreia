@@ -461,7 +461,15 @@
       if (forma === 'dinheiro') {
         await fetch(`/api/pedidos/${id}/pagamento-alternativo`, { method: 'POST', headers: { ...auth(), 'Content-Type': 'application/json' }, body: JSON.stringify({ forma: 'dinheiro' }) });
       } else if (forma === 'mercadopago') {
-        await fetch(`/api/pedidos/${id}/pagamento`, { method: 'POST', headers: { ...auth(), 'Content-Type': 'application/json' } });
+        msg('Gerando o link do Mercado Pago…');
+        let erroMp = null;
+        try {
+          const rp = await fetch(`/api/pedidos/${id}/pagamento`, { method: 'POST', headers: { ...auth(), 'Content-Type': 'application/json' } });
+          const jp = await rp.json().catch(() => ({}));
+          if (!rp.ok || !jp.init_point) erroMp = rp.status === 503 ? 'O Mercado Pago não está configurado no servidor.' : (jp.mensagem || jp.erro || `resposta ${rp.status}`);
+        } catch (_) { erroMp = 'sem conexão com o Mercado Pago'; }
+        // A tela da revisão mostra o aviso (o caso fica como "cobrar depois")
+        if (erroMp) { try { sessionStorage.setItem('rc_mp_erro_' + id, erroMp); } catch (_) {} }
       }
       location.href = `/pedido.html?id=${id}`;
     } catch (e) { btn.disabled = false; msg('Erro de conexão.', true); }

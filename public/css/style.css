@@ -154,6 +154,7 @@ textarea { resize: vertical; min-height: 100px; }
 .alert-success { background: #dcfce7; color: #14532d; border-left: 4px solid var(--verde); }
 .alert-error { background: #fee2e2; color: #7f1d1d; border-left: 4px solid var(--vermelho); }
 .alert-info { background: #dbeafe; color: #1e40af; border-left: 4px solid var(--azul-claro); }
+.alert-warning { background: #fef9c3; color: #713f12; border-left: 4px solid #ca8a04; }
 
 /* ═══════ LOADING ═══════ */
 .loading { text-align: center; padding: 48px; color: var(--cinza); }

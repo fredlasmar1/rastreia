@@ -77,6 +77,14 @@
     if (!data || data.erro) { document.getElementById('conteudo').innerHTML = '<div class="alert alert-error">Pedido não encontrado</div>'; return; }
     pedidoAtual = data;
     renderizar(data);
+    // Revisão aberta com "Link Mercado Pago", mas o link não saiu: avisa em vez de fingir que foi
+    try {
+      const erroMp = sessionStorage.getItem('rc_mp_erro_' + data.id);
+      if (erroMp && data.status === 'aguardando_pagamento' && !data.mp_init_point) {
+        mostrarAlerta(`O link do Mercado Pago NÃO foi gerado (${erroMp}). O caso ficou como "cobrar depois": tente "Gerar link" abaixo ou receba por Pix direto e confirme o pagamento.`, 'warning');
+      }
+      if (erroMp) sessionStorage.removeItem('rc_mp_erro_' + data.id);
+    } catch (_) {}
     renderLocacao(data);
     if (data.tipo === 'revisao_contrato_bancario') carregarRevisao(data.id);
     if ((data.dados || []).length) carregarProximoDegrau(data.id);
