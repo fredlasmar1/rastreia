@@ -89,6 +89,7 @@ Regra do dono (09/10/2026): preço atrativo, abaixo do mercado de Anápolis, com
 | PJ | Due Diligence Empresarial | `due_diligence` | R$ 497 | ≈ R$ 48,46 |
 | Imóvel | Due Diligence Imobiliária | `due_diligence_imobiliaria` | R$ 797 | ≈ R$ 52,50 |
 | Veículo | Simples / Mediana / Completa | `consulta_veicular_*` | 19,90 / 34,90 / 64,90 | 3,90 / 15,42 / 31,27 |
+| Jurídico | Revisão de Contrato Bancário (laudo + parecer do Balladão) | `revisao_contrato_bancario` | R$ 1.500 (configurável) | ≈ R$ 2 (IA) |
 
 - Produtos de venda respondem uma pergunta com VEREDITO (função pura, usada por PDF e tela):
   `veredito_locacao.js` (inquilino), `veredito_compra.js` (financiamento), `veredito_vendedor.js`
@@ -107,6 +108,41 @@ Regra do dono (09/10/2026): preço atrativo, abaixo do mercado de Anápolis, com
   `relatorio_url` cru numa resposta.
 - API Direct Data: doc em https://apiv3.directd.com.br/swagger/v3-scalar/swagger.json;
   números vêm com ponto decimal ("19699.97") — usar `numeroAPI()` em consultas.js.
+
+---
+
+## REVISÃO DE CONTRATO BANCÁRIO (`revisao_contrato_bancario`)
+
+Regra de ouro: **a IA LÊ e EXPLICA; quem CALCULA é código determinístico.** Nenhum
+número do laudo vem de texto da IA — todos saem de `revisao_bancaria.calculo`.
+
+Fluxo (tabela `revisao_bancaria`, 1 por pedido, coluna `etapa`):
+```
+pago → aguardando_documentos (upload até 10 docs) → extraindo (Claude lê o contrato)
+→ conferencia_operador (operador confere/corrige em pedido.html) → calculando
+  (taxa média BACEN SGS por modalidade; falhou ⇒ operador informa a taxa manual)
+→ revisao_juridica (cálculo + teses + parecer IA; advogado edita e aprova)
+→ aprovado → laudo PDF → pedido concluido → WhatsApp/e-mail (link 30 dias)
+  → forte/moderada: BALLADAO_CRM_WEBHOOK_URL (vazia ⇒ logs + WhatsApp do admin)
+```
+
+| Arquivo | Papel |
+|---|---|
+| `services/revisao_bancaria.js` | registro, preço (`configuracoes`), etapas com lock + logs |
+| `services/revisao_bancaria_ia.js` | extração (tool use) + parecer explicativo; custo por chamada em `dados_consulta` `custo_ia_revisao` |
+| `services/revisao_bancaria_calculo.js` | Price/SAC, taxa implícita (= TAXA do Excel), cenários A/B/C, veredito (`VERSAO_CALCULO`) |
+| `services/bacen_series.js` / `bacen_taxas.js` | séries SGS validadas por modalidade + posição do banco na Olinda |
+| `services/revisao_bancaria_teses.js` | 10 teses do STJ/CDC (`VERSAO_TESES`), revisável pelo Balladão |
+| `services/revisao_bancaria_fluxo.js` | taxa → cálculo → teses → parecer; aprovação atômica |
+| `services/revisao_bancaria_laudo.js` | PDF + conclusão + envios, idempotente |
+| `services/pdf/revisao_contrato_bancario.js` | laudo em 11 seções + anexo técnico |
+| `routes/revisao_bancaria.js` | `/api/revisao-bancaria/*` (conferência, taxa manual, aprovar, revisores) |
+
+- Só aprova quem tem `usuarios.pode_revisar_juridico` (admin liga em Usuários, com OAB).
+- `/concluir` recusa sem parecer jurídico aprovado. Limiares do veredito e prescrição em `configuracoes`.
+- Testes sem banco/API: `node scripts/test-revisao-bancaria.js` (cálculo/teses) e
+  `node scripts/test-laudo-revisao.js` (PDF); `scripts/test-bacen-taxas.js` consulta o BACEN real (grátis).
+- Opus 5.5 / Sonnet 5.5 recusam `tool_choice` forçado: `revisao_bancaria_ia.js` usa `auto` e confere o tool_use.
 
 ---
 
