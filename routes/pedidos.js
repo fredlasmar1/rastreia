@@ -124,15 +124,17 @@ router.get('/publico/:token', async (req, res) => {
 });
 
 // Dashboard stats — DEVE ficar ANTES de /:id
+// Revisão de Contratos é módulo à parte: fora dos números do Rastreia
+const SEM_TIPO = "'revisao_contrato_bancario'";
 router.get('/dashboard/stats', autenticar, async (req, res) => {
   try {
     const hoje = new Date(); hoje.setHours(0, 0, 0, 0);
     const [total, hoje_count, em_andamento, concluidos, receita] = await Promise.all([
-      pool.query('SELECT COUNT(*) FROM pedidos WHERE deletado_em IS NULL'),
-      pool.query('SELECT COUNT(*) FROM pedidos WHERE deletado_em IS NULL AND criado_em >= $1', [hoje]),
-      pool.query("SELECT COUNT(*) FROM pedidos WHERE deletado_em IS NULL AND status IN ('pago', 'em_andamento')"),
-      pool.query("SELECT COUNT(*) FROM pedidos WHERE deletado_em IS NULL AND status = 'concluido'"),
-      pool.query("SELECT SUM(valor) FROM pedidos WHERE deletado_em IS NULL AND status != 'cancelado' AND pago_em >= $1", [new Date(hoje.getFullYear(), hoje.getMonth(), 1)])
+      pool.query(`SELECT COUNT(*) FROM pedidos WHERE deletado_em IS NULL AND tipo <> ${SEM_TIPO}`),
+      pool.query(`SELECT COUNT(*) FROM pedidos WHERE deletado_em IS NULL AND tipo <> ${SEM_TIPO} AND criado_em >= $1`, [hoje]),
+      pool.query(`SELECT COUNT(*) FROM pedidos WHERE deletado_em IS NULL AND tipo <> ${SEM_TIPO} AND status IN ('pago', 'em_andamento')`),
+      pool.query(`SELECT COUNT(*) FROM pedidos WHERE deletado_em IS NULL AND tipo <> ${SEM_TIPO} AND status = 'concluido'`),
+      pool.query(`SELECT SUM(valor) FROM pedidos WHERE deletado_em IS NULL AND tipo <> ${SEM_TIPO} AND status != 'cancelado' AND pago_em >= $1`, [new Date(hoje.getFullYear(), hoje.getMonth(), 1)])
     ]);
     res.json({
       total: parseInt(total.rows[0].count),
@@ -160,6 +162,8 @@ router.get('/', autenticar, async (req, res) => {
     const whereParts = [];
     const params = [];
     if (!incluiDel) whereParts.push('p.deletado_em IS NULL');
+    // Revisão de Contratos é módulo à parte (/revisao-contratos.html): fora da lista do Rastreia
+    whereParts.push("p.tipo <> 'revisao_contrato_bancario'");
     if (status) {
       params.push(status);
       whereParts.push(`p.status = $${params.length}`);
@@ -174,6 +178,7 @@ router.get('/', autenticar, async (req, res) => {
     const countWhere = [];
     const countParams = [];
     if (!incluiDel) countWhere.push('deletado_em IS NULL');
+    countWhere.push("tipo <> 'revisao_contrato_bancario'");
     if (status) { countParams.push(status); countWhere.push(`status = $${countParams.length}`); }
     const countSql = `SELECT COUNT(*) FROM pedidos${countWhere.length ? ' WHERE ' + countWhere.join(' AND ') : ''}`;
     const count = await pool.query(countSql, countParams);
@@ -220,6 +225,10 @@ router.post('/', autenticar, async (req, res) => {
     if (tipo === 'revisao_contrato_bancario' && !consentimento_revisao) {
       return res.status(400).json({ erro: 'Marque o consentimento LGPD para o tratamento do contrato bancário.' });
     }
+    // Revisão de Contratos não tem preço de tabela: o operador digita o valor de cada caso
+    if (tipo === 'revisao_contrato_bancario' && !(typeof req.body.valor_customizado === 'number' && req.body.valor_customizado >= 0)) {
+      return res.status(400).json({ erro: 'Informe o valor cobrado nesta revisão (R$ 0 para cortesia).' });
+    }
     if (tipo === 'capacidade_compra' && !numPos(compra_valor)) {
       return res.status(400).json({ erro: 'Informe o valor do imóvel ou do veículo: é com ele que a Capacidade de Compra calcula a parcela.' });
     }
@@ -240,7 +249,8 @@ router.post('/', autenticar, async (req, res) => {
     // caso, a IA extrai os proprietários da matrícula/escritura e cria os alvos.
     const isImobiliaria = tipo === 'due_diligence_imobiliaria';
     const temDocumentos = !!req.body.tem_documentos;
-    const cpfPodeSerOpcional = isImobiliaria && temDocumentos;
+    // Revisão de Contratos: o CPF/CNPJ do contratante sai do próprio contrato (IA + conferência)
+    const cpfPodeSerOpcional = (isImobiliaria && temDocumentos) || tipo === 'revisao_contrato_bancario';
 
     if (isVeicular) {
       placaLimpa = (alvo_placa || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
@@ -303,9 +313,8 @@ router.post('/', autenticar, async (req, res) => {
     const ADDON_BV_PRODUTOS = new Set(['dossie_pf', 'dossie_pj', 'analise_devedor', 'investigacao_patrimonial', 'due_diligence', 'analise_inquilino']);
     const usaBoaVista = !!addon_boa_vista && ADDON_BV_PRODUTOS.has(tipo);
     if (usaBoaVista) valor += 29;
-    // Revisão Bancária: preço configurável (fixo ou % do valor financiado com mínimo)
+    // Revisão de Contratos: valor digitado pelo operador (valor_customizado, abaixo)
     const revisaoInformados = tipo === 'revisao_contrato_bancario' ? revisaoBancaria.normalizarInformados(revisao || {}) : null;
-    if (revisaoInformados) valor = await revisaoBancaria.precoRevisao(revisaoInformados.valor_financiado);
 
     // Admin/operador pode sobrescrever o valor final (ex: desconto ou cobrança especial)
     if (typeof valor_customizado === 'number' && valor_customizado >= 0) {

@@ -860,14 +860,12 @@ function sugerirProximoDegrau(tipo, dados = {}, alvoTipo = 'PF') {
     case 'analise_inquilino':
     case 'dossie_pf':
       destino = 'analise_devedor';
-      alternativa = _alternativaRevisao(dados);
       if (resumoDividas) motivos.push(`Encontramos ${resumoDividas}: a Análise de Devedor mostra se há bens que garantam o contrato ou a cobrança.`);
       else motivos.push('Perfil sem dívidas: confirme se há patrimônio antes de dar prazo maior ou crédito alto.');
       motivos.push('Veículos, empresas e participações, imóveis rurais e chance de recebimento.');
       break;
     case 'analise_devedor': {
       destino = 'investigacao_patrimonial';
-      alternativa = _alternativaRevisao(dados);
       const bens = [];
       if (a.empresas > 0) bens.push(`${a.empresas} empresa(s)`);
       if (a.veiculos > 0) bens.push(`${a.veiculos} veículo(s)`);

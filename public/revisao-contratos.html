@@ -1,0 +1,282 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Revisão de Contratos</title>
+  <link rel="stylesheet" href="/css/style.css">
+  <style>
+    .rc-kpis { display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:10px; margin-bottom:18px; }
+    .rc-kpi { background:#fff; border:1px solid #e5e7eb; border-radius:12px; padding:14px; }
+    .rc-kpi .r { font-size:11px; color:#6b7280; font-weight:700; text-transform:uppercase; letter-spacing:.04em; }
+    .rc-kpi .v { font-size:24px; font-weight:800; color:#0f172a; margin-top:4px; }
+    .rc-tab { width:100%; border-collapse:collapse; font-size:13px; }
+    .rc-tab th { text-align:left; font-size:11px; color:#6b7280; text-transform:uppercase; padding:8px; border-bottom:1px solid #e5e7eb; }
+    .rc-tab td { padding:10px 8px; border-bottom:1px solid #f1f5f9; vertical-align:top; }
+    .rc-tab tr.lin { cursor:pointer; }
+    .rc-tab tr.lin:hover td { background:#f8fafc; }
+    .rc-pill { display:inline-block; font-size:11px; font-weight:700; padding:2px 9px; border-radius:99px; white-space:nowrap; }
+    .rc-num { text-align:right; font-variant-numeric:tabular-nums; white-space:nowrap; }
+    #rc-form[hidden] { display:none; }
+    .rc-filtros { display:flex; gap:6px; flex-wrap:wrap; }
+    .rc-filtros button { border:1px solid #cbd5e1; background:#fff; border-radius:99px; padding:5px 12px; font-size:12px; cursor:pointer; }
+    .rc-filtros button.on { background:#1e3a8a; color:#fff; border-color:#1e3a8a; }
+    @media (max-width: 760px) { .rc-oculta { display:none; } }
+  </style>
+</head>
+<body>
+<nav class="nav">
+  <a href="/revisao-contratos.html" class="nav-logo"><img src="/img/logo-recobro.jpg" alt="Recobro"><div><div class="nav-brand">REVISÃO DE CONTRATOS</div></div></a>
+  <div class="nav-links">
+    <a href="/revisao-contratos.html" class="ativo">⚖ Revisão de Contratos</a>
+    <a href="/dashboard.html">Rastreia</a>
+    <a href="/usuarios.html" id="nav-usuarios" style="display:none">Usuários</a>
+    <a href="#" onclick="logout()">Sair</a>
+  </div>
+  <div class="nav-user" id="nav-user"></div>
+</nav>
+
+<div class="container">
+  <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:16px">
+    <div>
+      <h1 style="font-size:22px;margin:0">Revisão de Contratos Bancários</h1>
+      <div style="font-size:13px;color:#6b7280">O banco cobrou a mais? A IA lê o contrato, o sistema calcula e o advogado assina o laudo.</div>
+    </div>
+    <button class="btn btn-primary" onclick="abrirForm()">+ Nova revisão</button>
+  </div>
+  <div id="alerta"></div>
+
+  <!-- Nova revisão -->
+  <div class="card" id="rc-form" hidden>
+    <div class="card-header"><span class="card-title">Nova revisão</span><button class="btn btn-sm btn-outline" onclick="fecharForm()">Fechar</button></div>
+    <div style="padding:4px 0">
+      <div style="font-weight:700;margin:4px 0 8px">Cliente (quem recebe o laudo)</div>
+      <div class="form-grid">
+        <div class="form-group"><label>Nome *</label><input type="text" id="cli_nome"></div>
+        <div class="form-group"><label>WhatsApp</label><input type="text" id="cli_wpp" inputmode="tel" placeholder="(62) 99999-0000"></div>
+        <div class="form-group"><label>E-mail</label><input type="email" id="cli_email"></div>
+      </div>
+      <div style="font-weight:700;margin:14px 0 8px">Contratante (titular do contrato)</div>
+      <div class="form-grid">
+        <div class="form-group"><label>Nome</label><input type="text" id="alvo_nome" placeholder="Se vazio, usa o nome do cliente"></div>
+        <div class="form-group"><label>CPF/CNPJ</label><input type="text" id="alvo_doc" inputmode="numeric"></div>
+        <div class="form-group"><label>Pessoa</label><select id="alvo_tipo"><option value="PF">Física</option><option value="PJ">Jurídica</option></select></div>
+      </div>
+      <div style="font-weight:700;margin:14px 0 4px">Contrato <span style="font-weight:400;font-size:12px;color:#6b7280">— tudo opcional: a IA lê do contrato e o operador confere</span></div>
+      <div class="form-grid">
+        <div class="form-group"><label>Tipo de operação</label>
+          <select id="rev_tipo_operacao">
+            <option value="">— a IA identifica —</option>
+            <option value="financiamento_veiculo">Financiamento de veículo</option>
+            <option value="emprestimo_pessoal">Empréstimo pessoal</option>
+            <option value="consignado">Consignado</option>
+            <option value="ccb_capital_giro">CCB / capital de giro</option>
+            <option value="cartao_credito">Cartão de crédito</option>
+            <option value="cheque_especial">Cheque especial</option>
+            <option value="financiamento_imobiliario">Financiamento imobiliário</option>
+            <option value="outro">Outro</option>
+          </select></div>
+        <div class="form-group"><label>Banco credor</label><input type="text" id="rev_banco" placeholder="Ex: Banco Pan"></div>
+        <div class="form-group"><label>Data da contratação</label><input type="date" id="rev_data"></div>
+        <div class="form-group"><label>Valor financiado (R$)</label><input type="text" id="rev_valor" inputmode="decimal"></div>
+        <div class="form-group"><label>Parcela (R$)</label><input type="text" id="rev_parcela" inputmode="decimal"></div>
+        <div class="form-group"><label>Prazo (meses)</label><input type="number" id="rev_prazo" min="1" max="480"></div>
+        <div class="form-group"><label>Parcelas pagas</label><input type="number" id="rev_pagas" min="0" max="480"></div>
+        <div class="form-group"><label>Situação</label>
+          <select id="rev_situacao"><option value="">—</option><option value="em_dia">Em dia</option><option value="atrasado">Atrasado</option><option value="busca_apreensao">Busca e apreensão</option><option value="executado">Executado</option><option value="quitado">Quitado</option></select></div>
+      </div>
+      <div style="margin-top:12px">
+        <label style="font-weight:600;font-size:13px">Documentos (até 10) — contrato obrigatório; extratos, boletos, carnê e cálculo do banco ajudam</label>
+        <div id="docs-lista" style="margin:8px 0"></div>
+        <label class="btn btn-outline" style="cursor:pointer;display:flex;align-items:center;justify-content:center;width:100%;padding:16px;border:2px dashed #cbd5e1;background:#f8fafc;color:#475569;text-transform:none;font-weight:500">
+          📎 Anexar contrato e documentos (PDF ou foto)
+          <input type="file" accept=".pdf,.jpg,.jpeg,.png,.webp" multiple style="display:none" onchange="adicionarDocs(this.files); this.value=''">
+        </label>
+      </div>
+      <div style="font-weight:700;margin:16px 0 8px">Cobrança deste caso</div>
+      <div class="form-grid">
+        <div class="form-group"><label>Valor cobrado (R$) *</label><input type="text" id="valor" inputmode="decimal" placeholder="Ex: 1.200,00 — 0 para cortesia"></div>
+        <div class="form-group"><label>Como o cliente paga</label>
+          <select id="forma">
+            <option value="mercadopago">Link Mercado Pago (Pix/cartão/boleto)</option>
+            <option value="dinheiro">Já recebido (dinheiro/Pix direto)</option>
+            <option value="pendente">Só registrar — cobrar depois</option>
+          </select></div>
+      </div>
+      <label style="display:flex;gap:8px;align-items:flex-start;margin-top:12px;font-size:12px;color:#374151">
+        <input type="checkbox" id="consentimento" style="margin-top:2px">
+        <span>O contratante autoriza a Recobro e o Balladão Advogados a tratar o contrato bancário e os documentos enviados exclusivamente para a revisão do contrato e a orientação jurídica, conforme a <a href="/privacidade.html#revisao-bancaria" target="_blank">Política de Privacidade</a> e os <a href="/termos.html#revisao-bancaria" target="_blank">Termos de Uso</a> (LGPD, art. 7º, V e VI).</span>
+      </label>
+      <div style="display:flex;gap:8px;margin-top:14px;align-items:center;flex-wrap:wrap">
+        <button class="btn btn-primary" id="btn-criar" onclick="criar(this)">Criar revisão</button>
+        <span id="form-msg" style="font-size:13px;color:#6b7280"></span>
+      </div>
+    </div>
+  </div>
+
+  <div class="rc-kpis" id="kpis"></div>
+
+  <div class="card">
+    <div class="card-header" style="flex-wrap:wrap;gap:8px">
+      <span class="card-title">Revisões</span>
+      <div class="rc-filtros" id="filtros"></div>
+    </div>
+    <div id="lista"><div class="loading"><div class="spinner"></div>Carregando...</div></div>
+  </div>
+</div>
+
+<div class="footer">
+  Recobro Recuperação de Crédito · Balladão Advogados | Anápolis - GO |
+  <a href="/termos.html#revisao-bancaria" target="_blank">Termos de Uso</a> |
+  <a href="/privacidade.html#revisao-bancaria" target="_blank">Privacidade</a>
+</div>
+
+<script>
+  const token = localStorage.getItem('rastreia_token');
+  if (!token) window.location.href = '/';
+  const usuario = JSON.parse(localStorage.getItem('rastreia_usuario') || '{}');
+  document.getElementById('nav-user').textContent = usuario.nome || '';
+  if (usuario.perfil === 'admin') document.getElementById('nav-usuarios').style.display = '';
+  function logout() { localStorage.removeItem('rastreia_token'); localStorage.removeItem('rastreia_usuario'); window.location.href = '/'; }
+  function esc(s) { const d = document.createElement('div'); d.textContent = s == null ? '' : String(s); return d.innerHTML; }
+  const brl = (v) => v == null ? '—' : 'R$ ' + Number(v).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const num = (id) => { const v = document.getElementById(id).value.replace(/[^\d,.]/g, ''); if (v === '') return null; const n = v.includes(',') ? Number(v.replace(/\./g, '').replace(',', '.')) : Number(v); return Number.isFinite(n) ? n : null; };
+  function alerta(msg, tipo) { document.getElementById('alerta').innerHTML = `<div class="alert alert-${tipo === 'error' ? 'error' : 'success'}">${esc(msg)}</div>`; window.scrollTo(0, 0); }
+
+  // Onde cada caso está (etapa da revisão; antes do pagamento vale o status do pedido)
+  const ETAPA = {
+    aguardando_pagamento: ['Aguardando pagamento', '#fef3c7', '#92400e'],
+    aguardando_documentos: ['Aguardando documentos', '#fef3c7', '#92400e'],
+    extraindo: ['IA lendo o contrato', '#e0e7ff', '#3730a3'],
+    conferencia_operador: ['Conferência do operador', '#ffedd5', '#9a3412'],
+    calculando: ['Calculando / taxa manual', '#ffedd5', '#9a3412'],
+    revisao_juridica: ['Revisão jurídica', '#ede9fe', '#5b21b6'],
+    reprovado_juridico: ['Devolvido pelo jurídico', '#fee2e2', '#991b1b'],
+    aprovado: ['Laudo aprovado', '#dcfce7', '#14532d'],
+    concluido: ['Laudo entregue', '#dcfce7', '#14532d'],
+    cancelado: ['Cancelado', '#e5e7eb', '#374151']
+  };
+  const VER = { forte: ['FORTE', '#dcfce7', '#14532d'], moderada: ['MODERADA', '#fef9c3', '#713f12'], fraca: ['FRACA', '#ffedd5', '#7c2d12'], inviavel: ['INVIÁVEL', '#e5e7eb', '#1f2937'] };
+  const TIPO_OP = { financiamento_veiculo: 'Veículo', emprestimo_pessoal: 'Empréstimo pessoal', consignado: 'Consignado', ccb_capital_giro: 'Capital de giro', cartao_credito: 'Cartão', cheque_especial: 'Cheque especial', financiamento_imobiliario: 'Imobiliário', outro: 'Outro' };
+  const situacao = (r) => r.status === 'cancelado' ? 'cancelado' : r.status === 'aguardando_pagamento' ? 'aguardando_pagamento' : r.status === 'concluido' ? 'concluido' : (r.etapa || 'aguardando_documentos');
+  const pill = (t, f, c) => `<span class="rc-pill" style="background:${f};color:${c}">${esc(t)}</span>`;
+
+  let REVISOES = [], filtro = 'abertas';
+  const FILTROS = [['abertas', 'Em andamento'], ['revisao_juridica', 'No jurídico'], ['concluido', 'Entregues'], ['todas', 'Todas']];
+
+  async function carregar() {
+    const r = await fetch('/api/revisao-bancaria', { headers: { Authorization: `Bearer ${token}` } });
+    if (r.status === 401) return logout();
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok) { document.getElementById('lista').innerHTML = `<div style="padding:16px;color:#b91c1c">${esc(j.erro || 'Erro ao carregar')}</div>`; return; }
+    REVISOES = j.revisoes || [];
+    render();
+  }
+
+  function render() {
+    const s = REVISOES.map(r => ({ ...r, sit: situacao(r) }));
+    const abertas = s.filter(r => !['concluido', 'cancelado'].includes(r.sit));
+    const mes = new Date(); mes.setDate(1); mes.setHours(0, 0, 0, 0);
+    const entreguesMes = s.filter(r => r.sit === 'concluido' && r.concluido_em && new Date(r.concluido_em) >= mes);
+    const fortes = s.filter(r => ['forte', 'moderada'].includes(r.veredito) && r.sit !== 'cancelado');
+    document.getElementById('kpis').innerHTML = [
+      ['Em andamento', abertas.length],
+      ['No jurídico', s.filter(r => r.sit === 'revisao_juridica').length],
+      ['Entregues no mês', entreguesMes.length],
+      ['Casos fortes/moderados', fortes.length],
+      ['Economia apontada', brl(fortes.reduce((t, r) => t + Number(r.economia_estimada || 0), 0))]
+    ].map(([r, v]) => `<div class="rc-kpi"><div class="r">${r}</div><div class="v">${v}</div></div>`).join('');
+
+    document.getElementById('filtros').innerHTML = FILTROS.map(([k, t]) => `<button class="${filtro === k ? 'on' : ''}" onclick="filtro='${k}';render()">${t}</button>`).join('');
+    const vis = s.filter(r => filtro === 'todas' ? true : filtro === 'abertas' ? !['concluido', 'cancelado'].includes(r.sit) : r.sit === filtro);
+    if (!vis.length) { document.getElementById('lista').innerHTML = `<div style="padding:24px;text-align:center;color:#6b7280">Nenhuma revisão aqui.</div>`; return; }
+    document.getElementById('lista').innerHTML = `<div style="overflow-x:auto"><table class="rc-tab"><thead><tr>
+        <th>#</th><th>Cliente / contratante</th><th class="rc-oculta">Banco</th><th>Onde está</th><th>Veredito</th><th class="rc-num">Economia</th><th class="rc-num rc-oculta">Valor</th><th class="rc-oculta">Criada</th></tr></thead><tbody>
+      ${vis.map(r => {
+        const e = ETAPA[r.sit] || [r.sit, '#e5e7eb', '#374151'];
+        const v = VER[r.veredito];
+        return `<tr class="lin" onclick="location.href='/pedido.html?id=${r.id}'">
+          <td>${r.numero}</td>
+          <td><strong>${esc(r.cliente_nome)}</strong>${r.alvo_nome && r.alvo_nome !== r.cliente_nome ? `<div style="font-size:12px;color:#6b7280">${esc(r.alvo_nome)}</div>` : ''}</td>
+          <td class="rc-oculta">${esc(r.banco || '—')}${r.tipo_operacao ? `<div style="font-size:12px;color:#6b7280">${esc(TIPO_OP[r.tipo_operacao] || r.tipo_operacao)}</div>` : ''}</td>
+          <td>${pill(e[0], e[1], e[2])}</td>
+          <td>${v ? pill(v[0], v[1], v[2]) : '<span style="color:#9ca3af">—</span>'}</td>
+          <td class="rc-num">${r.economia_estimada != null ? brl(r.economia_estimada) : '—'}</td>
+          <td class="rc-num rc-oculta">${Number(r.valor) > 0 ? brl(r.valor) : 'cortesia'}</td>
+          <td class="rc-oculta" style="white-space:nowrap">${new Date(r.criado_em).toLocaleDateString('pt-BR')}</td></tr>`;
+      }).join('')}</tbody></table></div>`;
+  }
+
+  // ── Nova revisão ──
+  let docs = [];
+  function abrirForm() { const f = document.getElementById('rc-form'); f.hidden = false; f.scrollIntoView({ behavior: 'smooth' }); document.getElementById('cli_nome').focus(); }
+  function fecharForm() { document.getElementById('rc-form').hidden = true; }
+  function adicionarDocs(files) {
+    for (const f of Array.from(files || [])) {
+      if (docs.length >= 10) { alerta('Máximo de 10 documentos.', 'error'); break; }
+      if (f.size > 20 * 1024 * 1024) { alerta(`${f.name}: acima de 20 MB.`, 'error'); continue; }
+      docs.push(f);
+    }
+    renderDocs();
+  }
+  function removerDoc(i) { docs.splice(i, 1); renderDocs(); }
+  function renderDocs() {
+    document.getElementById('docs-lista').innerHTML = docs.map((d, i) => `<div style="display:flex;justify-content:space-between;align-items:center;font-size:13px;padding:6px 8px;border:1px solid #e5e7eb;border-radius:6px;margin-bottom:4px"><span>📄 ${esc(d.name)} <span style="color:#9ca3af">(${(d.size / 1024 / 1024).toFixed(1)} MB)</span></span><button type="button" class="btn btn-sm btn-outline" onclick="removerDoc(${i})">remover</button></div>`).join('');
+  }
+  function msg(t, erro) { const m = document.getElementById('form-msg'); m.style.color = erro ? '#b91c1c' : '#6b7280'; m.textContent = t; }
+
+  async function criar(btn) {
+    const cliente_nome = document.getElementById('cli_nome').value.trim();
+    const valor = num('valor');
+    if (!cliente_nome) return msg('Informe o nome do cliente.', true);
+    if (valor == null || valor < 0) return msg('Informe o valor cobrado (0 para cortesia).', true);
+    if (!docs.length) return msg('Anexe o contrato bancário (PDF ou foto).', true);
+    if (!document.getElementById('consentimento').checked) return msg('Marque o consentimento LGPD.', true);
+    if (btn.disabled) return;
+    btn.disabled = true; msg('Criando…');
+    let forma = document.getElementById('forma').value;
+    if (valor === 0) forma = 'dinheiro';   // cortesia: libera na hora
+    const pagas = document.getElementById('rev_pagas').value;
+    const payload = {
+      tipo: 'revisao_contrato_bancario', cliente_nome,
+      cliente_whatsapp: document.getElementById('cli_wpp').value.trim() || null,
+      cliente_email: document.getElementById('cli_email').value.trim() || null,
+      alvo_nome: document.getElementById('alvo_nome').value.trim() || cliente_nome,
+      alvo_documento: document.getElementById('alvo_doc').value.replace(/\D/g, '') || null,
+      alvo_tipo: document.getElementById('alvo_tipo').value,
+      finalidade: 'Revisão de contrato bancário: análise de juros, tarifas e encargos para orientação jurídica do próprio contratante',
+      aceite_termos: true, consentimento_revisao: true, valor_customizado: valor,
+      revisao: {
+        tipo_operacao: document.getElementById('rev_tipo_operacao').value || null,
+        banco: document.getElementById('rev_banco').value.trim() || null,
+        data_contratacao: document.getElementById('rev_data').value || null,
+        valor_financiado: num('rev_valor'), valor_parcela: num('rev_parcela'),
+        prazo_meses: parseInt(document.getElementById('rev_prazo').value, 10) || null,
+        parcelas_pagas: pagas === '' ? null : parseInt(pagas, 10),
+        situacao: document.getElementById('rev_situacao').value || null
+      }
+    };
+    const auth = { Authorization: `Bearer ${token}` };
+    try {
+      const r = await fetch('/api/pedidos', { method: 'POST', headers: { ...auth, 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+      const j = await r.json().catch(() => ({}));
+      if (!r.ok) { btn.disabled = false; return msg(j.erro || 'Erro ao criar', true); }
+      const id = j.id;
+      msg('Enviando o contrato…');
+      const fd = new FormData(); docs.forEach(d => fd.append('documentos', d, d.name));
+      const up = await fetch(`/api/pedidos/${id}/documentos`, { method: 'POST', headers: auth, body: fd });
+      if (!up.ok) console.warn('upload do contrato falhou: envie de novo na tela da revisão');
+      if (forma === 'dinheiro') {
+        await fetch(`/api/pedidos/${id}/pagamento-alternativo`, { method: 'POST', headers: { ...auth, 'Content-Type': 'application/json' }, body: JSON.stringify({ forma: 'dinheiro' }) });
+      } else if (forma === 'mercadopago') {
+        await fetch(`/api/pedidos/${id}/pagamento`, { method: 'POST', headers: { ...auth, 'Content-Type': 'application/json' } });
+      }
+      location.href = `/pedido.html?id=${id}`;
+    } catch (e) { btn.disabled = false; msg('Erro de conexão.', true); }
+  }
+
+  if (new URLSearchParams(location.search).get('nova') === '1') abrirForm();
+  carregar();
+</script>
+</body>
+</html>

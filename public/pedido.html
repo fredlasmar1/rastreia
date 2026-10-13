@@ -14,6 +14,7 @@
     <a href="/novo-pedido.html">+ Novo Pedido</a>
     <a href="/restricoes.html">🚦 Restrições no CPF</a>
     <a href="/clientes.html">Clientes</a>
+    <a href="/revisao-contratos.html">⚖ Revisão de Contratos</a>
     <a href="#" onclick="logout()">Sair</a>
   </div>
   <div class="nav-user" id="nav-user"></div>
@@ -434,8 +435,8 @@
 
     document.getElementById('conteudo').innerHTML = `
       <div style="display:flex;align-items:center;gap:12px;margin-bottom:20px">
-        <a href="/dashboard.html" class="btn btn-outline btn-sm">← Voltar</a>
-        <h1 class="page-title" style="margin:0">Pedido #${p.numero}</h1>
+        <a href="${p.tipo === 'revisao_contrato_bancario' ? '/revisao-contratos.html' : '/dashboard.html'}" class="btn btn-outline btn-sm">← Voltar</a>
+        <h1 class="page-title" style="margin:0">${p.tipo === 'revisao_contrato_bancario' ? 'Revisão de Contrato' : 'Pedido'} #${p.numero}</h1>
         ${p.upgrade_de ? `<span class="badge" style="background:#e0e7ff;color:#1a3a8a" title="Cobra só a diferença sobre o pedido anterior e reaproveita as consultas já feitas">⬆ Upgrade — paga só a diferença</span>` : ''}
         <span class="badge badge-${p.status === 'concluido' ? 'concluido' : p.status === 'em_andamento' ? 'andamento' : p.status === 'pago' ? 'pago' : 'aguardando'}">${STATUS_LABEL[p.status]}</span>
       </div>

@@ -52,6 +52,24 @@ function camposIniciais(reg, pedido) {
   };
 }
 
+// Lista da aba "Revisão de Contratos" (módulo à parte do Rastreia)
+router.get('/', autenticar, async (req, res) => {
+  try {
+    const r = await pool.query(
+      `SELECT p.id, p.numero, p.status, p.valor, p.forma_pagamento, p.cliente_nome, p.cliente_whatsapp, p.alvo_nome, p.alvo_documento,
+              p.criado_em, p.concluido_em, rb.etapa, rb.veredito, rb.economia_estimada,
+              COALESCE(rb.dados_conferidos->'instituicao'->>'nome', rb.dados_extraidos->'instituicao'->>'nome', rb.dados_informados->>'banco') AS banco,
+              COALESCE(rb.dados_conferidos->>'tipo_operacao', rb.dados_extraidos->>'tipo_operacao', rb.dados_informados->>'tipo_operacao') AS tipo_operacao,
+              u.nome AS operador_nome
+         FROM pedidos p
+         JOIN revisao_bancaria rb ON rb.pedido_id = p.id
+         LEFT JOIN usuarios u ON u.id = p.operador_id
+        WHERE p.tipo = $1 AND p.deletado_em IS NULL
+        ORDER BY p.criado_em DESC LIMIT 300`, [revisao.TIPO]);
+    res.json({ revisoes: r.rows });
+  } catch (e) { console.error('[revisao-bancaria] lista:', e); res.status(500).json({ erro: 'Erro ao listar as revisões' }); }
+});
+
 router.get('/:pedidoId', autenticar, async (req, res) => {
   try {
     const pedido = await carregarPedido(req.params.pedidoId);

@@ -15,6 +15,7 @@
     <a href="/restricoes.html">🚦 Restrições no CPF</a>
     <a href="/veicular.html">🚗 Consulta Veicular</a>
     <a href="/clientes.html">Clientes</a>
+    <a href="/revisao-contratos.html">⚖ Revisão de Contratos</a>
     <a href="#" onclick="logout()">Sair</a>
   </div>
   <div class="nav-user" id="nav-user"></div>
@@ -484,11 +485,7 @@
       dados: ['Identificação completa (marca, modelo, ano, chassi, renavam)', 'Situação atual do veículo no DETRAN', 'Restrições administrativas e judiciais', 'Alienação fiduciária e penhoras', 'Valor FIPE atualizado', 'Município e UF de registro', 'Histórico de roubo/furto'],
       publico: ['Comprador de veículo usado', 'Quem vai receber veículo como pagamento', 'Locadoras e revendas', 'Credor pesquisando veículo por placa', 'Leiloéiro e mecânica']
     },
-    revisao_contrato_bancario: { nome: 'Revisão de Contrato Bancário', preco: 1500, prazo: '48 horas', icone: '🏦',
-      argumento: 'O banco cobrou a mais? Conferimos a taxa real do contrato, comparamos com a taxa média do Banco Central do mês da contratação, recalculamos as parcelas e aplicamos as teses do STJ. Laudo com o valor cobrado a mais, a viabilidade e os próximos passos — revisado por advogado do Balladão.',
-      dados: ['Veredito: forte / moderada / fraca / inviável', 'Taxa real × declarada × média do BACEN', 'Cobrado × devido por cenário, total pago a mais e saldo revisado', 'Teses: juros, capitalização, TAC/TEC, tarifas, seguro, comissão de permanência, mora', 'Parecer jurídico do Balladão Advogados'],
-      publico: ['Financiamento de veículo, empréstimo, consignado, CCB', 'PJ com capital de giro', 'Quem está atrasado, com busca e apreensão ou execução']
-    },
+
     checagem_vendedor: { nome: 'Checagem do Vendedor', preco: 79, prazo: '30 minutos', icone: '📜',
       argumento: 'Antes de fechar a venda: o vendedor tem execução de dívida que pode anular o negócio (fraude à execução)? Débito trabalhista ou com a Receita/PGFN? Dívidas e protestos? Resposta LIVRE, ATENÇÃO ou RISCO, com as certidões oficiais.',
       dados: ['Veredito: livre / atenção / risco', 'Execuções contra o vendedor e valores', 'Certidão trabalhista (TST) e federal (Receita/PGFN) com comprovante', 'Dívidas, credores e protestos', 'Outros processos como réu'],
@@ -1308,6 +1305,8 @@
   renderProdutos();
   carregarEstimativasCusto();
   // Pré-seleção do produto via ?tipo= (vindo dos cards do dashboard)
+  // Revisão de Contratos é módulo à parte, com valor por caso
+  try { if (new URLSearchParams(location.search).get('tipo') === 'revisao_contrato_bancario') location.replace('/revisao-contratos.html?nova=1'); } catch (e) {}
   try { const _t = new URLSearchParams(location.search).get('tipo'); if (_t && PRODUTOS[_t]) selecionarProduto(_t); } catch (e) {}
   // Vindo do "Próximo passo" de um relatório: já preenche o alvo
   try {
