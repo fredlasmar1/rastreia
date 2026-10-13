@@ -231,6 +231,17 @@ function render(doc, pedido, dados, score, checklist, produto) {
     });
     y = paragrafo(doc, y, 'A restituição em dobro (CDC, art. 42, parágrafo único) é referência: depende de decisão judicial sobre a cobrança indevida.', { tam: 7.5, cor: COR.cinza });
   }
+  // Valor incontroverso — o que se reconhece e segue pagando (CPC art. 330, §§ 2º e 3º)
+  const vi = calc.valor_incontroverso;
+  if (vi) {
+    y = verificarPagina(doc, y + 4, 62);
+    doc.rect(MARGEM, y, LARGURA, 56).fill('#eff6ff');
+    doc.rect(MARGEM, y, 4, 56).fill(COR.azul);
+    doc.fillColor(COR.azul).font('Helvetica-Bold').fontSize(8.5).text('VALOR INCONTROVERSO (CPC, art. 330, §§ 2º e 3º)', MARGEM + 12, y + 7, { width: LARGURA - 24 });
+    doc.fillColor('#111827').fontSize(15).text(`${brl(vi.parcela_mensal)} por mês`, MARGEM + 12, y + 24, { width: 190 });
+    doc.font('Helvetica').fontSize(8).fillColor('#374151').text(`Parcela que o contratante reconhece e continua pagando durante a ação (cenário ${vi.cenario}), no lugar de ${brl(vi.parcela_contratada)}. Saldo devedor revisado: ${brl(vi.saldo_devedor_revisado)}; ${vi.parcelas_restantes} parcela(s) restante(s).`, MARGEM + 210, y + 21, { width: LARGURA - 222 });
+    y += 62;
+  }
   (calc.alertas || []).forEach(a => { y = item(doc, y, String(a).replace(/(\d)\.(\d)/g, '$1,$2'), COR.laranja, 8.5); });
 
   // ── 7. Pontos encontrados ──
@@ -266,7 +277,7 @@ function render(doc, pedido, dados, score, checklist, produto) {
   y = secao(doc, 'PRÓXIMOS PASSOS', y + 4);
   const passos = Array.isArray(pia.proximos_passos) && pia.proximos_passos.length ? pia.proximos_passos : (() => {
     const p = [];
-    if (['forte', 'moderada'].includes(nivel)) p.push('Ação revisional do contrato, com pedido de recálculo e restituição do que foi pago a mais.');
+    if (['forte', 'moderada'].includes(nivel)) p.push(`Ação revisional do contrato, com pedido de recálculo e restituição do que foi pago a mais${vi ? `, seguindo o pagamento do valor incontroverso (${brl(vi.parcela_mensal)} por mês)` : ''}.`);
     if (d.situacao === 'busca_apreensao') p.push('Defesa na ação de busca e apreensão, com os pontos deste laudo.');
     if (['forte', 'moderada'].includes(nivel)) p.push('Notificação extrajudicial ao banco ou proposta de acordo com base no saldo revisado.');
     if (!p.length) p.push('Guardar este laudo; se o contrato for renegociado ou houver cobrança judicial, reavaliar com o advogado.');

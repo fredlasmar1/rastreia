@@ -47,14 +47,18 @@ function montarDados(ex = {}) {
   const op = { ...(ex.operacao || {}) };
   const cl = ex.classificacao || {};
   const doc = String(ex.contratante?.cpf_cnpj || '').replace(/\D/g, '');
-  const pagas = estimarPagas(op);
+  // Parcelas pagas: o que extrato/carnê comprova vale mais que a estimativa pela data
+  const pg = ex.pagamentos || {};
+  const doDoc = Number.isFinite(Number(pg.parcelas_pagas)) && pg.parcelas_pagas !== null ? Math.round(Number(pg.parcelas_pagas)) : null;
+  const pagas = doDoc != null ? doDoc : estimarPagas(op);
   return {
     pfpj: cl.pfpj || (doc.length === 14 ? 'PJ' : 'PF'),
     tipo_operacao: cl.tipo_operacao || 'outro',
     subtipo: cl.subtipo || null,
-    situacao: null,
+    situacao: Number(pg.parcelas_em_atraso) > 0 ? 'atrasado' : null,
     parcelas_pagas: pagas,
-    parcelas_pagas_estimadas: pagas != null,
+    parcelas_pagas_estimadas: doDoc == null && pagas != null,
+    parcelas_pagas_origem: doDoc != null ? (pg.documento_origem || 'documento') : (pagas != null ? 'estimativa' : null),
     instituicao: { nome: ex.instituicao?.nome || null, cnpj: ex.instituicao?.cnpj || null },
     contratante: { nome: ex.contratante?.nome || null, cpf_cnpj: ex.contratante?.cpf_cnpj || null },
     operacao: op,
@@ -115,7 +119,7 @@ async function recalcular(id, dadosNovos, camposEditados = []) {
   const a = await obter(id);
   if (!a) return null;
   const d = { ...dadosNovos, campos_editados: [...new Set([...(a.dados?.campos_editados || []), ...camposEditados])] };
-  if (camposEditados.includes('parcelas_pagas')) d.parcelas_pagas_estimadas = false;
+  if (camposEditados.includes('parcelas_pagas')) { d.parcelas_pagas_estimadas = false; d.parcelas_pagas_origem = 'operador'; }
   const out = await calcularAnalise(d, a.taxa_media_bacen);
   await salvar(id, { dados: d, ...out, status: 'pronto', erro: null });
   return obter(id);

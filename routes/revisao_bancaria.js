@@ -33,7 +33,8 @@ function camposIniciais(reg, pedido) {
     tipo_operacao: inf.tipo_operacao || ex.classificacao?.tipo_operacao || null,
     subtipo: ex.classificacao?.subtipo || null,
     situacao: inf.situacao || null,
-    parcelas_pagas: inf.parcelas_pagas ?? null,
+    parcelas_pagas: inf.parcelas_pagas ?? (ex.pagamentos && ex.pagamentos.parcelas_pagas != null ? Math.round(Number(ex.pagamentos.parcelas_pagas)) : null),
+    parcelas_pagas_origem: inf.parcelas_pagas != null ? 'informado' : (ex.pagamentos && ex.pagamentos.parcelas_pagas != null ? (ex.pagamentos.documento_origem || 'documento') : null),
     instituicao: { nome: ex.instituicao?.nome || inf.banco || null, cnpj: ex.instituicao?.cnpj || null },
     contratante: { nome: ex.contratante?.nome || pedido.alvo_nome || null, cpf_cnpj: ex.contratante?.cpf_cnpj || pedido.alvo_documento || null },
     operacao: {

@@ -572,6 +572,7 @@
         <div class="an-linha"><span>Já pago a mais</span><b>${cp ? brl(cp.total_pago_a_mais) : '—'}</b></div>
         <div class="an-linha"><span>Economia nas parcelas a vencer</span><b>${cp ? brl(cp.economia_futura) : '—'}</b></div>
         <div class="an-linha"><span>Restituição em dobro (referência)</span><b>${cp ? brl(cp.repeticao_dobro) : '—'}</b></div>
+        ${c.valor_incontroverso ? `<div style="margin-top:10px;background:#eff6ff;border:1px solid #bfdbfe;border-radius:10px;padding:10px 12px"><div style="font-size:11px;font-weight:800;color:#1e3a8a;letter-spacing:.05em">VALOR INCONTROVERSO (CPC art. 330, § 2º)</div><div style="font-size:20px;font-weight:900;color:#0f172a">${brl(c.valor_incontroverso.parcela_mensal)} <span style="font-size:12px;font-weight:600;color:#475569">por mês</span></div><div style="font-size:12px;color:#475569">o que o cliente reconhece e segue pagando na ação · ${c.valor_incontroverso.parcelas_restantes} parcela(s) restante(s)</div></div>` : ''}
       </div>
     </div>`;
 
@@ -590,7 +591,8 @@
           const ctl = tipo === 'select'
             ? `<select data-k="${k}">${ops.map(([o, t]) => `<option value="${o}" ${String(val ?? '') === o ? 'selected' : ''}>${t}</option>`).join('')}</select>`
             : `<input data-k="${k}" type="${tipo === 'date' ? 'date' : 'text'}" ${tipo === 'num' ? 'inputmode="decimal"' : ''} value="${esc(val == null ? '' : (tipo === 'num' ? String(val).replace('.', ',') : val))}">`;
-          const est = k === 'parcelas_pagas' && d.parcelas_pagas_estimadas ? ' · estimadas' : '';
+          const ORIG = { estimativa: ' · estimadas pela data', extrato: ' · do extrato', carne: ' · do carnê', boleto: ' · dos boletos', demonstrativo_banco: ' · do demonstrativo', documento: ' · dos documentos', operador: ' · corrigidas' };
+          const est = k === 'parcelas_pagas' ? (ORIG[d.parcelas_pagas_origem] || (d.parcelas_pagas_estimadas ? ' · estimadas pela data' : '')) : '';
           return `<div class="${baixa(k) ? 'baixa' : ''}"><label>${rot}${est}</label>${ctl}</div>`;
         }).join('')}</div>
         <button class="btn btn-outline" style="margin-top:12px;width:100%" onclick="anRecalcular(this)">↻ Recalcular com as correções</button>

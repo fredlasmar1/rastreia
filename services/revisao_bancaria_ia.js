@@ -62,6 +62,17 @@ const TOOL_EXTRACAO = {
       seguros: { type: 'array', items: { type: 'object', properties: { tipo: s, valor: n, financiado: b, seguradora: s, havia_opcao_recusar: b, trecho: s } } },
       iof: { type: 'object', properties: { valor: n, financiado: b } },
       encargos_mora: { type: 'object', properties: { juros_mora: n, multa_percentual: n, comissao_permanencia: b, comissao_permanencia_cumulada: b, outros: s, trecho: s } },
+      pagamentos: {
+        type: 'object', description: 'Só se houver extrato, carnê, boletos pagos ou demonstrativo do banco: o que os documentos MOSTRAM como pago. Não estime pela data.',
+        properties: {
+          parcelas_pagas: { type: ['number', 'null'], description: 'Quantidade de parcelas comprovadamente pagas nos documentos.' },
+          ultima_parcela_paga: { type: ['number', 'null'], description: 'Número da última parcela paga.' },
+          data_ultimo_pagamento: s,
+          parcelas_em_atraso: { type: ['number', 'null'] },
+          documento_origem: { type: ['string', 'null'], enum: ['extrato', 'carne', 'boleto', 'demonstrativo_banco', 'outro', null] },
+          trecho: s
+        }
+      },
       paginas_relevantes: { type: 'array', items: { type: 'object', properties: { campo: s, pagina: n } } },
       confianca_por_campo: { type: 'object', additionalProperties: { type: 'string', enum: ['alta', 'media', 'baixa'] } },
       alertas_leitura: { type: 'array', items: { type: 'string' } },
@@ -71,7 +82,7 @@ const TOOL_EXTRACAO = {
   }
 };
 
-const SYSTEM_EXTRACAO = 'Você é um analista de contratos bancários brasileiros. Sua tarefa é EXTRAIR dados do contrato exatamente como estão escritos, sem calcular, sem opinar e sem completar lacunas. Se um campo não estiver no documento, use null e registre em alertas_leitura. Transcreva em "trecho" a frase exata do contrato que sustenta cada tarifa, seguro, cláusula de capitalização e encargo de mora. Valores em reais como número (1234.56). Taxas em percentual como número (2.19 para 2,19%). Datas no formato AAAA-MM-DD. Identifique a página de onde tirou cada dado. Em classificacao, diga o tipo da operação (veículo, empréstimo pessoal, consignado, capital de giro etc.) e se o contratante é pessoa física (PF) ou jurídica (PJ). Responda sempre em português do Brasil usando a ferramenta.';
+const SYSTEM_EXTRACAO = 'Você é um analista de contratos bancários brasileiros. Sua tarefa é EXTRAIR dados do contrato exatamente como estão escritos, sem calcular, sem opinar e sem completar lacunas. Se um campo não estiver no documento, use null e registre em alertas_leitura. Transcreva em "trecho" a frase exata do contrato que sustenta cada tarifa, seguro, cláusula de capitalização e encargo de mora. Valores em reais como número (1234.56). Taxas em percentual como número (2.19 para 2,19%). Datas no formato AAAA-MM-DD. Identifique a página de onde tirou cada dado. Se houver extrato, carnê, boletos pagos ou demonstrativo, preencha pagamentos com o que os documentos comprovam (quantas parcelas pagas, a última, em atraso); sem esses documentos, deixe pagamentos nulo — nunca estime pela data. Em classificacao, diga o tipo da operação (veículo, empréstimo pessoal, consignado, capital de giro etc.) e se o contratante é pessoa física (PF) ou jurídica (PJ). Responda sempre em português do Brasil usando a ferramenta.';
 
 function bloco(doc) {
   const data = fs.readFileSync(doc.filepath).toString('base64');

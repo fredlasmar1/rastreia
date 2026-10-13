@@ -10,7 +10,7 @@
  * PMT = parcela, n = prazo em meses, i = taxa mensal (fração: 0.02 = 2%).
  * Testes: scripts/test-revisao-bancaria.js (node).
  */
-const VERSAO_CALCULO = 'rb-calc-1.0.0 (2026-10-13)';
+const VERSAO_CALCULO = 'rb-calc-1.1.0 (2026-10-13)';
 
 const EPS = 1e-12;
 
@@ -152,6 +152,13 @@ function calcular(dados = {}, opts = {}) {
   const declAA = op.taxa_juros_anual_declarada != null ? Number(op.taxa_juros_anual_declarada) / 100 : null;
   const cetAM = op.cet_mensal != null ? Number(op.cet_mensal) / 100 : null;
 
+  // Modalidades em que parcela fixa não descreve bem a dívida
+  const SIMPLIFICADO = {
+    cartao_credito: 'Cartão de crédito: o rotativo muda de saldo e taxa todo mês — o cálculo trata como parcela fixa e é uma aproximação; confira com as faturas.',
+    cheque_especial: 'Cheque especial: os juros incidem sobre o saldo diário — o cálculo por parcela fixa é uma aproximação; confira com os extratos.',
+    financiamento_imobiliario: 'Financiamento imobiliário: correção pela TR e seguros MIP/DFI não entram neste cálculo — use como estimativa e confira com a planilha do banco.'
+  };
+  if (SIMPLIFICADO[dados.tipo_operacao]) alertas.push(`Cálculo simplificado. ${SIMPLIFICADO[dados.tipo_operacao]}`);
   const faltando = [];
   if (!(PV > 0)) faltando.push('valor financiado');
   if (!(n > 0)) faltando.push('prazo');
@@ -223,6 +230,16 @@ function calcular(dados = {}, opts = {}) {
   const economia = melhor ? Math.max(0, melhor.economia_total) : 0;
   resultado.economia_estimada = economia;
   resultado.cenario_principal = melhor ? (cen.C ? 'C' : cen.A ? 'A' : 'B') : null;
+  // Valor incontroverso (CPC art. 330, §§ 2º e 3º): na revisional o autor diz
+  // quanto reconhece dever e segue pagando — é a parcela do cenário revisado.
+  resultado.valor_incontroverso = melhor ? {
+    cenario: resultado.cenario_principal,
+    parcela_mensal: melhor.parcela_revisada,
+    parcela_contratada: melhor.parcela_contratada,
+    diferenca_mensal: melhor.diferenca_por_parcela,
+    saldo_devedor_revisado: melhor.saldo_devedor_revisado,
+    parcelas_restantes: Math.max(0, n - k)
+  } : null;
 
   // 6) Veredito
   const pct = PV > 0 ? economia / PV * 100 : 0;

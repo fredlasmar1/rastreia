@@ -228,5 +228,34 @@ teste('Sem classificação: CNPJ vira PJ e operação "outro"', () => {
   assert.strictEqual(d.pfpj, 'PJ'); assert.strictEqual(d.tipo_operacao, 'outro'); assert.strictEqual(d.parcelas_pagas, null);
 });
 
+console.log('\n9) Valor incontroverso, parcelas do extrato e cálculo simplificado');
+teste('Valor incontroverso = parcela revisada do cenário principal', () => {
+  const d = contratoPan();
+  const calc = C.calcular(d, { taxaMediaBacenAM: 2.08, questionaveis: T.itensQuestionaveis(d) });
+  const vi = calc.valor_incontroverso;
+  assert.ok(vi && vi.cenario === calc.cenario_principal);
+  perto(vi.parcela_mensal, calc.cenarios[calc.cenario_principal].parcela_revisada, 1e-9, 'parcela');
+  assert.ok(vi.parcela_mensal < 1580);
+  assert.strictEqual(vi.parcelas_restantes, 48 - 14);
+});
+teste('Sem cenário de revisão ⇒ sem valor incontroverso', () => {
+  const d = { pfpj: 'PF', tipo_operacao: 'emprestimo_pessoal', operacao: { valor_financiado_total: 10000, valor_parcela: 450, prazo_meses: 24 } };
+  const calc = C.calcular(d, { taxaMediaBacenAM: 9, questionaveis: [] });   // média acima do contrato
+  assert.strictEqual(calc.valor_incontroverso, null);
+});
+teste('Cartão, cheque especial e imobiliário avisam "cálculo simplificado"', () => {
+  for (const t of ['cartao_credito', 'cheque_especial', 'financiamento_imobiliario']) {
+    const calc = C.calcular({ tipo_operacao: t, operacao: { valor_financiado_total: 10000, valor_parcela: 500, prazo_meses: 24 } }, { taxaMediaBacenAM: 2 });
+    assert.ok(calc.alertas.some(a => /simplificado/i.test(a)), t);
+  }
+  const v = C.calcular({ tipo_operacao: 'financiamento_veiculo', operacao: { valor_financiado_total: 10000, valor_parcela: 500, prazo_meses: 24 } }, { taxaMediaBacenAM: 2 });
+  assert.ok(!v.alertas.some(a => /simplificado/i.test(a)), 'veículo não');
+});
+teste('Parcelas do extrato valem mais que a estimativa pela data', () => {
+  const d = AN.montarDados({ operacao: { prazo_meses: 48, data_primeiro_vencimento: '2023-06-10' }, pagamentos: { parcelas_pagas: 20, parcelas_em_atraso: 2, documento_origem: 'extrato' } });
+  assert.strictEqual(d.parcelas_pagas, 20); assert.strictEqual(d.parcelas_pagas_estimadas, false);
+  assert.strictEqual(d.parcelas_pagas_origem, 'extrato'); assert.strictEqual(d.situacao, 'atrasado');
+});
+
 console.log(`\n${ok} passaram, ${falhas} falharam.`);
 process.exit(falhas ? 1 : 0);
