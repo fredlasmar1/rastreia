@@ -22,7 +22,9 @@
     .rc-filtros button { border:1px solid #cbd5e1; background:#fff; border-radius:99px; padding:5px 12px; font-size:12px; cursor:pointer; }
     .rc-filtros button.on { background:#1e3a8a; color:#fff; border-color:#1e3a8a; }
     @media (max-width: 760px) { .rc-oculta { display:none; } }
-    .an-drop { border:2px dashed #93c5fd; background:#eff6ff; border-radius:14px; padding:22px; text-align:center; cursor:pointer; transition:background .15s; }
+    .rc-check { display:flex !important; gap:8px; align-items:flex-start; text-transform:none; letter-spacing:0; font-weight:400; font-size:12px; color:#374151; }
+    .rc-check input { width:auto; flex:none; margin-top:2px; }
+    .an-drop { display:block; text-transform:none; letter-spacing:0; font-weight:400; font-size:14px; color:#1f2937; border:2px dashed #93c5fd; background:#eff6ff; border-radius:14px; padding:22px; text-align:center; cursor:pointer; transition:background .15s; }
     .an-drop.sobre { background:#dbeafe; }
     .an-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(170px,1fr)); gap:8px; }
     .an-box { border:1px solid #e5e7eb; border-radius:10px; padding:12px; background:#fff; }
@@ -69,7 +71,7 @@
         <input type="file" id="an-arquivos" accept=".pdf,.jpg,.jpeg,.png,.webp" multiple style="display:none" onchange="anEscolher(this.files)">
       </label>
       <div id="an-lista" style="margin-top:8px"></div>
-      <label style="display:flex;gap:8px;align-items:flex-start;margin-top:10px;font-size:12px;color:#374151">
+      <label class="rc-check" style="margin-top:10px;font-size:12px;color:#374151">
         <input type="checkbox" id="an-consent" style="margin-top:2px">
         <span>O contratante me enviou este contrato e autorizou a análise (LGPD, art. 7º, V e VI).</span>
       </label>
@@ -139,7 +141,7 @@
             <option value="pendente">Só registrar — cobrar depois</option>
           </select></div>
       </div>
-      <label style="display:flex;gap:8px;align-items:flex-start;margin-top:12px;font-size:12px;color:#374151">
+      <label class="rc-check" style="margin-top:12px;font-size:12px;color:#374151">
         <input type="checkbox" id="consentimento" style="margin-top:2px">
         <span>O contratante autoriza a Recobro e o Balladão Advogados a tratar o contrato bancário e os documentos enviados exclusivamente para a revisão do contrato e a orientação jurídica, conforme a <a href="/privacidade.html#revisao-bancaria" target="_blank">Política de Privacidade</a> e os <a href="/termos.html#revisao-bancaria" target="_blank">Termos de Uso</a> (LGPD, art. 7º, V e VI).</span>
       </label>
