@@ -319,7 +319,7 @@ function calcular(dados = {}, opts = {}) {
   resultado.economia_estimada = economia;
   resultado.cenario_principal = melhor ? (cen.C ? 'C' : cen.A ? 'A' : 'B') : null;
   // Pago a mais CORRIGIDO (estimativa): cada diferença paga é corrigida pelo
-  // IPCA desde o mês do pagamento (Súmula 43 STJ; CC art. 389, par. único,
+  // IPCA desde o mês do pagamento (Súmulas 43 e 162 STJ por analogia; CC art. 389, par. único,
   // Lei 14.905/2024). Juros de mora ficam de fora — na repetição correm da
   // citação (CC art. 405). Parcela t vence no 1º vencimento + (t−1) meses e é
   // tida como paga no vencimento. opts.ipcaMensal = { 'AAAA-MM': % do mês }.

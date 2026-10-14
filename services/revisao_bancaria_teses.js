@@ -10,7 +10,11 @@
  * `d` = dados_conferidos; `calc` = saída do motor (pode ser null na 1ª passada,
  * usada só para descobrir os itens questionáveis do cenário B).
  */
-const VERSAO_TESES = 'rb-teses-1.1.0 (2026-10-13)';
+// Citações conferidas em 13/10/2026 contra o catálogo oficial de súmulas do STJ e
+// os precedentes qualificados do Portal de Dados Abertos do STJ (espelhados em
+// github.com/emidio-trancoso/advocacia-aberta, MIT): Súmulas 297, 382, 472, 539,
+// 541, 565, 566 e Temas 27, 28, 246/247, 618, 619, 620, 958 e 972.
+const VERSAO_TESES = 'rb-teses-1.2.0 (2026-10-13)';
 
 const pct = (x) => (x == null ? '—' : `${(x * 100).toFixed(2).replace('.', ',')}%`);
 const reTAC = /\b(tac|abertura de cr[eé]dito|tec|emiss[aã]o de (carn[eê]|boleto|ficha)|tarifa de emiss)/i;
@@ -26,7 +30,7 @@ const TESES = [
   {
     id: 'juros_abusivos',
     nome: 'Juros remuneratórios abusivos',
-    fundamento: 'STJ, REsp 1.061.530/RS (repetitivo): abusividade quando a taxa fica substancialmente acima da média de mercado do BACEN para a operação e o mês; Súmula 382 STJ: juros acima de 12% a.a., por si só, não indicam abusividade.',
+    fundamento: 'STJ, Tema 27 (REsp 1.061.530/RS, repetitivo): revisão dos juros remuneratórios admitida quando a abusividade fica cabalmente demonstrada — parâmetro usual: taxa substancialmente acima da média de mercado do BACEN para a operação e o mês; Súmula 382 STJ: juros acima de 12% a.a., por si só, não indicam abusividade.',
     explicacao_cliente: 'Comparamos a taxa do seu contrato com a taxa média que os bancos cobravam no mesmo mês para o mesmo tipo de operação.',
     regra(d, calc) {
       if (!calc || calc.razao == null) return { resultado: 'verificar', detalhe: 'Sem taxa média do BACEN para comparar.' };
@@ -41,7 +45,7 @@ const TESES = [
   {
     id: 'capitalizacao',
     nome: 'Capitalização de juros',
-    fundamento: 'Súmula 539 STJ: capitalização em periodicidade inferior à anual é permitida se expressamente pactuada; Súmula 541 STJ: taxa anual superior ao duodécuplo da mensal basta para caracterizar a pactuação.',
+    fundamento: 'Súmula 539 STJ e Tema 246: capitalização em periodicidade inferior à anual é permitida nos contratos a partir de 31/03/2000, se expressamente pactuada; Súmula 541 STJ e Tema 247: taxa anual superior ao duodécuplo da mensal basta para permitir a cobrança da taxa efetiva anual.',
     explicacao_cliente: 'Verificamos se o contrato autoriza "juros sobre juros". Se não autorizar de forma clara, a cobrança pode ser questionada.',
     regra(d, calc) {
       const trecho = d.operacao?.clausula_capitalizacao_trecho || null;
@@ -53,7 +57,7 @@ const TESES = [
   {
     id: 'tac_tec',
     nome: 'TAC e TEC',
-    fundamento: 'STJ, Temas 618 e 620 (repetitivos): TAC e TEC válidas só em contratos até 30/04/2008; a tarifa de cadastro é válida apenas no início do relacionamento.',
+    fundamento: 'STJ, Temas 618 e 619 (repetitivos) e Súmula 565: TAC e TEC (ou outro nome para o mesmo fato gerador) válidas só em contratos anteriores a 30/04/2008 (Res. CMN 3.518/2007); Tema 620 e Súmula 566: a tarifa de cadastro só pode ser cobrada no início do relacionamento.',
     explicacao_cliente: 'Tarifas de abertura de crédito e de emissão de carnê/boleto não podem ser cobradas em contratos feitos depois de abril de 2008.',
     regra(d) {
       const data = d.operacao?.data_contratacao || '';
@@ -69,7 +73,7 @@ const TESES = [
   {
     id: 'avaliacao_registro_terceiros',
     nome: 'Avaliação do bem, registro e serviços de terceiros',
-    fundamento: 'STJ, Tema 958 (repetitivo): tarifas de avaliação do bem e de registro do contrato são válidas se o serviço foi efetivamente prestado e sem onerosidade excessiva; serviços de terceiros sem especificação são abusivos.',
+    fundamento: 'STJ, Tema 958 (repetitivo): é abusivo cobrar serviços de terceiros sem especificar o serviço e, a partir de 25/02/2011 (Res. CMN 3.954/2011), a comissão do correspondente bancário; avaliação do bem e registro do contrato valem se o serviço foi efetivamente prestado e sem onerosidade excessiva. Tema 972: abusivo o ressarcimento do registro do pré-gravame a partir de 25/02/2011.',
     explicacao_cliente: 'Cobranças de "serviços de terceiros" sem dizer qual serviço foi prestado não são permitidas; avaliação e registro só valem se o serviço realmente aconteceu.',
     regra(d) {
       const terc = itensDaLista(d.tarifas, it => reTerceiros.test(it.nome || ''));
@@ -82,7 +86,7 @@ const TESES = [
   {
     id: 'seguro_venda_casada',
     nome: 'Seguro prestamista / proteção financeira',
-    fundamento: 'STJ, Tema 972 (repetitivo): é abusivo impor o seguro ou a seguradora indicada pelo banco sem opção de escolha (venda casada).',
+    fundamento: 'STJ, Tema 972 (repetitivo): nos contratos bancários em geral, o consumidor não pode ser compelido a contratar seguro com a instituição financeira ou com seguradora por ela indicada (venda casada).',
     explicacao_cliente: 'Se o seguro veio embutido sem você poder recusar ou escolher a seguradora, é venda casada e pode ser devolvido.',
     regra(d) {
       const imp = itensDaLista(d.seguros, it => it.havia_opcao_recusar === false);
@@ -95,7 +99,7 @@ const TESES = [
   {
     id: 'comissao_permanencia',
     nome: 'Comissão de permanência cumulada',
-    fundamento: 'Súmula 472 STJ: a comissão de permanência não pode ser cumulada com juros remuneratórios, moratórios ou multa.',
+    fundamento: 'Súmula 472 STJ: a cobrança de comissão de permanência — limitada à soma dos encargos remuneratórios e moratórios do contrato — exclui a exigibilidade dos juros remuneratórios, moratórios e da multa.',
     explicacao_cliente: 'Em atraso, o banco não pode cobrar comissão de permanência junto com juros e multa.',
     regra(d) {
       const e = d.encargos_mora || {};

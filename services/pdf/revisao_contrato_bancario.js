@@ -236,7 +236,7 @@ function render(doc, pedido, dados, score, checklist, produto) {
   if (ic && ic.nominal > 0) {
     y = verificarPagina(doc, y + 4, 40);
     y = linha(doc, `Pago a mais corrigido (IPCA até ${mesBR(ic.ate_mes)})`, `${brl(ic.corrigido)}  —  nominal ${brl(ic.nominal)} + correção ${brl(ic.correcao)}; em dobro (referência) ${brl(ic.repeticao_dobro_corrigida)}`, y, 12);
-    y = paragrafo(doc, y, 'Correção monetária pelo IPCA desde cada pagamento (Súmula 43 do STJ; CC, art. 389, parágrafo único, na redação da Lei 14.905/2024). Juros de mora não incluídos: na repetição do indébito correm da citação (CC, art. 405). Para pagamentos anteriores a 30/08/2024, conferir o índice adotado pelo tribunal (há tabelas com INPC).', { tam: 7.5, cor: COR.cinza });
+    y = paragrafo(doc, y, 'Correção monetária pelo IPCA desde cada pagamento (por analogia às Súmulas 43 e 162 do STJ; CC, art. 389, parágrafo único, na redação da Lei 14.905/2024). Juros de mora não incluídos: na repetição do indébito correm da citação (CC, art. 405). Para pagamentos anteriores a 30/08/2024, conferir o índice adotado pelo tribunal (há tabelas com INPC).', { tam: 7.5, cor: COR.cinza });
   }
   // Valor incontroverso — o que se reconhece e segue pagando (CPC art. 330, §§ 2º e 3º)
   const vi = calc.valor_incontroverso;

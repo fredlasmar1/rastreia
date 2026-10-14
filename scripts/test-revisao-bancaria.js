@@ -305,5 +305,16 @@ teste('Sem IPCA (BACEN fora) ⇒ sem valor corrigido, nunca número inventado', 
   assert.strictEqual(C.calcular(contratoPan(), { taxaMediaBacenAM: 2.08 }).indebito_corrigido, null);
 });
 
+console.log('\n12) Citações só da lista conferida no STJ');
+teste('Toda Súmula/Tema citado nas teses foi conferido na base oficial do STJ (13/10/2026)', () => {
+  const CONFERIDAS = { sumulas: [297, 382, 472, 539, 541, 565, 566], temas: [27, 28, 246, 247, 618, 619, 620, 958, 972] };
+  const txt = T.TESES.map(t => t.fundamento).join(' ') + ' ' + T.FUNDAMENTO_GERAL;
+  const sum = [...txt.matchAll(/Súmulas? (\d+)/g)].map(m => Number(m[1]));
+  const tem = [...txt.matchAll(/Temas? ([\d, e]+)/g)].flatMap(m => m[1].split(/,| e /).map(x => Number(x.trim())).filter(Boolean));
+  const fora = [...sum.filter(n => !CONFERIDAS.sumulas.includes(n)).map(n => 'Súmula ' + n), ...tem.filter(n => !CONFERIDAS.temas.includes(n)).map(n => 'Tema ' + n)];
+  assert.deepStrictEqual(fora, [], 'citação não conferida: ' + fora.join(', '));
+  assert.ok(sum.length >= 6 && tem.length >= 8);
+});
+
 console.log(`\n${ok} passaram, ${falhas} falharam.`);
 process.exit(falhas ? 1 : 0);

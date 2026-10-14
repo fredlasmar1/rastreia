@@ -151,6 +151,11 @@ pago → aguardando_documentos (upload até 10 docs) → extraindo (Claude lê o
 - `/concluir` recusa sem parecer jurídico aprovado. Limiares do veredito e prescrição em `configuracoes`.
 - Testes sem banco/API: `node scripts/test-revisao-bancaria.js` (cálculo/teses) e
   `node scripts/test-laudo-revisao.js` (PDF); `scripts/test-bacen-taxas.js` consulta o BACEN real (grátis).
+- Taxas médias: `services/bacen_series.js` cobre ~35 modalidades PF/PJ (catálogo de referência
+  github.com/edilsonaguiais/sgs-peritos, MIT; códigos conferidos na API SGS). Série zerada não vale como média.
+- CET real (TIR do recebido líquido × parcelas) × CET informado; pago a mais corrigido pelo IPCA (SGS 433),
+  sem juros de mora (correm da citação).
+- Teses: toda Súmula/Tema citado precisa estar na lista conferida no STJ (teste 12 de test-revisao-bancaria.js).
 - Opus 5.5 / Sonnet 5.5 recusam `tool_choice` forçado: `revisao_bancaria_ia.js` usa `auto` e confere o tool_use.
 
 ---
