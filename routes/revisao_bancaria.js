@@ -134,6 +134,31 @@ router.put('/analises/:id/dados', autenticar, async (req, res) => {
   } catch (e) { console.error('[revisao-analise] recalcular:', e); res.status(500).json({ erro: 'Erro ao recalcular' }); }
 });
 
+// Acrescentar documentos (demonstrativo do empréstimo, extrato, carnê) e ler tudo de novo
+router.post('/analises/:id/documentos', autenticar, async (req, res, next) => {
+  try {
+    const a = await analise.obter(req.params.id);
+    if (!a) return res.status(404).json({ erro: 'Análise não encontrada' });
+    if (a.pedido_id) return res.status(400).json({ erro: 'Esta análise já virou revisão: envie os documentos pela página do pedido.' });
+    if (a.status === 'lendo') return res.status(409).json({ erro: 'A leitura anterior ainda está em andamento.' });
+    req.analiseId = a.id; req.analiseAtual = a; next();
+  } catch (e) { res.status(400).json({ erro: 'Análise inválida' }); }
+}, (req, res) => {
+  uploadAnalise.array('documentos', 10)(req, res, async (err) => {
+    if (err) return res.status(400).json({ erro: err.message });
+    try {
+      const files = req.files || [];
+      if (!files.length) return res.status(400).json({ erro: 'Anexe ao menos um documento.' });
+      const novos = files.map(f => ({ filename: nomeUtf8(f.originalname), filepath: f.path, mime_type: f.mimetype, size_bytes: f.size }));
+      const todos = [...(req.analiseAtual.arquivos || []), ...novos];
+      if (todos.length > 10) return res.status(400).json({ erro: 'No máximo 10 documentos por análise.' });
+      await analise.salvar(req.analiseId, { arquivos: todos, status: 'lendo', erro: null });
+      res.json({ id: req.analiseId, status: 'lendo' });
+      setImmediate(() => analise.processar(req.analiseId).catch(e => console.error('[revisao-analise]', e.message)));
+    } catch (e) { console.error('[revisao-analise] documentos:', e); res.status(500).json({ erro: 'Erro ao anexar' }); }
+  });
+});
+
 // Ler o contrato de novo (nova chamada da IA)
 router.post('/analises/:id/reler', autenticar, async (req, res) => {
   try {

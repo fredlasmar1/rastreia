@@ -127,9 +127,9 @@ teste('Taxa efetiva > declarada em mais de 0,05 p.p. gera alerta', () => {
   assert.strictEqual(r.taxa.taxa_efetiva_maior_que_declarada, true);
   assert.ok(r.alertas.length > 0);
 });
-teste('Faltando parcela e taxa ⇒ inviável', () => {
+teste('Faltando parcela e taxa ⇒ incompleto (não inviável)', () => {
   const r = C.calcular({ operacao: { valor_financiado_total: 45000, prazo_meses: 48 } }, {});
-  assert.strictEqual(r.veredito.nivel, 'inviavel');
+  assert.strictEqual(r.veredito.nivel, 'incompleto');
 });
 
 console.log('\n5) Parcelas já pagas com atraso');
@@ -314,6 +314,50 @@ teste('Toda Súmula/Tema citado nas teses foi conferido na base oficial do STJ (
   const fora = [...sum.filter(n => !CONFERIDAS.sumulas.includes(n)).map(n => 'Súmula ' + n), ...tem.filter(n => !CONFERIDAS.temas.includes(n)).map(n => 'Tema ' + n)];
   assert.deepStrictEqual(fora, [], 'citação não conferida: ' + fora.join(', '));
   assert.ok(sum.length >= 6 && tem.length >= 8);
+});
+
+console.log('\n13) Contrato de LIMITE de crédito (GiroCaixa): falta dado ≠ inviável');
+const exGiro = () => ({
+  classificacao: { tipo_operacao: 'ccb_capital_giro', pfpj: 'PJ' },
+  operacao: { tipo: 'Cédula de Crédito Bancário - GIROCAIXA Fácil (Limite de Crédito pré-aprovado)', valor_financiado_total: 150000, data_contratacao: '2025-06-17', capitalizacao_expressa: true,
+    clausula_capitalizacao_trecho: 'juros capitalizados mensalmente praticados pela CAIXA, podendo ser fixados entre a taxa mínima de 2,26% ao mês e a taxa máxima de 100,00% ao mês, além de IOF' }
+});
+teste('Faixa de juros lida do trecho (2,26% a 100,00% a.m.)', () => {
+  assert.deepStrictEqual(AN.faixaDoTrecho(exGiro().operacao.clausula_capitalizacao_trecho), { min: 2.26, max: 100 });
+  assert.strictEqual(AN.faixaDoTrecho('taxa de 1,99% ao mês'), null);
+});
+teste('Limite não vira valor financiado; estrutura = limite_de_credito', () => {
+  const d = AN.montarDados(exGiro());
+  assert.strictEqual(d.operacao.estrutura, 'limite_de_credito');
+  assert.strictEqual(d.operacao.limite_credito, 150000);
+  assert.strictEqual(d.operacao.valor_financiado_total, null);
+  assert.strictEqual(d.operacao.taxa_minima_mensal, 2.26);
+});
+teste('Sem o demonstrativo ⇒ FALTAM DADOS com o que pedir, e o piso comparado com o BACEN', () => {
+  const d = AN.montarDados(exGiro());
+  const calc = C.calcular(d, { taxaMediaBacenAM: 1.75 });
+  AN.limiteDeCredito(d, calc, { ok: true, valor_am: 1.75 });
+  assert.strictEqual(calc.veredito.nivel, 'incompleto');
+  assert.ok(/LIMITE de crédito/.test(calc.veredito.motivo) && calc.veredito.pedir_documentos.length === 2);
+  perto(calc.limite.razao_piso, 2.26 / 1.75, 1e-9, 'razão do piso');
+  assert.ok(calc.alertas.some(a => /MÍNIMA do contrato \(2,26% a\.m\.\) já é 1,29×/.test(a)));
+  const jr = T.aplicarTeses(d, calc).teses.find(t => t.id === 'juros_abusivos');
+  assert.ok(/piso da faixa \(2,26% a\.m\.\) é 1,29× a média BACEN \(1,75% a\.m\.\)/.test(jr.detalhe), jr.detalhe);
+});
+teste('Contrato comum sem taxa: a tese diz que falta a taxa do CONTRATO, não a do BACEN', () => {
+  const d = { operacao: { valor_financiado_total: 45000, prazo_meses: 48 } };
+  const calc = C.calcular(d, { taxaMediaBacenAM: 2 });
+  const jr = T.aplicarTeses(d, calc).teses.find(t => t.id === 'juros_abusivos');
+  assert.ok(/taxa do contrato não foi encontrada/.test(jr.detalhe), jr.detalhe);
+});
+teste('Com o demonstrativo da operação, o limite calcula normalmente', () => {
+  const ex = exGiro();
+  Object.assign(ex.operacao, { estrutura: 'limite_de_credito', limite_credito: 150000, valor_financiado_total: 80000, prazo_meses: 36, valor_parcela: C.parcelaPrice(80000, 0.0326, 36) });
+  const d = AN.montarDados(ex);
+  const calc = C.calcular(d, { taxaMediaBacenAM: 1.75 });
+  AN.limiteDeCredito(d, calc, { ok: true, valor_am: 1.75 });
+  assert.strictEqual(calc.veredito.nivel, 'forte');
+  assert.strictEqual(d.operacao.valor_financiado_total, 80000);
 });
 
 console.log(`\n${ok} passaram, ${falhas} falharam.`);

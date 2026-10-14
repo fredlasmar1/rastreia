@@ -42,9 +42,31 @@ function estimarPagas(op, hoje = new Date()) {
   return Math.max(0, Math.min(n, meses));
 }
 
+// Faixa de juros escrita no contrato ("taxa mínima de 2,26% ao mês e a taxa
+// máxima de 100,00% ao mês") — rede de segurança se a IA não preencheu os campos
+const numBR = (t) => Number(String(t).replace(/\./g, '').replace(',', '.'));
+function faixaDoTrecho(txt) {
+  const m = String(txt || '').match(/m[ií]nima\s+de\s+([\d.,]+)\s*%[^%]{0,80}?m[aá]xima\s+de\s+([\d.,]+)\s*%/i);
+  if (!m) return null;
+  const min = numBR(m[1]), max = numBR(m[2]);
+  return Number.isFinite(min) && Number.isFinite(max) && min > 0 && max >= min ? { min, max } : null;
+}
+const reLimite = /limite\s+de\s+cr[eé]dito|cr[eé]dito\s+pr[eé]-?aprovado|girocaixa|cheque\s+empresa|conta\s+garantida/i;
+
 // Saída da IA → dados no formato do motor de cálculo (o mesmo da conferência)
+// Contrato de limite: cada saque é uma operação; o limite não é valor financiado
+function marcarLimite(op) {
+  const faixa = (op.taxa_minima_mensal != null || op.taxa_maxima_mensal != null) ? null : faixaDoTrecho(op.clausula_capitalizacao_trecho);
+  if (faixa) { op.taxa_minima_mensal = faixa.min; op.taxa_maxima_mensal = faixa.max; }
+  if (!op.estrutura && (reLimite.test(op.tipo || '') || faixa)) op.estrutura = 'limite_de_credito';
+  if (op.estrutura === 'limite_de_credito' && op.limite_credito == null && op.valor_financiado_total != null && op.valor_parcela == null && op.prazo_meses == null) {
+    op.limite_credito = op.valor_financiado_total; op.valor_financiado_total = null;
+  }
+  return op;
+}
+
 function montarDados(ex = {}) {
-  const op = { ...(ex.operacao || {}) };
+  const op = marcarLimite({ ...(ex.operacao || {}) });
   const cl = ex.classificacao || {};
   const doc = require('./documento').limparDoc(ex.contratante?.cpf_cnpj);
   // Parcelas pagas: o que extrato/carnê comprova vale mais que a estimativa pela data
@@ -67,6 +89,7 @@ function montarDados(ex = {}) {
     seguros: ex.seguros || [],
     iof: ex.iof || {},
     encargos_mora: ex.encargos_mora || {},
+    operacoes_do_limite: Array.isArray(ex.operacoes_do_limite) ? ex.operacoes_do_limite : [],
     campos_editados: []
   };
 }
@@ -80,14 +103,41 @@ async function taxaPara(d, anterior) {
   return bacen.buscarTaxaMedia({ tipoOperacao: d.tipo_operacao || 'outro', pfpj: d.pfpj || 'PF', subtipo: d.subtipo || null, dataContratacao: d.operacao?.data_contratacao, banco: d.instituicao || {} });
 }
 
+// Contrato de LIMITE (GiroCaixa, cheque empresa…): o papel não tem a taxa de
+// cada saque. Sem o demonstrativo da operação, diz o que pedir ao cliente e
+// compara o PISO da faixa com a média do BACEN (sinal, não cálculo).
+function limiteDeCredito(d, calc, taxa) {
+  const op = d.operacao || {};
+  if (op.estrutura !== 'limite_de_credito') return;
+  const fx = (v) => Number(v).toLocaleString('pt-BR', { maximumFractionDigits: 2 });
+  const media = taxa && taxa.ok ? Number(taxa.valor_am) : null;
+  const sinais = [];
+  if (op.taxa_minima_mensal != null && media) {
+    const r = op.taxa_minima_mensal / media;
+    calc.limite = { taxa_minima_am: op.taxa_minima_mensal, taxa_maxima_am: op.taxa_maxima_mensal ?? null, media_bacen_am: media, razao_piso: r };
+    sinais.push(`Mesmo a taxa MÍNIMA do contrato (${fx(op.taxa_minima_mensal)}% a.m.) já é ${r.toFixed(2).replace('.', ',')}× a média do Banco Central (${fx(media)}% a.m.)${r >= 1.5 ? ' — indício forte de juros abusivos em qualquer saque' : r >= 1.2 ? ' — os saques tendem a ficar acima do mercado' : ''}.`);
+  }
+  if (op.taxa_maxima_mensal != null && op.taxa_maxima_mensal >= 10) sinais.push(`O contrato permite ao banco cobrar até ${fx(op.taxa_maxima_mensal)}% a.m.: a taxa de cada saque é escolhida pelo banco na hora — ponto para o advogado avaliar.`);
+  if (calc.veredito?.nivel === 'incompleto') {
+    const nOps = (d.operacoes_do_limite || []).length;
+    calc.veredito.motivo = `Este é um contrato de LIMITE de crédito${op.limite_credito ? ` (R$ ${fx(op.limite_credito)})` : ''}: ele só abre o limite; cada empréstimo tirado dele tem taxa, prazo e parcela próprios. ` +
+      (nOps ? `Foram encontradas ${nOps} operação(ões) nos documentos: confira os dados de uma delas abaixo e recalcule.` : 'Para analisar, peça ao cliente o DEMONSTRATIVO (ou comprovante/extrato) de cada empréstimo contratado no limite e clique em "Adicionar documentos".');
+    calc.veredito.pedir_documentos = ['Demonstrativo / comprovante de cada empréstimo tirado do limite (internet banking ou agência)', 'Extrato da conta mostrando as parcelas debitadas'];
+  }
+  calc.alertas.unshift(...sinais);
+}
+
 // Cálculo + teses (sem IA). Devolve os campos para salvar.
 async function calcularAnalise(d, taxaAnterior) {
+  const editouValor = (d.campos_editados || []).some(k => /valor_financiado_total/.test(k));
+  if (d.operacao && !d.operacao.estrutura && !editouValor) d.operacao = marcarLimite({ ...d.operacao });   // análises lidas antes da v1.4
   const taxa = await taxaPara(d, taxaAnterior);
   const { limiares } = require('./revisao_bancaria_fluxo');
   const ipcaMensal = await bacen.buscarIPCA(String(d.operacao?.data_contratacao || '').slice(0, 7) || null);
   const calc = calculo.calcular(d, { taxaMediaBacenAM: taxa && taxa.ok ? taxa.valor_am : null, questionaveis: teses.itensQuestionaveis(d), limiares: await limiares(), ipcaMensal });
   if (!taxa || !taxa.ok) calc.alertas.unshift(`Taxa média do Banco Central indisponível${taxa?.erro ? ` (${taxa.erro})` : ''}: o veredito considera só tarifas e seguros. Informe a taxa para comparar os juros.`);
   if (d.parcelas_pagas_estimadas) calc.alertas.push('Parcelas pagas ESTIMADAS pela data do 1º vencimento: confirme com o cliente (extrato ou carnê).');
+  limiteDeCredito(d, calc, taxa);
   const ts = teses.aplicarTeses(d, calc);
   return {
     taxa_media_bacen: taxa && taxa.ok ? taxa : { ok: false, erro: taxa?.erro || 'indisponível' },
@@ -154,4 +204,4 @@ async function vincularAoPedido(analiseId, pedidoId, uploadsRoot, usuarioId) {
   return { ok: true };
 }
 
-module.exports = { obter, salvar, processar, recalcular, montarDados, estimarPagas, calcularAnalise, vincularAoPedido };
+module.exports = { obter, salvar, processar, recalcular, montarDados, estimarPagas, calcularAnalise, vincularAoPedido, faixaDoTrecho, limiteDeCredito };

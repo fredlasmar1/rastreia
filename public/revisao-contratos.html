@@ -389,7 +389,8 @@
     forte: ['FORTE', '#dcfce7', '#14532d', '#16a34a', 'Há base sólida para revisar o contrato.'],
     moderada: ['MODERADA', '#fef9c3', '#713f12', '#ca8a04', 'Há pontos questionáveis; vale a análise do advogado.'],
     fraca: ['FRACA', '#ffedd5', '#7c2d12', '#ea580c', 'O contrato está perto do praticado no mercado.'],
-    inviavel: ['INVIÁVEL', '#e5e7eb', '#1f2937', '#6b7280', 'Não dá para sustentar a revisão com estes dados.']
+    inviavel: ['INVIÁVEL', '#e5e7eb', '#1f2937', '#6b7280', 'Não dá para sustentar a revisão com estes dados.'],
+    incompleto: ['FALTAM DADOS', '#e0f2fe', '#0c4a6e', '#0284c7', 'Ainda não dá para calcular: faltam documentos ou dados.']
   };
   const TIPO_OP = { financiamento_veiculo: 'Financiamento de veículo', emprestimo_pessoal: 'Empréstimo pessoal', consignado: 'Consignado', renegociacao: 'Renegociação / composição de dívidas', ccb_capital_giro: 'CCB / capital de giro', conta_garantida: 'Conta garantida', desconto_recebiveis: 'Desconto de duplicatas / cheques', antecipacao_cartao: 'Antecipação de recebíveis de cartão', cartao_credito: 'Cartão de crédito', cheque_especial: 'Cheque especial', financiamento_bens: 'Financiamento de outros bens', arrendamento_mercantil: 'Arrendamento mercantil (leasing)', vendor: 'Vendor', compror: 'Compror', cambio: 'Adiantamento de câmbio (ACC)', comercio_exterior: 'Financiamento de importação/exportação', financiamento_imobiliario: 'Financiamento imobiliário', outro: 'Outro' };
   const RES = { aplicavel: ['Aplicável', '#dcfce7', '#14532d', '#16a34a'], verificar: ['Verificar', '#fef9c3', '#713f12', '#ca8a04'] };
@@ -753,6 +754,7 @@
     ['operacao.valor_financiado_total', 'Valor financiado (R$)', 'num'], ['operacao.valor_parcela', 'Parcela (R$)', 'num'],
     ['operacao.prazo_meses', 'Prazo (meses)', 'num'], ['parcelas_pagas', 'Parcelas pagas', 'num'],
     ['operacao.taxa_juros_mensal_declarada', 'Taxa mensal no contrato (%)', 'num'],
+    ['operacao.estrutura', 'Estrutura do contrato', 'select', [['', '—'], ['operacao_unica', 'Operação única'], ['limite_de_credito', 'Limite de crédito (cada saque à parte)']]],
     ['operacao.sistema_amortizacao', 'Sistema', 'select', [['price', 'Price'], ['sac', 'SAC'], ['nao_informado', 'Não informado'], ['outro', 'Outro']]],
     ['situacao', 'Situação', 'select', [['', '—'], ['em_dia', 'Em dia'], ['atrasado', 'Atrasado'], ['busca_apreensao', 'Busca e apreensão'], ['executado', 'Executado'], ['quitado', 'Quitado']]]
   ];
@@ -772,14 +774,14 @@
       return;
     }
     const c = a.calculo || {}, d = a.dados || {}, tx = a.taxa_media_bacen || {};
-    const v = VER[a.veredito] || VER.inviavel;
+    const v = VER[a.veredito] || VER.incompleto;
     const cp = c.cenario_principal ? (c.cenarios || {})[c.cenario_principal] : null;
     const conf = (a.dados_extraidos || {}).confianca_por_campo || {};
     const baixa = (k) => (conf[k] || conf[k.split('.').pop()]) === 'baixa';
 
     // 1) Banner do veredito
     let h = `<div class="an-banner" style="background:${v[1]};color:${v[2]}">
-      <div><div class="rot">Veredito preliminar</div><div class="ver">${v[0]}</div><div class="mot">${esc(v[4])}${c.veredito?.economia_pct != null ? ` Economia de ${c.veredito.economia_pct.toFixed(1).replace('.', ',')}% do valor financiado.` : ''}</div></div>
+      <div><div class="rot">Veredito preliminar</div><div class="ver">${v[0]}</div><div class="mot">${esc(c.veredito?.motivo || v[4])}${c.veredito?.economia_pct != null ? ` Economia de ${c.veredito.economia_pct.toFixed(1).replace('.', ',')}% do valor financiado.` : ''}</div></div>
       <div class="eco"><div class="rot">Economia estimada</div><div class="val">${brl(a.economia_estimada)}</div><div class="det">${cp ? `${esc(cp.nome)}` : 'sem cenário de revisão'}</div></div>
     </div>` + arquivos;
 
@@ -803,6 +805,15 @@
         <div class="an-linha"><span>Restituição em dobro (referência)</span><b>${cp ? brl(cp.repeticao_dobro) : '—'}</b></div>
         ${c.valor_incontroverso ? `<div style="margin-top:10px;background:#eff6ff;border:1px solid #bfdbfe;border-radius:10px;padding:10px 12px"><div style="font-size:11px;font-weight:800;color:#1e3a8a;letter-spacing:.05em">VALOR INCONTROVERSO (CPC art. 330, § 2º)</div><div style="font-size:20px;font-weight:900;color:#0f172a">${brl(c.valor_incontroverso.parcela_mensal)} <span style="font-size:12px;font-weight:600;color:#475569">por mês</span></div><div style="font-size:12px;color:#475569">o que o cliente reconhece e segue pagando na ação · ${c.valor_incontroverso.parcelas_restantes} parcela(s) restante(s)</div></div>` : ''}
       </div>
+    </div>`;
+
+    // 2b) Contrato de limite: o que pedir ao cliente e as operações achadas
+    const ops = d.operacoes_do_limite || [];
+    if (c.veredito?.pedir_documentos?.length || ops.length) h += `<div class="an-card" style="margin:14px 0;border-color:#7dd3fc;background:#f0f9ff">
+      <h3>Contrato de limite de crédito</h3>
+      ${c.veredito?.pedir_documentos?.length ? `<div style="font-size:13px;color:#0c4a6e;margin-bottom:8px">Peça ao cliente:</div><ul style="margin:0 0 10px 18px;padding:0;font-size:13px">${c.veredito.pedir_documentos.map(x => `<li>${esc(x)}</li>`).join('')}</ul>` : ''}
+      ${ops.length ? `<table style="width:100%;font-size:12px;border-collapse:collapse;margin-bottom:10px"><tr style="text-align:left;color:#64748b"><th>Data</th><th>Valor</th><th>Taxa a.m.</th><th>Prazo</th><th>Parcela</th></tr>${ops.map(o => `<tr style="border-top:1px solid #e2e8f0"><td>${esc(o.data ? o.data.split('-').reverse().join('/') : '—')}</td><td>${brl(o.valor_liberado)}</td><td>${o.taxa_mensal != null ? String(o.taxa_mensal).replace('.', ',') + '%' : '—'}</td><td>${esc(o.prazo_meses ?? '—')}</td><td>${brl(o.valor_parcela)}</td></tr>`).join('')}</table>` : ''}
+      <button class="btn btn-primary btn-sm" onclick="document.getElementById('an-mais').click()">📎 Adicionar documentos</button>
     </div>`;
 
     // 3) Avisos
@@ -832,6 +843,7 @@
     h += `<div class="an-acoes">
       ${a.pedido_id ? `<a class="btn btn-primary" href="/pedido.html?id=${a.pedido_id}">Ver a revisão #${esc(a.pedido_numero || '')}</a>` : `<button class="btn btn-primary" onclick="anAbrirRevisao()">⚖ Abrir revisão com laudo do advogado</button>`}
       <button class="btn btn-outline" onclick="anReler()">Ler o contrato de novo</button>
+      ${a.pedido_id ? '' : `<button class="btn btn-outline" onclick="document.getElementById('an-mais').click()">📎 Adicionar documentos</button><input type="file" id="an-mais" accept=".pdf,.jpg,.jpeg,.png,.webp" multiple style="display:none" onchange="anAdicionar(this.files)">`}
       <span id="an-res-msg" style="font-size:13px"></span>
       <div class="an-nota">Preliminar: a IA só leu o contrato; taxas, cenários e economia são calculados pelo sistema. O laudo final passa pela conferência do operador e pela assinatura do advogado.</div>
     </div>`;
@@ -854,6 +866,17 @@
     const j = await r.json().catch(() => ({}));
     if (!r.ok) { btn.disabled = false; btn.textContent = '↻ Recalcular com as correções'; const m = document.getElementById('an-res-msg'); m.style.color = '#b91c1c'; m.textContent = j.erro || 'Erro'; return; }
     ANALISE = j; anRender(); carregarAnalises();
+  }
+  // Demonstrativo do empréstimo, extrato, carnê: junta aos arquivos e lê tudo de novo
+  async function anAdicionar(files) {
+    if (!ANALISE || !files || !files.length) return;
+    const fd = new FormData();
+    [...files].forEach(f => fd.append('documentos', f));
+    const m = document.getElementById('an-res-msg'); if (m) { m.style.color = '#64748b'; m.textContent = 'Enviando…'; }
+    const r = await fetch(`/api/revisao-bancaria/analises/${ANALISE.id}/documentos`, { method: 'POST', headers: auth(), body: fd });
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok) { if (m) { m.style.color = '#b91c1c'; m.textContent = j.erro || 'Erro ao enviar'; } return; }
+    anAbrir(ANALISE.id);
   }
   async function anReler() {
     if (!ANALISE) return;

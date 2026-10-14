@@ -14,7 +14,7 @@
 // os precedentes qualificados do Portal de Dados Abertos do STJ (espelhados em
 // github.com/emidio-trancoso/advocacia-aberta, MIT): Súmulas 297, 382, 472, 539,
 // 541, 565, 566 e Temas 27, 28, 246/247, 618, 619, 620, 958 e 972.
-const VERSAO_TESES = 'rb-teses-1.2.0 (2026-10-13)';
+const VERSAO_TESES = 'rb-teses-1.3.0 (2026-10-14)';
 
 const pct = (x) => (x == null ? '—' : `${(x * 100).toFixed(2).replace('.', ',')}%`);
 const reTAC = /\b(tac|abertura de cr[eé]dito|tec|emiss[aã]o de (carn[eê]|boleto|ficha)|tarifa de emiss)/i;
@@ -33,7 +33,15 @@ const TESES = [
     fundamento: 'STJ, Tema 27 (REsp 1.061.530/RS, repetitivo): revisão dos juros remuneratórios admitida quando a abusividade fica cabalmente demonstrada — parâmetro usual: taxa substancialmente acima da média de mercado do BACEN para a operação e o mês; Súmula 382 STJ: juros acima de 12% a.a., por si só, não indicam abusividade.',
     explicacao_cliente: 'Comparamos a taxa do seu contrato com a taxa média que os bancos cobravam no mesmo mês para o mesmo tipo de operação.',
     regra(d, calc) {
-      if (!calc || calc.razao == null) return { resultado: 'verificar', detalhe: 'Sem taxa média do BACEN para comparar.' };
+      if (!calc || calc.razao == null) {
+        // Diz o que faltou de verdade: a taxa do CONTRATO ou a média do BACEN
+        if (calc && calc.taxa?.efetiva_am == null) {
+          const lim = calc.limite;
+          if (lim) return { resultado: lim.razao_piso >= 1.5 ? 'aplicavel' : 'verificar', detalhe: `Contrato de limite sem a taxa de cada saque. O piso da faixa (${pct(lim.taxa_minima_am / 100)} a.m.) é ${lim.razao_piso.toFixed(2).replace('.', ',')}× a média BACEN (${pct(lim.media_bacen_am / 100)} a.m.): confirmar com o demonstrativo de cada operação.` };
+          return { resultado: 'verificar', detalhe: 'A taxa do contrato não foi encontrada (falta taxa, parcela ou prazo): não dá para comparar com a média do BACEN ainda.' };
+        }
+        return { resultado: 'verificar', detalhe: 'Sem taxa média do BACEN para comparar.' };
+      }
       const r = calc.razao;
       const detalhe = `Taxa efetiva ${pct(calc.taxa.efetiva_am)} a.m. × média BACEN ${pct(calc.bacen.am)} a.m. (${r.toFixed(2).replace('.', ',')}× a média).`;
       const trecho = d.operacao?.taxa_juros_mensal_declarada != null ? `Taxa declarada: ${d.operacao.taxa_juros_mensal_declarada}% a.m.` : null;

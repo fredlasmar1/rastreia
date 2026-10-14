@@ -235,7 +235,7 @@
   // Resultado do cálculo + revisão jurídica (entrega 5)
   const rbBrl = (v) => v == null ? '—' : 'R$ ' + Number(v).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   const rbPct = (v, d = 2) => v == null ? '—' : (Number(v) * 100).toFixed(d).replace('.', ',') + '%';
-  const RB_VER = { forte: ['#dcfce7', '#14532d', 'FORTE'], moderada: ['#fef9c3', '#713f12', 'MODERADA'], fraca: ['#ffedd5', '#7c2d12', 'FRACA'], inviavel: ['#e5e7eb', '#1f2937', 'INVIÁVEL'] };
+  const RB_VER = { forte: ['#dcfce7', '#14532d', 'FORTE'], moderada: ['#fef9c3', '#713f12', 'MODERADA'], fraca: ['#ffedd5', '#7c2d12', 'FRACA'], inviavel: ['#e5e7eb', '#1f2937', 'INVIÁVEL'], incompleto: ['#e0f2fe', '#0c4a6e', 'FALTAM DADOS'] };
   const RB_RES = { aplicavel: ['#dcfce7', '#14532d', 'Aplicável'], verificar: ['#fef9c3', '#713f12', 'Verificar'], nao_aplicavel: ['#f3f4f6', '#4b5563', 'Não aplicável'] };
   function renderRevisaoResultado(e) {
     let h = '';

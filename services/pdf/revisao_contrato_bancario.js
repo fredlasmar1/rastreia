@@ -23,7 +23,8 @@ const VER = {
   forte: { fundo: '#dcfce7', texto: '#14532d', titulo: 'FORTE', frase: 'Há base sólida para revisar o contrato.' },
   moderada: { fundo: '#fef9c3', texto: '#713f12', titulo: 'MODERADA', frase: 'Há pontos questionáveis; vale a análise do advogado.' },
   fraca: { fundo: '#ffedd5', texto: '#7c2d12', titulo: 'FRACA', frase: 'O contrato está próximo do praticado no mercado.' },
-  inviavel: { fundo: '#e5e7eb', texto: '#1f2937', titulo: 'INVIÁVEL', frase: 'Não há como sustentar a revisão com os dados disponíveis.' }
+  inviavel: { fundo: '#e5e7eb', texto: '#1f2937', titulo: 'INVIÁVEL', frase: 'Não há como sustentar a revisão com os dados disponíveis.' },
+  incompleto: { fundo: '#e0f2fe', texto: '#0c4a6e', titulo: 'FALTAM DADOS', frase: 'Ainda não é possível calcular: faltam documentos ou dados do contrato.' }
 };
 const RES = { aplicavel: 'APLICÁVEL', verificar: 'VERIFICAR', nao_aplicavel: 'NÃO APLICÁVEL' };
 

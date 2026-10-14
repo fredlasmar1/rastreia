@@ -54,8 +54,16 @@ const TOOL_EXTRACAO = {
           valor_liberado: n, valor_financiado_total: n, prazo_meses: n, valor_parcela: n,
           sistema_amortizacao: { type: ['string', 'null'], enum: ['price', 'sac', 'outro', 'nao_informado', null] },
           taxa_juros_mensal_declarada: n, taxa_juros_anual_declarada: n, cet_mensal: n, cet_anual: n,
-          capitalizacao_expressa: b, clausula_capitalizacao_trecho: s
+          capitalizacao_expressa: b, clausula_capitalizacao_trecho: s,
+          estrutura: { type: ['string', 'null'], enum: ['operacao_unica', 'limite_de_credito', null], description: 'limite_de_credito = o contrato só abre um LIMITE (GiroCaixa, cheque empresa, conta garantida, crédito pré-aprovado) e cada saque/empréstimo tem taxa, prazo e parcela próprios definidos depois; operacao_unica = valor, prazo e parcela fixados no próprio contrato.' },
+          limite_credito: { type: ['number', 'null'], description: 'Valor do limite, quando estrutura = limite_de_credito. Não repita o limite em valor_financiado_total.' },
+          taxa_minima_mensal: { type: ['number', 'null'], description: 'Quando o contrato fixa só uma FAIXA de juros (ex.: "entre 2,26% e 100% ao mês"): o piso, em % a.m.' },
+          taxa_maxima_mensal: { type: ['number', 'null'], description: 'O teto da faixa, em % a.m.' }
         }
+      },
+      operacoes_do_limite: {
+        type: 'array', description: 'Só para limite_de_credito: cada empréstimo/saque que aparece nos demonstrativos, extratos ou comprovantes enviados. Vazio se só veio o contrato do limite.',
+        items: { type: 'object', properties: { data: s, numero: s, valor_liberado: n, taxa_mensal: n, prazo_meses: n, valor_parcela: n, documento: s } }
       },
       garantia: { type: 'object', properties: { tipo: { type: ['string', 'null'], enum: ['alienacao_fiduciaria', 'consignacao', 'aval', 'nenhuma', 'outro', null] }, bem_descricao: s } },
       tarifas: { type: 'array', items: { type: 'object', properties: { nome: s, valor: n, financiada: b, trecho: s } } },
@@ -82,7 +90,7 @@ const TOOL_EXTRACAO = {
   }
 };
 
-const SYSTEM_EXTRACAO = 'Você é um analista de contratos bancários brasileiros. Sua tarefa é EXTRAIR dados do contrato exatamente como estão escritos, sem calcular, sem opinar e sem completar lacunas. Se um campo não estiver no documento, use null e registre em alertas_leitura. Transcreva em "trecho" a frase exata do contrato que sustenta cada tarifa, seguro, cláusula de capitalização e encargo de mora. Valores em reais como número (1234.56). Taxas em percentual como número (2.19 para 2,19%). Datas no formato AAAA-MM-DD. Identifique a página de onde tirou cada dado. Se houver extrato, carnê, boletos pagos ou demonstrativo, preencha pagamentos com o que os documentos comprovam (quantas parcelas pagas, a última, em atraso); sem esses documentos, deixe pagamentos nulo — nunca estime pela data. Em classificacao, diga o tipo da operação (veículo, empréstimo pessoal, consignado, capital de giro etc.) e se o contratante é pessoa física (PF) ou jurídica (PJ). Responda sempre em português do Brasil usando a ferramenta.';
+const SYSTEM_EXTRACAO = 'Você é um analista de contratos bancários brasileiros. Sua tarefa é EXTRAIR dados do contrato exatamente como estão escritos, sem calcular, sem opinar e sem completar lacunas. Se um campo não estiver no documento, use null e registre em alertas_leitura. Transcreva em "trecho" a frase exata do contrato que sustenta cada tarifa, seguro, cláusula de capitalização e encargo de mora. Valores em reais como número (1234.56). Taxas em percentual como número (2.19 para 2,19%). Datas no formato AAAA-MM-DD. Identifique a página de onde tirou cada dado. Se houver extrato, carnê, boletos pagos ou demonstrativo, preencha pagamentos com o que os documentos comprovam (quantas parcelas pagas, a última, em atraso); sem esses documentos, deixe pagamentos nulo — nunca estime pela data. Se o contrato só abre um LIMITE de crédito (estrutura = limite_de_credito), NÃO coloque o limite em valor_financiado_total; registre-o em limite_credito, a faixa de juros em taxa_minima_mensal/taxa_maxima_mensal, e liste em operacoes_do_limite cada empréstimo que os demonstrativos/extratos mostrarem; se houver um demonstrativo de operação, preencha os campos de operacao (valor, prazo, parcela, taxa, datas) com a operação MAIS RECENTE do demonstrativo. Em classificacao, diga o tipo da operação (veículo, empréstimo pessoal, consignado, capital de giro etc.) e se o contratante é pessoa física (PF) ou jurídica (PJ). Responda sempre em português do Brasil usando a ferramenta.';
 
 function bloco(doc) {
   const data = fs.readFileSync(doc.filepath).toString('base64');

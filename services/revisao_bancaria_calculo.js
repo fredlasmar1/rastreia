@@ -10,7 +10,7 @@
  * PMT = parcela, n = prazo em meses, i = taxa mensal (fração: 0.02 = 2%).
  * Testes: scripts/test-revisao-bancaria.js (node).
  */
-const VERSAO_CALCULO = 'rb-calc-1.3.0 (2026-10-13)';
+const VERSAO_CALCULO = 'rb-calc-1.4.0 (2026-10-14)';
 
 const EPS = 1e-12;
 
@@ -253,7 +253,8 @@ function calcular(dados = {}, opts = {}) {
   };
 
   if (faltando.length || efetivaAM == null) {
-    resultado.veredito = { nivel: 'inviavel', motivo: `Dados insuficientes para calcular: ${faltando.join(', ') || 'taxa'}.` };
+    // Faltar dado não é contrato ruim: é análise que ainda não pode ser feita
+    resultado.veredito = { nivel: 'incompleto', motivo: `Faltam dados para calcular: ${faltando.join(', ') || 'taxa'}.` };
     resultado.economia_estimada = 0;
     return resultado;
   }
