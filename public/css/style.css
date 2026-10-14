@@ -53,7 +53,6 @@ body:has(> .nav) { padding-left: var(--menu-largura); }
 .nav-links a[href="/usuarios.html"]::before { content: '🔐'; }
 .nav-links a[href="/faturamento.html"]::before { content: '💰'; }
 .nav-links a[href="/custos-api.html"]::before { content: '🔌'; }
-.nav-links a[href="/credify.html"]::before { content: '🗂'; }
 .nav-links a[onclick*="logout"]::before { content: '↩'; }
 .nav-links a::before { width: 18px; text-align: center; flex: none; }
 /* administração separada do dia a dia; "Sair" no pé do menu */
