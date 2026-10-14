@@ -5,7 +5,8 @@ const monitorApi = require('./monitorApi');
 // UTILITÁRIOS
 // ─────────────────────────────────────────────
 
-function limparDoc(doc) { return doc.replace(/\D/g, ''); }
+// CPF/CNPJ: mantém as letras do CNPJ alfanumérico (services/documento.js)
+const { limparDoc } = require('./documento');
 
 // Número vindo de API: a Direct Data manda renda como "19699.97" (ponto decimal).
 // Só trata o ponto como milhar quando há vírgula ("19.699,97"). Antes, todo ponto
@@ -18,7 +19,7 @@ function numeroAPI(v) {
   return isNaN(n) ? null : n;
 }
 function formatarCPF(cpf) { return cpf.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, '$1.$2.$3-$4'); }
-function formatarCNPJ(cnpj) { return cnpj.replace(/(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})/, '$1.$2.$3/$4-$5'); }
+function formatarCNPJ(cnpj) { return require('./documento').formatarDoc(cnpj); }   // aceita o CNPJ alfanumérico
 
 // Classifica erros HTTP/mensagens de API externa em categorias estáveis.
 // Retorna { categoria, etiqueta, mensagem } onde categoria é uma das:
@@ -420,7 +421,7 @@ async function consultarProcessosDirectData(doc, tipo, nome) {
     // entao o descarte de "aparece so como advogado" é exato, sem heuristica de nome).
     const nomeLower = String(nome || '').toLowerCase().trim();
     const ehParteAlvo = (p) => (p.partes || []).some(parte => {
-      const docParte = String(parte.documento || '').replace(/\D/g, '');
+      const docParte = limparDoc(parte.documento);
       if (docParte && docParte === doc) return true;
       if (!docParte && nomeLower) return String(parte.nomeCompleto || '').toLowerCase().includes(nomeLower);
       return false;
@@ -554,7 +555,7 @@ async function consultarEscavador(doc, tipo, nome) {
       const envolvimentos = p.envolvimentos || p.partes || [];
       const ehParte = envolvimentos.some(e => {
         const tipoEnv = (e.tipo_envolvimento || e.tipo || e.polo || '').toLowerCase();
-        const cpfEnv = (e.cpf || e.documento || '').replace(/\D/g, '');
+        const cpfEnv = limparDoc(e.cpf || e.documento);
         return cpfEnv === doc && !tipoEnv.includes('advog') && !tipoEnv.includes('repres');
       });
       if (ehParte) return true;
@@ -736,7 +737,7 @@ async function consultarTransparencia(documento, nome) {
       ];
       for (const c of candidatos) {
         if (!c) continue;
-        const dig = String(c).replace(/\D/g, '');
+        const dig = limparDoc(c);
         if (dig && dig === docDigitos) return true;
       }
       return false;
@@ -840,7 +841,7 @@ function normalizarFalencias(arr) {
   const vistos = new Set();
   const result = [];
   for (const f of arr) {
-    const cnpj = String(f.cnpj || f.documento || '').replace(/\D/g, '');
+    const cnpj = limparDoc(f.cnpj || f.documento);
     const data = limparData(f.data || f.dataAbertura || '');
     const desc = String(f.descricao || f.tipo || f.natureza || '').trim();
     const temDados = !!(cnpj || data || (desc && desc.toLowerCase() !== 'falencia' && desc.toLowerCase() !== 'falência'));
@@ -1761,7 +1762,7 @@ async function consultarProprietariosPlaca(placa) {
     }
 
     const proprietarios = registros.map(r => {
-      const doc = String(r.DOCUMENTO || r.NUMERO_DOCUMENTO_PROPRIETARIO || r.documento || '').replace(/\D/g, '');
+      const doc = limparDoc(r.DOCUMENTO || r.NUMERO_DOCUMENTO_PROPRIETARIO || r.documento);
       const tipoDoc = doc.length === 14 ? 'CNPJ' : (doc.length === 11 ? 'CPF' : '');
       const docFormatado = doc.length === 14 ? formatarCNPJ(doc) : (doc.length === 11 ? formatarCPF(doc) : (r.DOCUMENTO || ''));
       return {
@@ -1815,7 +1816,7 @@ async function consultarProprietariosPlaca(placa) {
 // Endpoint publico documentado no cardapio V4.3 (R$ 0,36).
 // =============================================
 async function consultarHistoricoVeiculos(cpfCnpj) {
-  const doc = String(cpfCnpj || '').replace(/\D/g, '');
+  const doc = limparDoc(cpfCnpj);
   if (!doc || (doc.length !== 11 && doc.length !== 14)) {
     return { disponivel: false, erro: 'CPF/CNPJ invalido', fonte: 'DirectData HistoricoVeiculos' };
   }
@@ -2427,7 +2428,7 @@ async function executarConsultaCompleta(pedido) {
       veiculo_placa?.proprietario_documento
       || veiculo_placa?.veiculo?.documento
       || ''
-    ).replace(/\D/g, '');
+    ).toUpperCase().replace(/[^0-9A-Z]/g, '');
 
     // Histórico de proprietários (incluso só a partir do Completo e no add-on veiculos_por_cpf)
     const temHistoricoProp = tier !== 'basico' || addons.includes('veiculos_por_cpf');

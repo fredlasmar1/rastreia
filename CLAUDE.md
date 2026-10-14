@@ -106,6 +106,9 @@ Regra do dono (09/10/2026): preço atrativo, abaixo do mercado de Anápolis, com
   Custos das consultas veiculares (exceto a Nacional, R$1,10) estão ESTIMADOS em api_custos até a Direct Data informar.
 - PDF só abre com link assinado (`services/link_relatorio.js`) ou JWT — nunca devolver
   `relatorio_url` cru numa resposta.
+- **CPF/CNPJ só por `services/documento.js`** (`limparDoc`, `tipoDoc`, `validarCNPJ`, `formatarDoc`): desde
+  07/2026 o CNPJ novo tem LETRAS nas 12 primeiras posições (IN RFB 2.229/2024). Nunca `replace(/\D/g, '')`
+  em documento — apaga as letras. Teste: `node scripts/test-documento.js`.
 - API Direct Data: doc em https://apiv3.directd.com.br/swagger/v3-scalar/swagger.json;
   números vêm com ponto decimal ("19699.97") — usar `numeroAPI()` em consultas.js.
 

@@ -22,12 +22,10 @@ const MARGEM = 50;
 const LARGURA = 495;
 const RODAPE_H = 30;
 
+// CPF/CNPJ formatados — aceita o CNPJ alfanumérico (services/documento.js)
 function formatarDoc(doc) {
   if (!doc) return '';
-  const d = doc.replace(/\D/g, '');
-  if (d.length === 11) return d.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, '$1.$2.$3-$4');
-  if (d.length === 14) return d.replace(/(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})/, '$1.$2.$3/$4-$5');
-  return doc;
+  return require('../documento').formatarDoc(doc);
 }
 
 function corScore(classificacao) {
@@ -163,8 +161,9 @@ function truncar(texto, max) {
 function isAlvoNoPolo(poloStr, cpf, nome) {
   if (!poloStr) return false;
   const polo = String(poloStr).toLowerCase();
-  const cpfDigits = String(cpf || '').replace(/\D/g, '');
-  if (cpfDigits && cpfDigits.length >= 11 && polo.replace(/\D/g, '').includes(cpfDigits)) return true;
+  const { limparDoc } = require('../documento');
+  const cpfDigits = limparDoc(cpf);
+  if (cpfDigits && cpfDigits.length >= 11 && polo.toUpperCase().replace(/[^0-9A-Z]/g, '').includes(cpfDigits)) return true;
   if (nome) {
     const primeiro = String(nome).toLowerCase().trim().split(/\s+/)[0];
     if (primeiro && primeiro.length >= 3 && polo.includes(primeiro)) return true;

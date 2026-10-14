@@ -243,7 +243,7 @@
         <div class="rc-grade">
           <div class="c2"><label>Contratante (titular)</label><input type="text" id="alvo_nome" placeholder="Se vazio, usa o nome do cliente"></div>
           <div><label>Pessoa</label><select id="alvo_tipo"><option value="PF">Física</option><option value="PJ">Jurídica</option></select></div>
-          <div><label>CPF/CNPJ</label><input type="text" id="alvo_doc" inputmode="numeric"></div>
+          <div><label>CPF/CNPJ</label><input type="text" id="alvo_doc" placeholder="CPF ou CNPJ (pode ter letras)"></div>
           <div><label>Banco credor</label><input type="text" id="rev_banco"></div>
           <div><label>Tipo de operação</label>
             <select id="rev_tipo_operacao">
@@ -432,7 +432,7 @@
       cliente_whatsapp: document.getElementById('cli_wpp').value.trim() || null,
       cliente_email: document.getElementById('cli_email').value.trim() || null,
       alvo_nome: document.getElementById('alvo_nome').value.trim() || cliente_nome,
-      alvo_documento: document.getElementById('alvo_doc').value.replace(/\D/g, '') || null,
+      alvo_documento: document.getElementById('alvo_doc').value.toUpperCase().replace(/[^0-9A-Z]/g, '') || null,
       alvo_tipo: document.getElementById('alvo_tipo').value,
       finalidade: 'Revisão de contrato bancário: análise de juros, tarifas e encargos para orientação jurídica do próprio contratante',
       aceite_termos: true, consentimento_revisao: true, valor_customizado: valor,

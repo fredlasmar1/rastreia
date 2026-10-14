@@ -58,7 +58,7 @@
       </div>
       <div class="form-group full">
         <label>CPF ou CNPJ *</label>
-        <input type="text" id="alvo_documento" placeholder="000.000.000-00 ou 00.000.000/0000-00" oninput="onDocChange()">
+        <input type="text" id="alvo_documento" placeholder="CPF ou CNPJ (o CNPJ novo pode ter letras)" oninput="onDocChange()">
         <div id="tipo-detectado" style="font-size:11px;color:#6b7280;margin-top:4px"></div>
       </div>
       <div class="form-group">
@@ -155,13 +155,14 @@
     setTimeout(() => { document.getElementById('alerta').innerHTML = ''; }, 6000);
   }
 
-  function limparDoc(d) { return (d || '').replace(/\D/g, ''); }
+  // CPF/CNPJ — mantém as letras do CNPJ alfanumérico (inscrições desde 07/2026)
+  function limparDoc(d) { return (d || '').toUpperCase().replace(/[^0-9A-Z]/g, ''); }
   function onDocChange() {
     const d = limparDoc(document.getElementById('alvo_documento').value);
     const el = document.getElementById('tipo-detectado');
     if (d.length === 11) el.textContent = 'CPF detectado';
     else if (d.length === 14) el.textContent = 'CNPJ detectado';
-    else if (d.length > 0) el.textContent = `${d.length} dígitos — esperado 11 (CPF) ou 14 (CNPJ)`;
+    else if (d.length > 0) el.textContent = `${d.length} posições — esperado 11 (CPF) ou 14 (CNPJ)`;
     else el.textContent = '';
   }
 

@@ -11,7 +11,8 @@ const { pool } = require('../db');
 
 const MAX_ALVOS = 5; // limite duro: pedidos com >5 proprietários geram alerta
 
-function digSafe(s) { return String(s || '').replace(/\D/g, ''); }
+// CPF/CNPJ limpo, mantendo as letras do CNPJ alfanumérico (nome antigo mantido: é exportado)
+function digSafe(s) { return require('./documento').limparDoc(s); }
 
 function inferirTipoDoc(doc) {
   const d = digSafe(doc);

@@ -13,6 +13,7 @@ const { criarPreferenceParaPedido, configurado: mpConfigurado } = require('../se
 const { PRODUTOS, sugerirProximoDegrau } = require('../services/produtos');
 const { assinar, assinarPedido, VALIDADE } = require('../services/link_relatorio');
 const revisaoBancaria = require('../services/revisao_bancaria');
+const { limparDoc, ehCPF, ehCNPJ } = require('../services/documento');   // CPF/CNPJ (CNPJ alfanumérico)
 const credifyCatalogo = require('../services/credify/catalogo');
 const analiseIA = require('../services/analise_documentos_ia');
 const pedidoAlvos = require('../services/pedido_alvos');
@@ -267,9 +268,9 @@ router.post('/', autenticar, async (req, res) => {
       if (!ALVO_TIPOS_VALIDOS.includes(alvo_tipo)) {
         return res.status(400).json({ erro: 'alvo_tipo deve ser PF ou PJ' });
       }
-      docLimpo = alvo_documento.replace(/\D/g, '');
-      if (docLimpo.length !== 11 && docLimpo.length !== 14) {
-        return res.status(400).json({ erro: 'Documento deve ser CPF (11 dígitos) ou CNPJ (14 dígitos)' });
+      docLimpo = limparDoc(alvo_documento);
+      if (!ehCPF(docLimpo) && !ehCNPJ(docLimpo)) {
+        return res.status(400).json({ erro: 'Documento deve ser CPF (11 dígitos) ou CNPJ (14 posições — o CNPJ novo pode ter letras)' });
       }
     }
 
@@ -335,9 +336,9 @@ router.post('/', autenticar, async (req, res) => {
         return res.status(400).json({ erro: 'Para Due Diligence Imobiliária sem documentos anexados: alvo2_nome, alvo2_documento e imovel_matricula são obrigatórios' });
       }
       if (alvo2_documento) {
-        alvo2DocLimpo = alvo2_documento.replace(/\D/g, '');
-        if (alvo2DocLimpo.length !== 11 && alvo2DocLimpo.length !== 14) {
-          return res.status(400).json({ erro: 'CPF/CNPJ do vendedor deve ter 11 ou 14 dígitos' });
+        alvo2DocLimpo = limparDoc(alvo2_documento);
+        if (!ehCPF(alvo2DocLimpo) && !ehCNPJ(alvo2DocLimpo)) {
+          return res.status(400).json({ erro: 'CPF/CNPJ do vendedor inválido (CPF com 11 dígitos ou CNPJ com 14 posições)' });
         }
       }
     }
@@ -1076,7 +1077,7 @@ router.post('/demo', autenticar, async (req, res) => {
         cliente_nome,
         cliente_cnpj,
         (alvo_nome || '').trim() || 'A identificar',
-        alvo_documento.replace(/\D/g, ''),
+        limparDoc(alvo_documento),
         alvo_tipo || 'PF',
         finalidade,
         ip,

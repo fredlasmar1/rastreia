@@ -65,7 +65,7 @@ async function posicaoBancoOlinda(modalidade, anoMes, banco = {}, segmento = 'PF
     if (!todas.length) return null;
     const semana = todas[0].InicioPeriodo;
     const linhas = todas.filter(l => l.InicioPeriodo === semana);
-    const cnpj8 = String(banco.cnpj || '').replace(/\D/g, '').slice(0, 8);
+    const cnpj8 = require('./documento').raizCNPJ(banco.cnpj);
     const IGN = ['BANCO', 'BCO', 'S.A', 'SA', 'S/A', 'FINANCEIRA', 'CREDITO', 'FINANCIAMENTO', 'INVESTIMENTO', 'DO', 'DA', 'DE'];
     const nomeNorm = String(banco.nome || '').toUpperCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^A-Z0-9 ]/g, ' ').split(/\s+/).filter(p => p.length > 1 && !IGN.includes(p));
     // Nome: todas as palavras do banco aparecem e sobra o mínimo de palavras

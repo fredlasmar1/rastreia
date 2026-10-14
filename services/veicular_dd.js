@@ -214,7 +214,7 @@ async function consultarHistoricoProprietarios(placa) {
   const r = await chamar('ConsultaVeicularHistoricoProprietarios', { Placa: normalizarPlaca(placa) }, fonte);
   if (!r.ok) return r;
   const regs = (Array.isArray(r.retorno.registros) ? r.retorno.registros : []).map(x => {
-    const doc = t(x.documento).replace(/\D/g, '');
+    const doc = require('./documento').limparDoc(t(x.documento));
     return {
       nome: t(x.nomeRazaoSocial), tipo_documento: t(x.tipoDocumento),
       documento_mascarado: doc ? (doc.length === 14 ? `**.***.***/****-${doc.slice(-2)}` : `***.***.***-${doc.slice(-2)}`) : '',

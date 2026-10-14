@@ -803,7 +803,7 @@
 
   async function adicionarAlvoManual() {
     const nome = document.getElementById('alvo-manual-nome').value.trim();
-    const documento = document.getElementById('alvo-manual-doc').value.replace(/\D/g, '');
+    const documento = document.getElementById('alvo-manual-doc').value.toUpperCase().replace(/[^0-9A-Z]/g, '');
     if (!documento || (documento.length !== 11 && documento.length !== 14)) {
       mostrarAlerta('CPF deve ter 11 dígitos ou CNPJ 14 dígitos', 'error');
       return;

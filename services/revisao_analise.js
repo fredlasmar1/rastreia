@@ -46,7 +46,7 @@ function estimarPagas(op, hoje = new Date()) {
 function montarDados(ex = {}) {
   const op = { ...(ex.operacao || {}) };
   const cl = ex.classificacao || {};
-  const doc = String(ex.contratante?.cpf_cnpj || '').replace(/\D/g, '');
+  const doc = require('./documento').limparDoc(ex.contratante?.cpf_cnpj);
   // Parcelas pagas: o que extrato/carnê comprova vale mais que a estimativa pela data
   const pg = ex.pagamentos || {};
   const doDoc = Number.isFinite(Number(pg.parcelas_pagas)) && pg.parcelas_pagas !== null ? Math.round(Number(pg.parcelas_pagas)) : null;

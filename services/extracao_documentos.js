@@ -17,7 +17,8 @@
 const fs = require('fs');
 
 const REGEX_CPF = /(?<![\d.])(\d{3}[.\s]?\d{3}[.\s]?\d{3}[-\s]?\d{2})(?![\d-])/g;
-const REGEX_CNPJ = /(?<![\d.])(\d{2}[.\s]?\d{3}[.\s]?\d{3}[\/\s]?\d{4}[-\s]?\d{2})(?!\d)/g;
+// CNPJ numérico ou alfanumérico (12 posições 0-9/A-Z + 2 dígitos); o DV filtra palavras soltas
+const REGEX_CNPJ = /(?<![0-9A-Z.])([0-9A-Z]{2}[.\s]?[0-9A-Z]{3}[.\s]?[0-9A-Z]{3}[\/\s]?[0-9A-Z]{4}[-\s]?\d{2})(?![0-9A-Z])/g;
 
 // Termos que costumam preceder um CPF/CNPJ em matrículas/escrituras brasileiras.
 // Mantido apenas para documentação — a heurística de nome usa janela do texto.
@@ -48,22 +49,9 @@ function validarCpf(cpfRaw) {
   return dv2 === parseInt(cpf[10], 10);
 }
 
+// DV do CNPJ, inclusive o alfanumérico (letra vale ASCII − 48) — services/documento.js
 function validarCnpj(cnpjRaw) {
-  const cnpj = digSafe(cnpjRaw);
-  if (cnpj.length !== 14) return false;
-  if (/^(\d)\1{13}$/.test(cnpj)) return false;
-  const calc = (base, pesos) => {
-    let soma = 0;
-    for (let i = 0; i < pesos.length; i++) soma += parseInt(base[i], 10) * pesos[i];
-    const r = soma % 11;
-    return r < 2 ? 0 : 11 - r;
-  };
-  const pesos1 = [5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2];
-  const pesos2 = [6, 5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2];
-  const dv1 = calc(cnpj.slice(0, 12), pesos1);
-  if (dv1 !== parseInt(cnpj[12], 10)) return false;
-  const dv2 = calc(cnpj.slice(0, 13), pesos2);
-  return dv2 === parseInt(cnpj[13], 10);
+  return require('./documento').validarCNPJ(cnpjRaw);
 }
 
 // ─── Heurística de nome próximo ──────────────────────────────────
@@ -130,8 +118,9 @@ function extrairCpfCnpjDoTexto(texto) {
 
   REGEX_CNPJ.lastIndex = 0;
   while ((m = REGEX_CNPJ.exec(txt)) !== null) {
-    const limpo = digSafe(m[1]);
+    const limpo = require('./documento').limparDoc(m[1]);
     if (limpo.length !== 14) continue;
+    if ((limpo.match(/\d/g) || []).length < 6) continue;   // palavra em maiúsculas não é CNPJ
     if (!validarCnpj(limpo)) continue;
     if (vistos.has(limpo)) continue;
     vistos.add(limpo);

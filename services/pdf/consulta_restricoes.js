@@ -95,7 +95,7 @@ function blocoStatusRestricoes(doc, y, dados) {
 function blocoIdentificacao(doc, y, pedido, dados) {
   const cad = dados.receita_federal || {};
   const nome = pedido.alvo_nome || cad.nome || cad.razao_social || cad.nome_fantasia || '-';
-  const isPJ = (pedido.alvo_tipo === 'PJ') || ((pedido.alvo_documento || '').replace(/\D/g, '').length === 14);
+  const isPJ = (pedido.alvo_tipo === 'PJ') || (require('../documento').tipoDoc(pedido.alvo_documento) === 'PJ');
   const situacao = cad.situacao_rf || cad.situacao || '-';
 
   y = secao(doc, 'IDENTIFICAÇÃO DO CONSULTADO', y);
@@ -374,7 +374,7 @@ function blocoNegativacoes(doc, y, dados) {
     // "Estruturada" = tem ao menos um campo de identificação (CNPJ, data ou
     // descrição com algo além do rótulo solto "Falência").
     const estruturadas = falencias.filter(f => {
-      const cnpj = String(f.cnpj || f.documento || '').replace(/\D/g, '');
+      const cnpj = require('../documento').limparDoc(f.cnpj || f.documento);
       const data = formatarData(f.data || f.dataAbertura);
       const desc = String(f.descricao || f.tipo || f.natureza || '').trim().toLowerCase();
       const descUtil = desc && desc !== 'falencia' && desc !== 'falência';

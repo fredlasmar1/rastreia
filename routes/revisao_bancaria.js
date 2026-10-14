@@ -27,7 +27,7 @@ function camposIniciais(reg, pedido) {
   const ex = reg.dados_extraidos || {};
   const inf = reg.dados_informados || {};
   const op = ex.operacao || {};
-  const doc = String(pedido.alvo_documento || '').replace(/\D/g, '');
+  const doc = require('../services/documento').limparDoc(pedido.alvo_documento);
   return {
     pfpj: ex.classificacao?.pfpj || (doc.length === 14 ? 'PJ' : 'PF'),
     tipo_operacao: inf.tipo_operacao || ex.classificacao?.tipo_operacao || null,

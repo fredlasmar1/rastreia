@@ -18,8 +18,8 @@ function _norm(s) {
 function _ehReu(p, nome, doc) {
   const polo = _norm(p.polo_passivo);
   if (!polo) return false;
-  const dig = String(doc || '').replace(/\D/g, '');
-  if (dig.length >= 11 && polo.replace(/\D/g, '').includes(dig)) return true;
+  const dig = require('./documento').limparDoc(doc);
+  if (dig.length >= 11 && polo.toUpperCase().replace(/[^0-9A-Z]/g, '').includes(dig)) return true;
   const partes = _norm(nome).split(' ').filter(x => x.length >= 3);
   if (partes.length < 2) return partes.length === 1 && polo.includes(partes[0]) && partes[0].length >= 6;
   return polo.includes(partes[0]) && polo.includes(partes[partes.length - 1]);

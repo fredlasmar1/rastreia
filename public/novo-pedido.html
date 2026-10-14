@@ -56,7 +56,7 @@
       </div>
       <div class="form-group">
         <label id="label-alvo-doc">CPF ou CNPJ *</label>
-        <input type="text" id="alvo_documento" placeholder="000.000.000-00 ou 00.000.000/0000-00" oninput="detectarTipo(this.value)">
+        <input type="text" id="alvo_documento" placeholder="CPF ou CNPJ (o CNPJ novo pode ter letras)" oninput="detectarTipo(this.value)">
       </div>
       <div class="form-group">
         <label>Tipo</label>
@@ -761,8 +761,8 @@
   }
 
   function detectarTipo(val) {
-    const limpo = val.replace(/\D/g, '');
-    document.getElementById('alvo_tipo').value = limpo.length > 11 ? 'PJ' : 'PF';
+    const limpo = val.toUpperCase().replace(/[^0-9A-Z]/g, '');   // CNPJ novo pode ter letras
+    document.getElementById('alvo_tipo').value = (limpo.length > 11 || /[A-Z]/.test(limpo)) ? 'PJ' : 'PF';
   }
 
   // Estado do plano do operador (carregado em loadPlano)
@@ -829,7 +829,7 @@
       payload.addons_veicular = Array.from(addonsSelecionados);
     } else {
       const alvo_nome = document.getElementById('alvo_nome').value.trim();
-      const alvo_documento = document.getElementById('alvo_documento').value.replace(/\D/g, '');
+      const alvo_documento = document.getElementById('alvo_documento').value.toUpperCase().replace(/[^0-9A-Z]/g, '');
       const alvo_tipo = document.getElementById('alvo_tipo').value;
       // V3: Due Diligence Imobiliária com documentos anexados → CPF é opcional.
       // A IA extrai os proprietários da matrícula/escritura e cria os alvos.
@@ -879,7 +879,7 @@
     // Campos de Due Diligence Imobiliária
     if (tipo === 'due_diligence_imobiliaria') {
       payload.alvo2_nome = document.getElementById('alvo2_nome').value.trim();
-      payload.alvo2_documento = document.getElementById('alvo2_documento').value.replace(/\D/g, '');
+      payload.alvo2_documento = document.getElementById('alvo2_documento').value.toUpperCase().replace(/[^0-9A-Z]/g, '');
       payload.alvo2_tipo = document.getElementById('alvo2_tipo').value;
       payload.imovel_matricula = document.getElementById('imovel_matricula').value.trim();
       payload.imovel_endereco = document.getElementById('imovel_endereco').value.trim();

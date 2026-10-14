@@ -225,7 +225,7 @@ function montarBloco(doc) {
   };
 }
 
-function digSafe(s) { return (s || '').toString().replace(/\D/g, ''); }
+function digSafe(s) { return require('./documento').limparDoc(s); }   // mantém o CNPJ alfanumérico
 
 async function temAlvoConsultado(pedidoId) {
   const r = await pool.query('SELECT 1 FROM pedido_alvos WHERE pedido_id = $1 LIMIT 1', [pedidoId]);
