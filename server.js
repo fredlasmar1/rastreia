@@ -384,6 +384,7 @@ app.use('/api/assinaturas', require('./routes/assinaturas'));
 app.use('/api/clientes', require('./routes/clientes'));
 app.use('/api/admin/custos', require('./routes/custos'));
 app.use('/api/revisao-bancaria', require('./routes/revisao_bancaria'));
+app.use('/api/cobrancas', require('./routes/cobrancas'));
 app.use('/api', require('./routes/planos_usuario'));
 app.use('/api/_debug', require('./routes/_debug'));
 

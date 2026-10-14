@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Cobranças</title>
+  <link rel="stylesheet" href="/css/style.css">
+  <style>
+    .cb-kpis { display:grid; grid-template-columns:repeat(4,1fr); gap:10px; margin-bottom:16px; }
+    .cb-kpi { background:#fff; border:1px solid #e2e8f0; border-radius:14px; padding:14px 16px; border-left:4px solid var(--c,#2563eb); }
+    .cb-kpi .r { font-size:11px; color:#64748b; font-weight:700; text-transform:uppercase; letter-spacing:.05em; }
+    .cb-kpi .v { font-size:22px; font-weight:800; color:#0f172a; margin-top:2px; font-variant-numeric:tabular-nums; }
+    .cb-kpi .s { font-size:12px; color:#64748b; }
+    .cb-abas { display:flex; gap:4px; border-bottom:1px solid #e2e8f0; margin-bottom:0; flex-wrap:wrap; }
+    .cb-aba { border:0; background:none; padding:10px 14px; font-size:14px; font-weight:700; color:#64748b; border-bottom:3px solid transparent; cursor:pointer; }
+    .cb-aba.on { color:#1e3a8a; border-bottom-color:#2563eb; }
+    .cb-painel { background:#fff; border:1px solid #e2e8f0; border-top:0; border-radius:0 0 14px 14px; padding:16px; margin-bottom:18px; }
+    .cb-tab { width:100%; border-collapse:collapse; font-size:13px; }
+    .cb-tab th { text-align:left; font-size:11px; color:#64748b; text-transform:uppercase; padding:8px; border-bottom:1px solid #e2e8f0; }
+    .cb-tab td { padding:9px 8px; border-bottom:1px solid #f1f5f9; vertical-align:middle; }
+    .cb-tab .sub { font-size:12px; color:#64748b; }
+    .cb-num { text-align:right; font-variant-numeric:tabular-nums; white-space:nowrap; }
+    .pill { display:inline-block; font-size:11px; font-weight:800; padding:2px 9px; border-radius:99px; white-space:nowrap; }
+    .cb-acoes { display:flex; gap:6px; flex-wrap:wrap; }
+    .cb-vazio { padding:28px; text-align:center; color:#64748b; }
+    .cb-dica { background:#eff6ff; border:1px solid #bfdbfe; color:#1e3a8a; border-radius:10px; padding:10px 12px; font-size:13px; margin-bottom:12px; }
+    .cb label { text-transform:none; letter-spacing:0; }
+    .cb input[type=checkbox] { width:auto; }
+    @media (max-width: 760px) { .cb-kpis { grid-template-columns:1fr 1fr; } .cb-oculta { display:none; } }
+  </style>
+</head>
+<body>
+<nav class="nav">
+  <a href="/dashboard.html" class="nav-logo"><img src="/img/logo-recobro.jpg" alt="Recobro"><div><div class="nav-brand">RASTREIA</div></div></a>
+  <div class="nav-links">
+    <a href="/dashboard.html">Dashboard</a>
+    <a href="/novo-pedido.html">+ Novo Pedido</a>
+    <a href="/restricoes.html">🚦 Restrições no CPF</a>
+    <a href="/veicular.html">🚗 Consulta Veicular</a>
+    <a href="/clientes.html">Clientes</a>
+    <a href="/cobrancas.html" class="ativo">💳 Cobranças</a>
+    <a href="/revisao-contratos.html">⚖ Revisão de Contratos</a>
+    <a href="/usuarios.html" id="nav-usuarios" style="display:none">Usuários</a>
+    <a href="/faturamento.html" id="nav-faturamento" style="display:none">Faturamento</a>
+    <a href="/custos-api.html" id="nav-custos" style="display:none">API</a>
+    <a href="#" onclick="logout()">Sair</a>
+  </div>
+  <div class="nav-user" id="nav-user"></div>
+</nav>
+
+<div class="container cb">
+  <div style="display:flex;justify-content:space-between;align-items:flex-end;gap:12px;flex-wrap:wrap;margin-bottom:14px">
+    <div><h1 class="page-title" style="margin:0">Cobranças</h1>
+      <div style="font-size:13px;color:#64748b">Mercado Pago: Pix, boleto e cartão em até 12x — parcelas mensais, lotes e assinaturas no cartão.</div></div>
+  </div>
+  <div id="alerta"></div>
+  <div class="cb-kpis" id="kpis"></div>
+
+  <div class="cb-abas">
+    <button class="cb-aba on" data-aba="abertas" onclick="aba('abertas')">Em aberto</button>
+    <button class="cb-aba" data-aba="pagas" onclick="aba('pagas')">Pagas</button>
+    <button class="cb-aba" data-aba="lote" onclick="aba('lote')">Cobrar em lote</button>
+    <button class="cb-aba" data-aba="assinaturas" onclick="aba('assinaturas')">Assinaturas no cartão</button>
+  </div>
+  <div class="cb-painel" id="painel"><div class="loading"><div class="spinner"></div>Carregando...</div></div>
+</div>
+
+<script>
+  const token = localStorage.getItem('rastreia_token');
+  if (!token) window.location.href = '/';
+  const usuario = JSON.parse(localStorage.getItem('rastreia_usuario') || '{}');
+  document.getElementById('nav-user').textContent = usuario.nome || '';
+  if (usuario.perfil === 'admin') ['nav-usuarios', 'nav-faturamento', 'nav-custos'].forEach(id => { const el = document.getElementById(id); if (el) el.style.display = ''; });
+  function logout() { localStorage.clear(); window.location.href = '/'; }
+  function esc(s) { const d = document.createElement('div'); d.textContent = s == null ? '' : String(s); return d.innerHTML; }
+  const brl = (v) => 'R$ ' + Number(v || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const dataBR = (s) => s ? String(s).slice(0, 10).split('-').reverse().join('/') : '—';
+  const auth = () => ({ Authorization: `Bearer ${token}` });
+  const api = async (url, opts = {}) => { const r = await fetch(url, { ...opts, headers: { ...auth(), ...(opts.body ? { 'Content-Type': 'application/json' } : {}) } }); if (r.status === 401) logout(); return { r, j: await r.json().catch(() => ({})) }; };
+  const wa = (fone, txt) => `https://wa.me/${String(fone || '').replace(/\D/g, '').replace(/^(?!55)(?=\d)/, '55')}?text=${encodeURIComponent(txt)}`;
+  async function copiar(t, btn) { try { await navigator.clipboard.writeText(t); const o = btn.textContent; btn.textContent = 'Copiado'; setTimeout(() => btn.textContent = o, 1500); } catch (_) {} }
+  function alerta(msg, tipo) { document.getElementById('alerta').innerHTML = `<div class="alert alert-${tipo === 'error' ? 'error' : 'success'}">${esc(msg)}</div>`; }
+  const ORIGEM = { parcela: 'Parcela', lote: 'Pedido', plano: 'Mensalidade' };
+  const vencida = (c) => c.status === 'aberta' && c.vencimento && new Date(String(c.vencimento).slice(0, 10) + 'T23:59:59') < new Date();
+
+  let ABA = 'abertas';
+  function aba(a) { ABA = a; document.querySelectorAll('.cb-aba').forEach(b => b.classList.toggle('on', b.dataset.aba === a)); carregarAba(); }
+
+  async function carregarKpis() {
+    const { j } = await api('/api/cobrancas?status=todas');
+    const rs = Object.fromEntries((j.resumo || []).map(x => [x.status, x]));
+    const pagasMes = (j.cobrancas || []).filter(c => c.status === 'paga' && c.pago_em && new Date(c.pago_em).getMonth() === new Date().getMonth() && new Date(c.pago_em).getFullYear() === new Date().getFullYear());
+    document.getElementById('kpis').innerHTML = [
+      ['Em aberto', rs.aberta ? rs.aberta.n : 0, rs.aberta ? brl(rs.aberta.total) : brl(0), '#2563eb'],
+      ['Vencidas', rs.aberta ? rs.aberta.vencidas : 0, 'cobrar de novo', '#dc2626'],
+      ['Pagas no mês', pagasMes.length, brl(pagasMes.reduce((s, c) => s + Number(c.valor), 0)), '#16a34a'],
+      ['Pagas no total', rs.paga ? rs.paga.n : 0, rs.paga ? brl(rs.paga.total) : brl(0), '#0f172a']
+    ].map(([r, v, s, c]) => `<div class="cb-kpi" style="--c:${c}"><div class="r">${r}</div><div class="v">${v}</div><div class="s">${s}</div></div>`).join('');
+  }
+
+  async function carregarAba() {
+    const el = document.getElementById('painel');
+    el.innerHTML = '<div class="loading"><div class="spinner"></div>Carregando...</div>';
+    if (ABA === 'abertas' || ABA === 'pagas') return listaCobrancas(ABA === 'abertas' ? 'aberta' : 'paga');
+    if (ABA === 'lote') return telaLote();
+    if (ABA === 'assinaturas') return telaAssinaturas();
+  }
+
+  async function listaCobrancas(st) {
+    const { j } = await api(`/api/cobrancas?status=${st}`);
+    const ls = j.cobrancas || [];
+    const el = document.getElementById('painel');
+    if (!ls.length) { el.innerHTML = `<div class="cb-vazio">${st === 'aberta' ? 'Nenhuma cobrança em aberto. Use "Cobrar em lote" ou divida um pedido em parcelas na tela do pedido.' : 'Nenhuma cobrança paga ainda.'}</div>`; return; }
+    el.innerHTML = `<div style="overflow-x:auto"><table class="cb-tab"><thead><tr><th>Cobrança</th><th>Cliente</th><th class="cb-num">Valor</th><th>Vencimento</th><th>Situação</th>${st === 'aberta' ? '<th>Ações</th>' : '<th class="cb-oculta">Pagamento</th>'}</tr></thead><tbody>${ls.map(c => {
+      const cli = c.cliente_nome || c.cliente_cadastro || '—'; const fone = c.cliente_whatsapp || c.cliente_cadastro_whatsapp;
+      const sit = c.status === 'paga' ? '<span class="pill" style="background:#dcfce7;color:#14532d">Paga</span>' : vencida(c) ? '<span class="pill" style="background:#fee2e2;color:#991b1b">Vencida</span>' : '<span class="pill" style="background:#fef3c7;color:#92400e">Em aberto</span>';
+      const txt = `Olá! Segue o link de pagamento: ${c.descricao || ''} — ${brl(c.valor)}${c.vencimento ? ', vence ' + dataBR(c.vencimento) : ''}. Pix, boleto ou cartão em até 12x: ${c.mp_init_point || ''}`;
+      return `<tr><td><strong>${esc(ORIGEM[c.origem] || c.origem)}${c.numero ? ` ${c.numero}/${c.total}` : ''}</strong><div class="sub">${c.pedido_id ? `<a href="/pedido.html?id=${c.pedido_id}">pedido #${c.pedido_numero}</a> · ` : ''}${esc(c.descricao || '')}</div></td>
+        <td>${esc(cli)}</td><td class="cb-num">${brl(c.valor)}</td><td>${dataBR(c.vencimento)}</td><td>${sit}</td>
+        ${st === 'aberta' ? `<td><div class="cb-acoes">${c.mp_init_point ? `<button class="btn btn-sm btn-outline" onclick="copiar('${esc(c.mp_init_point)}', this)">📋 Link</button>${fone ? `<a class="btn btn-sm" style="background:#25d366;color:#fff;text-decoration:none" target="_blank" href="${wa(fone, txt)}">📱</a>` : ''}` : ''}
+          <button class="btn btn-sm btn-outline" title="Gerar link novo" onclick="acao('${c.id}','link')">↻</button>
+          <button class="btn btn-sm btn-outline" title="Recebido fora do Mercado Pago" onclick="acao('${c.id}','baixa-manual')">✓ Recebi</button>
+          <button class="btn btn-sm btn-outline" title="Cancelar cobrança" onclick="acao('${c.id}','cancelar')">✕</button></div></td>`
+        : `<td class="cb-oculta sub">${c.pago_em ? new Date(c.pago_em).toLocaleDateString('pt-BR') : ''} · ${esc(c.forma_baixa || '')}</td>`}</tr>`;
+    }).join('')}</tbody></table></div>`;
+  }
+  async function acao(id, a) {
+    const { r, j } = await api(`/api/cobrancas/${id}/${a}`, { method: 'POST' });
+    if (!r.ok) return alerta(j.erro || 'Erro', 'error');
+    alerta(a === 'link' ? 'Link novo gerado.' : a === 'cancelar' ? 'Cobrança cancelada.' : 'Baixa registrada.', 'ok');
+    carregarKpis(); carregarAba();
+  }
+
+  // ── Lote ──
+  async function telaLote() {
+    const [{ j: jp }, { j: ja }] = await Promise.all([api('/api/cobrancas/pedidos-em-aberto'), api('/api/cobrancas/assinaturas')]);
+    const pedidos = jp.pedidos || [], clientes = (ja.clientes || []).filter(c => Number(c.plano_valor_mensal) > 0);
+    const hoje = new Date(); const v = `${hoje.getFullYear()}-${String(hoje.getMonth() + 1).padStart(2, '0')}-${String(hoje.getDate()).padStart(2, '0')}`;
+    document.getElementById('painel').innerHTML = `
+      <div class="cb-dica">Gere vários links de uma vez. Cada link aceita Pix, boleto e cartão em até 12x e baixa sozinho quando o cliente paga.</div>
+      <div style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap;margin-bottom:12px"><label style="font-size:12px">Vencimento<input type="date" id="lote-v" value="${v}" style="display:block;padding:7px;border:1px solid #cbd5e1;border-radius:8px"></label></div>
+      <div style="font-weight:800;margin:6px 0">Pedidos aguardando pagamento (${pedidos.length})</div>
+      ${pedidos.length ? `<div style="overflow-x:auto"><table class="cb-tab"><thead><tr><th><input type="checkbox" onclick="document.querySelectorAll('.lote-p').forEach(x=>x.checked=this.checked)"></th><th>Pedido</th><th>Cliente</th><th class="cb-num">Valor</th><th class="cb-oculta">Criado</th></tr></thead><tbody>${pedidos.map(p => `<tr><td><input type="checkbox" class="lote-p" value="${p.id}"></td><td><a href="/pedido.html?id=${p.id}">#${p.numero}</a> <span class="sub">${esc(p.alvo_nome || p.tipo)}</span>${p.cobrancas_abertas ? ` <span class="pill" style="background:#ede9fe;color:#5b21b6">já tem cobrança</span>` : ''}</td><td>${esc(p.cliente_nome)}</td><td class="cb-num">${brl(p.valor)}</td><td class="cb-oculta sub">${new Date(p.criado_em).toLocaleDateString('pt-BR')}</td></tr>`).join('')}</tbody></table></div>` : '<div class="cb-vazio">Nenhum pedido aguardando pagamento.</div>'}
+      <div style="font-weight:800;margin:16px 0 6px">Mensalidade de clientes com plano (${clientes.length})</div>
+      ${clientes.length ? `<div style="overflow-x:auto"><table class="cb-tab"><thead><tr><th><input type="checkbox" onclick="document.querySelectorAll('.lote-c').forEach(x=>x.checked=this.checked)"></th><th>Cliente</th><th>Plano</th><th class="cb-num">Mensalidade</th><th class="cb-oculta">Assinatura</th></tr></thead><tbody>${clientes.map(c => `<tr><td><input type="checkbox" class="lote-c" value="${c.id}" ${c.assinatura_status === 'authorized' ? 'disabled title="Já paga pela assinatura no cartão"' : ''}></td><td>${esc(c.nome)}</td><td>${esc(c.plano_nome || '—')}</td><td class="cb-num"><input type="text" class="lote-cv" data-id="${c.id}" value="${String(Number(c.plano_valor_mensal).toFixed(2)).replace('.', ',')}" style="width:100px;text-align:right;padding:5px;border:1px solid #cbd5e1;border-radius:6px"></td><td class="cb-oculta sub">${c.assinatura_status === 'authorized' ? 'cartão automático' : '—'}</td></tr>`).join('')}</tbody></table></div><div class="sub" style="margin-top:4px">A mensalidade paga renova a cota do mês do cliente.</div>` : '<div class="cb-vazio">Nenhum cliente com valor de mensalidade definido (Clientes → Plano).</div>'}
+      <div style="display:flex;gap:10px;align-items:center;margin-top:14px"><button class="btn btn-primary" onclick="gerarLote(this)">Gerar os links</button><span id="lote-msg" class="sub"></span></div>
+      <div id="lote-res" style="margin-top:14px"></div>`;
+  }
+  async function gerarLote(btn) {
+    const pedido_ids = [...document.querySelectorAll('.lote-p:checked')].map(x => x.value);
+    const clientes = [...document.querySelectorAll('.lote-c:checked')].map(x => { const inp = document.querySelector(`.lote-cv[data-id="${x.value}"]`); return { cliente_id: x.value, valor: Number(String(inp.value).replace(/\./g, '').replace(',', '.')) }; });
+    if (!pedido_ids.length && !clientes.length) return document.getElementById('lote-msg').textContent = 'Marque pedidos ou clientes.';
+    btn.disabled = true; document.getElementById('lote-msg').textContent = `Gerando ${pedido_ids.length + clientes.length} link(s)…`;
+    const { r, j } = await api('/api/cobrancas/lote', { method: 'POST', body: JSON.stringify({ pedido_ids, clientes, vencimento: document.getElementById('lote-v').value }) });
+    btn.disabled = false;
+    if (!r.ok) return document.getElementById('lote-msg').textContent = j.erro || 'Erro';
+    const itens = j.itens || [];
+    document.getElementById('lote-msg').textContent = `${itens.filter(i => i.ok).length} link(s) gerado(s)${itens.some(i => !i.ok) ? `, ${itens.filter(i => !i.ok).length} com erro` : ''}.`;
+    const todos = itens.filter(i => i.ok).map(i => `${i.cliente} — ${brl(i.valor)}: ${i.link}`).join('\n');
+    document.getElementById('lote-res').innerHTML = `<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px"><strong>Links gerados</strong>${todos ? `<button class="btn btn-sm btn-outline" id="cp-todos">📋 Copiar todos</button>` : ''}</div>` +
+      itens.map(i => `<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;padding:8px;border:1px solid #e2e8f0;border-radius:8px;margin-bottom:6px">${i.ok ? '✅' : '⚠️'} <strong>${esc(i.cliente || '')}</strong>${i.numero ? ` <span class="sub">#${i.numero}</span>` : ''} <span>${i.valor ? brl(i.valor) : ''}</span>
+        ${i.ok ? `<button class="btn btn-sm btn-outline" onclick="copiar('${esc(i.link)}', this)">📋 Link</button>${i.whatsapp ? `<a class="btn btn-sm" style="background:#25d366;color:#fff;text-decoration:none" target="_blank" href="${wa(i.whatsapp, `Olá! Segue o link de pagamento (${brl(i.valor)}) — Pix, boleto ou cartão em até 12x: ${i.link}`)}">📱 WhatsApp</a>` : ''}` : `<span style="color:#b91c1c;font-size:12px">${esc(i.erro || '')}</span>`}</div>`).join('');
+    const cp = document.getElementById('cp-todos'); if (cp) cp.onclick = () => copiar(todos, cp);
+    carregarKpis();
+  }
+
+  // ── Assinaturas no cartão ──
+  const ASS = { pending: ['Aguardando o cliente autorizar', '#fef3c7', '#92400e'], authorized: ['Ativa — cobra todo mês', '#dcfce7', '#14532d'], paused: ['Pausada', '#ffedd5', '#9a3412'], cancelled: ['Cancelada', '#e5e7eb', '#374151'] };
+  async function telaAssinaturas() {
+    const { j } = await api('/api/cobrancas/assinaturas');
+    const ls = j.clientes || [];
+    const el = document.getElementById('painel');
+    el.innerHTML = `<div class="cb-dica">O cliente abre o link uma vez, cadastra o cartão no Mercado Pago e a mensalidade é cobrada sozinha todo mês. Cada cobrança aprovada renova a cota do plano. O Mercado Pago exige o e-mail do cliente.</div>` +
+      (ls.length ? `<div style="overflow-x:auto"><table class="cb-tab"><thead><tr><th>Cliente</th><th>Plano</th><th class="cb-num">Mensalidade</th><th>Assinatura</th><th>Ações</th></tr></thead><tbody>${ls.map(c => {
+        const st = ASS[c.assinatura_status];
+        return `<tr><td><strong>${esc(c.nome)}</strong><div class="sub">${esc(c.email || 'sem e-mail')}</div></td><td>${esc(c.plano_nome || '—')}</td><td class="cb-num">${Number(c.plano_valor_mensal) > 0 ? brl(c.plano_valor_mensal) : '<span class="sub">defina em Clientes</span>'}</td>
+          <td>${st ? `<span class="pill" style="background:${st[1]};color:${st[2]}">${st[0]}</span>${c.assinatura_ultimo_pagamento ? `<div class="sub">último pagamento ${new Date(c.assinatura_ultimo_pagamento).toLocaleDateString('pt-BR')}</div>` : ''}` : '<span class="sub">sem assinatura</span>'}</td>
+          <td><div class="cb-acoes">
+            ${!c.mp_preapproval_id || c.assinatura_status === 'cancelled' ? `<button class="btn btn-sm btn-primary" onclick="criarAss('${c.id}', this)" ${Number(c.plano_valor_mensal) > 0 && c.email ? '' : 'disabled title="Precisa de mensalidade e e-mail"'}>Criar assinatura</button>` : ''}
+            ${c.assinatura_link && c.assinatura_status === 'pending' ? `<button class="btn btn-sm btn-outline" onclick="copiar('${esc(c.assinatura_link)}', this)">📋 Link</button>${c.whatsapp ? `<a class="btn btn-sm" style="background:#25d366;color:#fff;text-decoration:none" target="_blank" href="${wa(c.whatsapp, `Olá! Para a mensalidade do plano ${c.plano_nome || ''} (${brl(c.plano_valor_mensal)}) ser cobrada no cartão todo mês, autorize aqui (Mercado Pago): ${c.assinatura_link}`)}">📱</a>` : ''}` : ''}
+            ${c.mp_preapproval_id ? `<button class="btn btn-sm btn-outline" title="Atualizar situação" onclick="atualizarAss('${c.id}')">↻</button>` : ''}
+            ${c.mp_preapproval_id && c.assinatura_status !== 'cancelled' && usuario.perfil === 'admin' ? `<button class="btn btn-sm btn-outline" onclick="cancelarAss('${c.id}', this)">Cancelar</button>` : ''}
+          </div></td></tr>`; }).join('')}</tbody></table></div>` : '<div class="cb-vazio">Nenhum cliente com plano. Defina o plano em Clientes.</div>');
+  }
+  async function criarAss(id, btn) { btn.disabled = true; const { r, j } = await api(`/api/cobrancas/assinaturas/${id}`, { method: 'POST', body: '{}' }); if (!r.ok) { btn.disabled = false; return alerta(j.erro || 'Erro', 'error'); } alerta('Assinatura criada: envie o link ao cliente para ele autorizar o cartão.', 'ok'); telaAssinaturas(); }
+  async function atualizarAss(id) { const { r, j } = await api(`/api/cobrancas/assinaturas/${id}/atualizar`, { method: 'POST' }); if (!r.ok) return alerta(j.erro || 'Erro', 'error'); telaAssinaturas(); }
+  async function cancelarAss(id, btn) {
+    if (btn.dataset.confirma !== '1') { btn.dataset.confirma = '1'; btn.textContent = 'Confirmar cancelamento'; btn.style.background = '#fee2e2'; return; }
+    const r = await fetch(`/api/cobrancas/assinaturas/${id}`, { method: 'DELETE', headers: auth() }); const j = await r.json().catch(() => ({}));
+    if (!r.ok) return alerta(j.erro || 'Erro', 'error'); alerta('Assinatura cancelada no Mercado Pago.', 'ok'); telaAssinaturas();
+  }
+
+  carregarKpis(); carregarAba();
+</script>
+</body>
+</html>

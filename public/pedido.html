@@ -14,6 +14,7 @@
     <a href="/novo-pedido.html">+ Novo Pedido</a>
     <a href="/restricoes.html">🚦 Restrições no CPF</a>
     <a href="/clientes.html">Clientes</a>
+    <a href="/cobrancas.html">💳 Cobranças</a>
     <a href="/revisao-contratos.html">⚖ Revisão de Contratos</a>
     <a href="#" onclick="logout()">Sair</a>
   </div>
@@ -77,6 +78,7 @@
     if (!data || data.erro) { document.getElementById('conteudo').innerHTML = '<div class="alert alert-error">Pedido não encontrado</div>'; return; }
     pedidoAtual = data;
     renderizar(data);
+    carregarCobrancasPedido(data).catch(() => {});
     // Revisão aberta com "Link Mercado Pago", mas o link não saiu: avisa em vez de fingir que foi
     try {
       const erroMp = sessionStorage.getItem('rc_mp_erro_' + data.id);
@@ -518,7 +520,7 @@
         <div class="pedido-section" id="secao-link-mp" style="border:1px solid #dbeafe;background:#eff6ff">
           <div class="section-title" style="color:#1e40af">💳 Link de pagamento (Mercado Pago)</div>
           <div style="font-size:13px;color:#374151;margin-bottom:10px">
-            Envie este link ao cliente. Quando ele pagar, este pedido sai automaticamente de "aguardando pagamento".
+            Envie este link ao cliente: Pix, boleto ou cartão em <strong>até 12x</strong>. Quando ele pagar, este pedido sai automaticamente de "aguardando pagamento".
           </div>
           <div id="mp-link-box" style="background:#fff;border:1px solid #bfdbfe;border-radius:6px;padding:9px 11px;font-family:monospace;font-size:12px;word-break:break-all;margin-bottom:10px">${p.mp_init_point ? esc(p.mp_init_point) : '<em style="color:#94a3b8">Link ainda não gerado — clique em "Gerar link" abaixo.</em>'}</div>
           <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px">
@@ -538,6 +540,8 @@
           ` : ''}
         </div>
       ` : ''}
+
+      ${p.status === 'aguardando_pagamento' && Number(p.valor) > 0 || p.forma_pagamento === 'parcelado' ? `<div class="pedido-section" id="cobrancas-box" style="border:1px solid #e9d5ff;background:#faf5ff"><div class="loading"><div class="spinner"></div></div></div>` : ''}
 
       <!-- CUSTO BRUTO (INTERNO — admin/operador) -->
       ${(usuario.perfil === 'admin' || usuario.perfil === 'operador') ? `
@@ -648,7 +652,7 @@
       const aWa = document.getElementById('btn-wa-link');
       if (aWa && p.mp_init_point) {
         const wa = (p.cliente_whatsapp || '').replace(/\D/g, '');
-        const txt = encodeURIComponent(`Olá! Segue o link de pagamento da sua consulta: ${p.mp_init_point}`);
+        const txt = encodeURIComponent(`Olá! Segue o link de pagamento da sua consulta (Pix, boleto ou cartão em até 12x): ${p.mp_init_point}`);
         if (wa && wa.length >= 10) {
           const num = wa.startsWith('55') ? wa : '55' + wa;
           aWa.href = `https://wa.me/${num}?text=${txt}`;
@@ -830,10 +834,58 @@
 
   // Cria/recupera a preference do MP e abre o checkout. Inicia o polling em paralelo
   // pra detectar a confirmação automática quando o webhook do MP chegar.
+  // ── Cobrança dividida em parcelas mensais (cada uma com link do MP) ──
+  const COB_ST = { aberta: ['Em aberto', '#fef3c7', '#92400e'], paga: ['Paga', '#dcfce7', '#14532d'], cancelada: ['Cancelada', '#e5e7eb', '#374151'] };
+  async function carregarCobrancasPedido(p) {
+    const box = document.getElementById('cobrancas-box'); if (!box) return;
+    const r = await fetch(`/api/cobrancas/pedido/${p.id}`, { headers: { Authorization: `Bearer ${localStorage.getItem('rastreia_token')}` } });
+    const j = await r.json().catch(() => ({}));
+    const lista = (j.cobrancas || []).filter(c => c.status !== 'cancelada');
+    const brlC = (v) => 'R$ ' + Number(v).toLocaleString('pt-BR', { minimumFractionDigits: 2 });
+    let h = `<div class="section-title" style="color:#6b21a8">🗓 Cobrança em parcelas mensais</div>`;
+    if (!lista.length) {
+      if (p.status !== 'aguardando_pagamento') { box.remove(); return; }
+      const hoje = new Date(); const v = `${hoje.getFullYear()}-${String(hoje.getMonth() + 1).padStart(2, '0')}-${String(hoje.getDate()).padStart(2, '0')}`;
+      h += `<div style="font-size:13px;color:#374151;margin-bottom:8px">Para quem não tem limite no cartão: divide ${brlC(p.valor)} em cobranças mensais, cada uma com seu link (Pix, boleto ou cartão). O pedido é liberado quando a 1ª for paga.</div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end">
+          <label style="font-size:12px">Parcelas<select id="cob-n" style="display:block;padding:7px;border:1px solid #cbd5e1;border-radius:6px">${[2,3,4,5,6,7,8,9,10,11,12].map(n => `<option value="${n}">${n}× de ${brlC(Math.floor(p.valor / n * 100) / 100)}</option>`).join('')}</select></label>
+          <label style="font-size:12px">1º vencimento<input type="date" id="cob-v" value="${v}" style="display:block;padding:6px;border:1px solid #cbd5e1;border-radius:6px"></label>
+          <button class="btn btn-sm" style="background:#7c3aed;color:#fff" onclick="parcelarPedido(this)">Dividir e gerar os links</button>
+          <span id="cob-msg" style="font-size:12px"></span></div>`;
+    } else {
+      const pagas = lista.filter(c => c.status === 'paga');
+      h += `<div style="font-size:13px;margin-bottom:8px">${pagas.length} de ${lista.length} paga(s) · recebido ${brlC(pagas.reduce((s, c) => s + Number(c.valor), 0))} de ${brlC(lista.reduce((s, c) => s + Number(c.valor), 0))}</div>`;
+      h += lista.map(c => { const st = COB_ST[c.status] || COB_ST.aberta; const venc = c.vencimento ? String(c.vencimento).slice(0, 10).split('-').reverse().join('/') : '—'; const vencida = c.status === 'aberta' && c.vencimento && new Date(String(c.vencimento).slice(0, 10) + 'T23:59:59') < new Date();
+        return `<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;padding:8px;border:1px solid #e9d5ff;border-radius:8px;background:#fff;margin-bottom:6px">
+          <strong style="min-width:52px">${c.numero ? c.numero + '/' + c.total : '—'}</strong><span style="min-width:90px">${brlC(c.valor)}</span><span style="min-width:90px;color:${vencida ? '#b91c1c' : '#374151'}">vence ${venc}</span>
+          <span style="background:${st[1]};color:${st[2]};font-size:11px;font-weight:700;padding:2px 8px;border-radius:99px">${vencida ? 'Vencida' : st[0]}</span>
+          ${c.status === 'aberta' ? `${c.mp_init_point ? `<button class="btn btn-sm btn-outline" onclick="copiarTexto('${esc(c.mp_init_point)}', this)">📋 Link</button><a class="btn btn-sm" style="background:#25d366;color:#fff;text-decoration:none" target="_blank" href="https://wa.me/${String(p.cliente_whatsapp || '').replace(/\D/g, '').replace(/^(?!55)/, '55')}?text=${encodeURIComponent(`Olá! Segue o link da parcela ${c.numero}/${c.total} (${brlC(c.valor)}, vence ${venc}) — Pix, boleto ou cartão: ${c.mp_init_point}`)}">📱</a>` : ''}
+            <button class="btn btn-sm btn-outline" onclick="cobAcao('${c.id}','link')" title="Gerar link novo">↻</button>
+            <button class="btn btn-sm btn-outline" onclick="cobAcao('${c.id}','baixa-manual')" title="Recebido fora do Mercado Pago">✓ Recebi</button>` : (c.pago_em ? `<span style="font-size:12px;color:#6b7280">paga em ${new Date(c.pago_em).toLocaleDateString('pt-BR')}${c.forma_baixa === 'manual' ? ' (manual)' : ''}</span>` : '')}
+        </div>`; }).join('');
+    }
+    box.innerHTML = h;
+  }
+  async function parcelarPedido(btn) {
+    if (btn.disabled) return; btn.disabled = true; btn.textContent = 'Gerando…';
+    const r = await fetch(`/api/cobrancas/pedido/${pedidoAtual.id}/parcelar`, { method: 'POST', headers: { Authorization: `Bearer ${localStorage.getItem('rastreia_token')}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ parcelas: Number(document.getElementById('cob-n').value), primeiro_vencimento: document.getElementById('cob-v').value }) });
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok) { btn.disabled = false; btn.textContent = 'Dividir e gerar os links'; document.getElementById('cob-msg').textContent = j.erro || 'Erro'; return; }
+    location.reload();
+  }
+  async function cobAcao(id, acao) {
+    const r = await fetch(`/api/cobrancas/${id}/${acao}`, { method: 'POST', headers: { Authorization: `Bearer ${localStorage.getItem('rastreia_token')}` } });
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok) { mostrarAlerta(j.erro || 'Erro', 'error'); return; }
+    if (acao === 'baixa-manual') location.reload(); else carregarCobrancasPedido(pedidoAtual);
+  }
+  async function copiarTexto(t, btn) { try { await navigator.clipboard.writeText(t); const o = btn.textContent; btn.textContent = 'Copiado'; setTimeout(() => btn.textContent = o, 1500); } catch (_) {} }
+
   function formaPagamentoLabel(f) {
     if (f === 'mercadopago') return '💳 Mercado Pago (link)';
     if (f === 'dinheiro') return '💵 Dinheiro';
     if (f === 'plano') return '📦 Plano (cota mensal)';
+    if (f === 'parcelado') return '🗓 Parcelado em cobranças mensais';
     return f;
   }
 

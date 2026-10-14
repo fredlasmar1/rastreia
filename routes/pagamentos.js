@@ -129,6 +129,16 @@ async function webhookMP(req, res) {
       return res.sendStatus(200);
     }
 
+    // Assinatura mensal: mudou de situação (autorizada, pausada, cancelada)
+    if ((tipo === 'subscription_preapproval' || tipo === 'preapproval') && paymentId) {
+      res.sendStatus(200);
+      try {
+        const st = await require('../services/cobrancas').atualizarStatusAssinatura(String(paymentId));
+        await pool.query('UPDATE pagamentos_log SET processado = true, status = $1 WHERE id = $2', [st.status || null, logId]);
+      } catch (e) { await pool.query('UPDATE pagamentos_log SET erro = $1 WHERE id = $2', [e.message, logId]); }
+      return;
+    }
+
     if (tipo !== 'payment' || !paymentId) {
       // Eventos diferentes (merchant_order, plan, etc.) — apenas registramos.
       await pool.query('UPDATE pagamentos_log SET processado = true WHERE id = $1', [logId]);
@@ -150,6 +160,20 @@ async function webhookMP(req, res) {
         }
 
         const status = pagamento.status; // approved | pending | rejected | ...
+        const ref = String(pagamento.external_reference || '');
+        // Cobranças (parcela, lote, mensalidade) e assinatura: referência própria
+        if (ref.startsWith('cob:') || ref.startsWith('plano:')) {
+          await pool.query('UPDATE pagamentos_log SET status = $1 WHERE id = $2', [status, logId]);
+          if (status === 'approved') {
+            const cob = require('../services/cobrancas');
+            const out = ref.startsWith('cob:')
+              ? await cob.baixar(ref.slice(4), { paymentId })
+              : await cob.pagamentoDeAssinatura(ref.slice(6), paymentId, pagamento.transaction_amount);
+            if (!out.ok) await pool.query('UPDATE pagamentos_log SET erro = $1 WHERE id = $2', [out.erro || 'falha na baixa', logId]);
+          }
+          await pool.query('UPDATE pagamentos_log SET processado = true WHERE id = $1', [logId]);
+          return;
+        }
         const pedidoId = pagamento.external_reference;
         await pool.query(
           'UPDATE pagamentos_log SET status = $1, pedido_id = $2 WHERE id = $3',

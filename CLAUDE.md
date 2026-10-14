@@ -268,6 +268,19 @@ Calculado pela função `calcularScore(tipo, dados)` em `services/produtos.js`.
 
 ---
 
+## COBRANÇAS (13/10/2026) — `services/cobrancas.js`, `routes/cobrancas.js`, `/cobrancas.html`
+
+- Todo link do MP: Pix, boleto e cartão em até 12x (`installments: 12`).
+- Tabela `cobrancas` (origem `parcela` | `lote` | `plano`), migração 005. external_reference `cob:<id>`.
+- **Parcelas mensais**: pedido dividido em 2–12 cobranças (tela do pedido); o pedido é liberado na 1ª paga.
+- **Lote**: vários pedidos em aberto ou mensalidades de clientes de plano de uma vez.
+- **Assinatura no cartão**: preapproval do MP por cliente (exige e-mail); external_reference `plano:<cliente_id>`;
+  cada pagamento aprovado renova a cota do plano. Para receber a mudança de situação da assinatura, ligar o
+  tópico "Planos e assinaturas" nos webhooks da aplicação no painel do MP.
+- Webhook (`routes/pagamentos.js`) separa `cob:`, `plano:` e o pedido legado (UUID puro).
+
+---
+
 ## MERCADO PAGO — INTEGRAÇÃO COMPLETA
 
 ### O que precisa ser implementado:

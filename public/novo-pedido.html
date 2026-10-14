@@ -15,6 +15,7 @@
     <a href="/restricoes.html">🚦 Restrições no CPF</a>
     <a href="/veicular.html">🚗 Consulta Veicular</a>
     <a href="/clientes.html">Clientes</a>
+    <a href="/cobrancas.html">💳 Cobranças</a>
     <a href="/revisao-contratos.html">⚖ Revisão de Contratos</a>
     <a href="#" onclick="logout()">Sair</a>
   </div>
@@ -998,12 +999,12 @@
     const aWa = document.getElementById('btn-whatsapp-link');
     if (wa && wa.length >= 10) {
       const num = wa.startsWith('55') ? wa : '55' + wa;
-      const txt = encodeURIComponent(`Olá! Segue o link de pagamento da sua consulta: ${url}`);
+      const txt = encodeURIComponent(`Olá! Segue o link de pagamento da sua consulta (Pix, boleto ou cartão em até 12x): ${url}`);
       aWa.href = `https://wa.me/${num}?text=${txt}`;
       aWa.style.display = '';
     } else {
       // Sem WhatsApp do cliente: abre wa.me sem número (usuário escolhe contato)
-      const txt = encodeURIComponent(`Olá! Segue o link de pagamento da sua consulta: ${url}`);
+      const txt = encodeURIComponent(`Olá! Segue o link de pagamento da sua consulta (Pix, boleto ou cartão em até 12x): ${url}`);
       aWa.href = `https://wa.me/?text=${txt}`;
     }
     document.getElementById('modal-link').style.display = 'flex';

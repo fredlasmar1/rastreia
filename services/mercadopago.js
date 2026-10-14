@@ -177,8 +177,75 @@ function configurado() {
   return !!getToken();
 }
 
+/**
+ * Link de pagamento genérico (cobranças: parcela, lote, mensalidade).
+ *   { titulo, valor, referencia ('cob:<uuid>'), expiraEm (Date), payerEmail, voltarPara }
+ * Pix, boleto e cartão em até 12x (o cliente escolhe na tela do MP).
+ */
+async function criarPreferenceGenerica({ titulo, valor, referencia, expiraEm, payerEmail, voltarPara }) {
+  const client = getClient();
+  if (!client) return { ok: false, erro: 'MERCADOPAGO_ACCESS_TOKEN não configurado ou SDK indisponível' };
+  const ownerEmail = (process.env.MERCADOPAGO_OWNER_EMAIL || '').toLowerCase().trim();
+  const exp = (expiraEm instanceof Date ? expiraEm : new Date(Date.now() + 7 * 24 * 3600 * 1000));
+  const body = {
+    items: [{ id: String(referencia), title: String(titulo).slice(0, 250), quantity: 1, unit_price: Math.round(Number(valor) * 100) / 100, currency_id: 'BRL' }],
+    external_reference: String(referencia),
+    back_urls: { success: voltarPara || baseUrl(), failure: voltarPara || baseUrl(), pending: voltarPara || baseUrl() },
+    auto_return: 'approved',
+    notification_url: `${baseUrl()}/api/mercadopago/webhook`,
+    metadata: { referencia: String(referencia) },
+    payment_methods: { excluded_payment_methods: [], excluded_payment_types: [], installments: 12 },
+    date_of_expiration: exp.toISOString().replace('Z', '-03:00')
+  };
+  if (payerEmail && String(payerEmail).toLowerCase().trim() !== ownerEmail) body.payer = { email: String(payerEmail) };
+  try {
+    const created = await new Preference(client).create({ body });
+    return { ok: true, init_point: created.init_point || created.sandbox_init_point, preference_id: created.id };
+  } catch (e) {
+    const msg = e?.cause?.[0]?.description || e?.message || 'Erro desconhecido';
+    console.error('[MP] criarPreferenceGenerica erro:', msg);
+    return { ok: false, erro: msg };
+  }
+}
+
+/**
+ * Assinatura mensal no cartão (Mercado Pago "preapproval"). O cliente abre o
+ * init_point, informa o cartão uma vez e o MP cobra todo mês sozinho.
+ * Cada cobrança gera um `payment` com external_reference = referencia.
+ * REST direto (o SDK varia entre versões neste recurso).
+ */
+const axios = require('axios');
+async function mpApi(metodo, caminho, dados) {
+  const token = getToken();
+  if (!token) return { ok: false, erro: 'MERCADOPAGO_ACCESS_TOKEN não configurado' };
+  try {
+    const r = await axios({ method: metodo, url: `https://api.mercadopago.com${caminho}`, data: dados, timeout: 20000,
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json', 'X-Idempotency-Key': crypto.randomUUID() } });
+    return { ok: true, dados: r.data };
+  } catch (e) {
+    const d = e.response?.data;
+    return { ok: false, status: e.response?.status, erro: d?.message || d?.cause?.[0]?.description || e.message };
+  }
+}
+async function criarAssinatura({ titulo, valor, referencia, payerEmail, voltarPara }) {
+  if (!payerEmail) return { ok: false, erro: 'A assinatura do Mercado Pago exige o e-mail do cliente.' };
+  const out = await mpApi('post', '/preapproval', {
+    reason: String(titulo).slice(0, 250), external_reference: String(referencia), payer_email: String(payerEmail),
+    back_url: voltarPara || baseUrl(), status: 'pending',
+    auto_recurring: { frequency: 1, frequency_type: 'months', transaction_amount: Math.round(Number(valor) * 100) / 100, currency_id: 'BRL' }
+  });
+  if (!out.ok) return out;
+  return { ok: true, preapproval_id: out.dados.id, init_point: out.dados.init_point, status: out.dados.status };
+}
+const consultarAssinatura = (id) => mpApi('get', `/preapproval/${encodeURIComponent(id)}`);
+const cancelarAssinatura = (id) => mpApi('put', `/preapproval/${encodeURIComponent(id)}`, { status: 'cancelled' });
+
 module.exports = {
   criarPreferenceParaPedido,
+  criarPreferenceGenerica,
+  criarAssinatura,
+  consultarAssinatura,
+  cancelarAssinatura,
   consultarPagamento,
   validarAssinaturaWebhook,
   configurado,
