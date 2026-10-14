@@ -17,7 +17,7 @@ const revisao = require('../services/revisao_bancaria');
 const { assinar } = require('../services/link_relatorio');
 
 async function carregarPedido(id) {
-  const r = await pool.query("SELECT id, numero, tipo, status, relatorio_url, alvo_nome, alvo_documento, alvo_tipo FROM pedidos WHERE id = $1 AND deletado_em IS NULL", [id]);
+  const r = await pool.query("SELECT id, numero, tipo, status, valor, mp_init_point, relatorio_url, alvo_nome, alvo_documento, alvo_tipo FROM pedidos WHERE id = $1 AND deletado_em IS NULL", [id]);
   return r.rows[0] && r.rows[0].tipo === revisao.TIPO ? r.rows[0] : null;
 }
 
@@ -154,7 +154,10 @@ router.get('/', autenticar, async (req, res) => {
               p.criado_em, p.concluido_em, rb.etapa, rb.veredito, rb.economia_estimada,
               COALESCE(rb.dados_conferidos->'instituicao'->>'nome', rb.dados_extraidos->'instituicao'->>'nome', rb.dados_informados->>'banco') AS banco,
               COALESCE(rb.dados_conferidos->>'tipo_operacao', rb.dados_extraidos->>'tipo_operacao', rb.dados_informados->>'tipo_operacao') AS tipo_operacao,
-              u.nome AS operador_nome
+              u.nome AS operador_nome, p.mp_init_point,
+              (SELECT COUNT(*) FROM cobrancas c WHERE c.pedido_id = p.id AND c.status <> 'cancelada')::int AS cob_total,
+              (SELECT COUNT(*) FROM cobrancas c WHERE c.pedido_id = p.id AND c.status = 'paga')::int AS cob_pagas,
+              (SELECT c.mp_init_point FROM cobrancas c WHERE c.pedido_id = p.id AND c.status = 'aberta' ORDER BY c.numero NULLS FIRST LIMIT 1) AS cob_link
          FROM pedidos p
          JOIN revisao_bancaria rb ON rb.pedido_id = p.id
          LEFT JOIN usuarios u ON u.id = p.operador_id
@@ -330,6 +333,44 @@ router.get('/:pedidoId/minuta/:tipo', autenticar, async (req, res) => {
     res.setHeader('Content-Disposition', `attachment; filename="${m.nome}"`);
     res.send('\ufeff' + m.html);
   } catch (e) { console.error('[revisao-bancaria] minuta:', e); res.status(500).json({ erro: 'Erro ao gerar a minuta' }); }
+});
+
+// Mensagem de COBRANÇA da revisão: o que a análise achou + valor + link (Pix, boleto, cartão 12x)
+router.get('/:pedidoId/mensagem-pagamento', autenticar, async (req, res) => {
+  try {
+    const p = (await pool.query('SELECT * FROM pedidos WHERE id = $1 AND deletado_em IS NULL', [req.params.pedidoId])).rows[0];
+    if (!p || p.tipo !== revisao.TIPO) return res.status(404).json({ erro: 'Revisão não encontrada' });
+    if (p.status !== 'aguardando_pagamento') return res.status(400).json({ erro: 'Esta revisão já está paga.' });
+    const cobs = (await pool.query("SELECT * FROM cobrancas WHERE pedido_id = $1 AND status <> 'cancelada' ORDER BY numero NULLS FIRST", [p.id])).rows;
+    const aberta = cobs.find(c => c.status === 'aberta');
+    const link = aberta ? aberta.mp_init_point : p.mp_init_point;
+    if (!link) return res.status(400).json({ erro: 'Gere o link de pagamento primeiro.' });
+    const reg = await revisao.obter(p.id);
+    const an = (await pool.query('SELECT veredito, economia_estimada, calculo FROM revisao_analises WHERE pedido_id = $1 ORDER BY criado_em DESC LIMIT 1', [p.id])).rows[0];
+    const calc = (reg && reg.calculo) || (an && an.calculo) || null;
+    const veredito = (reg && reg.veredito) || (an && an.veredito) || null;
+    const economia = Number((reg && reg.economia_estimada) ?? (an && an.economia_estimada) ?? 0);
+    const brl = (v) => 'R$ ' + Number(v || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    const pct = (v) => (Number(v) * 100).toFixed(2).replace('.', ',') + '%';
+    const L = [`Olá, ${p.cliente_nome || ''}!`, ''];
+    if (veredito && ['forte', 'moderada'].includes(veredito)) {
+      L.push('Analisamos o seu contrato e encontramos indícios de cobrança acima do mercado:');
+      if (calc && calc.taxa && calc.bacen) L.push(`• Sua taxa: ${pct(calc.taxa.efetiva_am)} ao mês — média do Banco Central: ${pct(calc.bacen.am)} ao mês`);
+      if (economia > 0) L.push(`• Economia estimada: ${brl(economia)}`);
+      L.push('');
+    }
+    L.push(`Para o laudo completo da revisão, assinado pelo advogado do Balladão Advogados, com o recálculo, as teses e o caminho para recuperar o valor:`);
+    if (cobs.length > 1) {
+      const n = cobs.length;
+      L.push(`• ${brl(p.valor)} em ${n} parcelas mensais de ${brl(cobs[0].valor)}`, `• Parcela ${aberta ? aberta.numero : 1}/${n}${aberta && aberta.vencimento ? ` (vence ${String(aberta.vencimento instanceof Date ? aberta.vencimento.toISOString() : aberta.vencimento).slice(0, 10).split('-').reverse().join('/')})` : ''}: ${link}`);
+    } else {
+      L.push(`• ${brl(p.valor)} — Pix, boleto ou cartão em até 12x: ${link}`);
+    }
+    L.push('', 'Assim que o pagamento for confirmado, damos início à revisão.', '_Recobro Recuperação de Crédito · Balladão Advogados_');
+    let fone = String(p.cliente_whatsapp || '').replace(/\D/g, '');
+    if (fone && !fone.startsWith('55')) fone = '55' + fone;
+    res.json({ texto: L.join('\n'), link, whatsapp: fone || null });
+  } catch (e) { console.error('[revisao-bancaria] mensagem-pagamento:', e); res.status(500).json({ erro: 'Erro ao montar a mensagem' }); }
 });
 
 // Mensagem pronta para o cliente (enquanto o WhatsApp automático não está ligado)

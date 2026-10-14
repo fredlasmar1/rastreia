@@ -239,6 +239,13 @@
   const RB_RES = { aplicavel: ['#dcfce7', '#14532d', 'Aplicável'], verificar: ['#fef9c3', '#713f12', 'Verificar'], nao_aplicavel: ['#f3f4f6', '#4b5563', 'Não aplicável'] };
   function renderRevisaoResultado(e) {
     let h = '';
+    // Cobrança da revisão: mensagem que mostra o que a análise achou + valor + link
+    if (e.pedido && e.pedido.status === 'aguardando_pagamento') {
+      h += `<div style="margin:0 0 14px;border:1px solid #fecaca;background:#fef2f2;border-radius:10px;padding:12px 14px">
+        <div style="font-weight:800;color:#991b1b">💳 Aguardando pagamento — ${rbBrl(e.pedido.valor)}</div>
+        <div style="font-size:13px;color:#374151;margin:4px 0 8px">A mensagem inclui o que a análise encontrou (taxa × média do Banco Central, economia estimada) e o link: Pix, boleto ou cartão em até 12x. Para parcelar em meses, use a seção "Cobrança em parcelas mensais" desta tela.</div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn btn-sm btn-primary" onclick="rbCobrar(this)">📱 Copiar mensagem e abrir o WhatsApp</button><span id="rb-cob-msg" style="font-size:12px;align-self:center"></span></div></div>`;
+    }
     const tx = e.taxa_media_bacen;
     if (e.etapa === 'calculando' && tx && tx.aguardando_taxa_manual) {
       h += `<div class="alert alert-warning" style="margin-top:12px;font-size:14px"><strong>O Banco Central não respondeu.</strong> ${esc(tx.erro || '')}<br>Informe a taxa média do mês da contratação (site do BACEN) para seguir; o laudo mostrará a origem "manual".
@@ -356,6 +363,15 @@
     }
     try { await navigator.clipboard.writeText(j.texto); out.style.color = '#15803d'; out.textContent = 'Mensagem copiada — o link vale 30 dias.'; }
     catch (_) { out.style.color = '#b91c1c'; out.textContent = 'Não consegui copiar; use "Abrir no WhatsApp".'; }
+  }
+  async function rbCobrar(btn) {
+    const out = document.getElementById('rb-cob-msg');
+    const r = await fetch(`/api/revisao-bancaria/${rbEstado.pedido.id}/mensagem-pagamento`, { headers: { Authorization: `Bearer ${localStorage.getItem('rastreia_token')}` } });
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok) { out.style.color = '#b91c1c'; out.textContent = j.erro || 'Erro'; return; }
+    try { await navigator.clipboard.writeText(j.texto); } catch (_) {}
+    window.open(`https://wa.me/${j.whatsapp || ''}?text=${encodeURIComponent(j.texto)}`, '_blank', 'noopener');
+    out.style.color = '#15803d'; out.textContent = 'Mensagem copiada e aberta no WhatsApp.';
   }
   async function rbGerarLaudo(btn) {
     if (btn.disabled) return; btn.disabled = true; btn.textContent = 'Gerando…';
