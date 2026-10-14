@@ -479,7 +479,7 @@
       alvo_nome: document.getElementById('alvo_nome').value.trim() || cliente_nome,
       alvo_documento: document.getElementById('alvo_doc').value.toUpperCase().replace(/[^0-9A-Z]/g, '') || null,
       alvo_tipo: document.getElementById('alvo_tipo').value,
-      finalidade: 'Revisão de contrato bancário: análise de juros, tarifas e encargos para orientação jurídica do próprio contratante',
+      finalidade: 'revisao_contrato_bancario',   // lista fechada no servidor (LGPD)
       aceite_termos: true, consentimento_revisao: true, valor_customizado: valor,
       revisao_analise_id: ANALISE_FORM || undefined,
       revisao: {

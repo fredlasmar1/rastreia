@@ -105,7 +105,9 @@ const PLACA_REGEX = /^[A-Z]{3}[0-9][A-Z0-9][0-9]{2}$/;
 const ALVO_TIPOS_VALIDOS = ['PF', 'PJ'];
 const FINALIDADES_VALIDAS = [
   'analise_credito', 'due_diligence_imobiliaria', 'due_diligence_empresarial',
-  'instrucao_processo', 'investigacao_patrimonial', 'verificacao_idoneidade', 'prevencao_fraude'
+  'instrucao_processo', 'investigacao_patrimonial', 'verificacao_idoneidade', 'prevencao_fraude',
+  // Revisão de Contratos: o próprio contratante pede a análise do contrato dele
+  'revisao_contrato_bancario'
 ];
 const MAX_LIMIT = 100;
 
