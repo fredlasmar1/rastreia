@@ -18,9 +18,24 @@ const mesBR = (s) => { const m = String(s || '').match(/^(\d{4})-(\d{2})/); retu
 const hoje = () => new Date().toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo', day: '2-digit', month: 'long', year: 'numeric' });
 
 const TIPOS = {
-  financiamento_veiculo: 'financiamento de veículo com alienação fiduciária', emprestimo_pessoal: 'empréstimo pessoal',
-  consignado: 'empréstimo consignado', ccb_capital_giro: 'cédula de crédito bancário (capital de giro)', cartao_credito: 'cartão de crédito',
-  cheque_especial: 'cheque especial', financiamento_imobiliario: 'financiamento imobiliário', outro: 'operação de crédito'
+  financiamento_veiculo: 'financiamento de veículo com alienação fiduciária',
+  emprestimo_pessoal: 'empréstimo pessoal',
+  consignado: 'empréstimo consignado',
+  renegociacao: 'renegociação (composição de dívidas)',
+  ccb_capital_giro: 'cédula de crédito bancário (capital de giro)',
+  conta_garantida: 'conta garantida',
+  desconto_recebiveis: 'desconto de títulos/recebíveis',
+  antecipacao_cartao: 'antecipação de recebíveis de cartão',
+  cartao_credito: 'cartão de crédito',
+  cheque_especial: 'cheque especial',
+  financiamento_bens: 'financiamento de bens',
+  arrendamento_mercantil: 'arrendamento mercantil (leasing)',
+  vendor: 'operação vendor',
+  compror: 'operação compror',
+  cambio: 'adiantamento sobre contrato de câmbio',
+  comercio_exterior: 'financiamento de comércio exterior',
+  financiamento_imobiliario: 'financiamento imobiliário',
+  outro: 'operação de crédito'
 };
 
 // Tudo que as minutas usam, calculado uma vez

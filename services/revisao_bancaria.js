@@ -13,7 +13,7 @@ const { pool } = require('../db');
 
 const TIPO = 'revisao_contrato_bancario';
 const ETAPAS = ['aguardando_documentos', 'extraindo', 'conferencia_operador', 'calculando', 'revisao_juridica', 'aprovado', 'reprovado_juridico'];
-const TIPOS_OPERACAO = ['financiamento_veiculo', 'emprestimo_pessoal', 'consignado', 'ccb_capital_giro', 'cartao_credito', 'cheque_especial', 'financiamento_imobiliario', 'outro'];
+const TIPOS_OPERACAO = ['financiamento_veiculo', 'emprestimo_pessoal', 'consignado', 'renegociacao', 'ccb_capital_giro', 'conta_garantida', 'desconto_recebiveis', 'antecipacao_cartao', 'cartao_credito', 'cheque_especial', 'financiamento_bens', 'arrendamento_mercantil', 'vendor', 'compror', 'cambio', 'comercio_exterior', 'financiamento_imobiliario', 'outro'];
 const SITUACOES = ['em_dia', 'atrasado', 'busca_apreensao', 'executado', 'quitado'];
 
 async function config(chave, padrao) {

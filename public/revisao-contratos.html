@@ -251,9 +251,19 @@
               <option value="financiamento_veiculo">Financiamento de veículo</option>
               <option value="emprestimo_pessoal">Empréstimo pessoal</option>
               <option value="consignado">Consignado</option>
+              <option value="renegociacao">Renegociação / composição de dívidas</option>
               <option value="ccb_capital_giro">CCB / capital de giro</option>
+              <option value="conta_garantida">Conta garantida</option>
+              <option value="desconto_recebiveis">Desconto de duplicatas / cheques</option>
+              <option value="antecipacao_cartao">Antecipação de recebíveis de cartão</option>
               <option value="cartao_credito">Cartão de crédito</option>
               <option value="cheque_especial">Cheque especial</option>
+              <option value="financiamento_bens">Financiamento de outros bens</option>
+              <option value="arrendamento_mercantil">Arrendamento mercantil (leasing)</option>
+              <option value="vendor">Vendor</option>
+              <option value="compror">Compror</option>
+              <option value="cambio">Adiantamento de câmbio (ACC)</option>
+              <option value="comercio_exterior">Financiamento de importação/exportação</option>
               <option value="financiamento_imobiliario">Financiamento imobiliário</option>
               <option value="outro">Outro</option>
             </select></div>
@@ -327,7 +337,7 @@
     fraca: ['FRACA', '#ffedd5', '#7c2d12', '#ea580c', 'O contrato está perto do praticado no mercado.'],
     inviavel: ['INVIÁVEL', '#e5e7eb', '#1f2937', '#6b7280', 'Não dá para sustentar a revisão com estes dados.']
   };
-  const TIPO_OP = { financiamento_veiculo: 'Veículo', emprestimo_pessoal: 'Empréstimo pessoal', consignado: 'Consignado', ccb_capital_giro: 'Capital de giro', cartao_credito: 'Cartão', cheque_especial: 'Cheque especial', financiamento_imobiliario: 'Imobiliário', outro: 'Outro' };
+  const TIPO_OP = { financiamento_veiculo: 'Financiamento de veículo', emprestimo_pessoal: 'Empréstimo pessoal', consignado: 'Consignado', renegociacao: 'Renegociação / composição de dívidas', ccb_capital_giro: 'CCB / capital de giro', conta_garantida: 'Conta garantida', desconto_recebiveis: 'Desconto de duplicatas / cheques', antecipacao_cartao: 'Antecipação de recebíveis de cartão', cartao_credito: 'Cartão de crédito', cheque_especial: 'Cheque especial', financiamento_bens: 'Financiamento de outros bens', arrendamento_mercantil: 'Arrendamento mercantil (leasing)', vendor: 'Vendor', compror: 'Compror', cambio: 'Adiantamento de câmbio (ACC)', comercio_exterior: 'Financiamento de importação/exportação', financiamento_imobiliario: 'Financiamento imobiliário', outro: 'Outro' };
   const RES = { aplicavel: ['Aplicável', '#dcfce7', '#14532d', '#16a34a'], verificar: ['Verificar', '#fef9c3', '#713f12', '#ca8a04'] };
   const situacao = (r) => r.status === 'cancelado' ? 'cancelado' : r.status === 'aguardando_pagamento' ? 'aguardando_pagamento' : r.status === 'concluido' ? 'concluido' : (r.etapa || 'aguardando_documentos');
   const pill = (t, f, c) => `<span class="rc-pill" style="background:${f};color:${c}">${esc(t)}</span>`;
@@ -527,9 +537,9 @@
 
   // Campos que o operador pode corrigir (o veredito é refeito pelo cálculo)
   const AN_CAMPOS = [
-    ['instituicao.nome', 'Banco'], ['tipo_operacao', 'Tipo de operação', 'select', [['financiamento_veiculo', 'Veículo'], ['emprestimo_pessoal', 'Empréstimo pessoal'], ['consignado', 'Consignado'], ['ccb_capital_giro', 'Capital de giro / CCB'], ['cartao_credito', 'Cartão'], ['cheque_especial', 'Cheque especial'], ['financiamento_imobiliario', 'Imobiliário'], ['outro', 'Outro']]],
+    ['instituicao.nome', 'Banco'], ['tipo_operacao', 'Tipo de operação', 'select', [['financiamento_veiculo', 'Financiamento de veículo'], ['emprestimo_pessoal', 'Empréstimo pessoal'], ['consignado', 'Consignado'], ['renegociacao', 'Renegociação / composição de dívidas'], ['ccb_capital_giro', 'CCB / capital de giro'], ['conta_garantida', 'Conta garantida'], ['desconto_recebiveis', 'Desconto de duplicatas / cheques'], ['antecipacao_cartao', 'Antecipação de recebíveis de cartão'], ['cartao_credito', 'Cartão de crédito'], ['cheque_especial', 'Cheque especial'], ['financiamento_bens', 'Financiamento de outros bens'], ['arrendamento_mercantil', 'Arrendamento mercantil (leasing)'], ['vendor', 'Vendor'], ['compror', 'Compror'], ['cambio', 'Adiantamento de câmbio (ACC)'], ['comercio_exterior', 'Financiamento de importação/exportação'], ['financiamento_imobiliario', 'Financiamento imobiliário'], ['outro', 'Outro']]],
     ['pfpj', 'Pessoa', 'select', [['PF', 'Física'], ['PJ', 'Jurídica']]],
-    ['subtipo', 'Subtipo', 'select', [['', '—'], ['inss', 'Consignado INSS'], ['publico', 'Consignado público'], ['privado', 'Consignado privado'], ['parcelado', 'Cartão parcelado'], ['ate_365', 'Giro até 365 dias']]],
+    ['subtipo', 'Subtipo', 'select', [['', '—'], ['inss', 'Consignado INSS'], ['publico', 'Consignado público'], ['privado', 'Consignado privado (CLT)'], ['parcelado', 'Cartão parcelado'], ['ate_365', 'Giro até 365 dias'], ['rotativo', 'Giro rotativo'], ['cheques', 'Desconto de cheques'], ['veiculo', 'Leasing de veículo'], ['outros', 'Leasing de outros bens'], ['importacao', 'Importação'], ['exportacao', 'Exportação']]],
     ['operacao.data_contratacao', 'Data da contratação', 'date'], ['operacao.data_primeiro_vencimento', '1º vencimento', 'date'],
     ['operacao.valor_financiado_total', 'Valor financiado (R$)', 'num'], ['operacao.valor_parcela', 'Parcela (R$)', 'num'],
     ['operacao.prazo_meses', 'Prazo (meses)', 'num'], ['parcelas_pagas', 'Parcelas pagas', 'num'],

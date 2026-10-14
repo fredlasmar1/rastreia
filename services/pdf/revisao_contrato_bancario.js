@@ -41,11 +41,7 @@ const mesBR = (s) => { const m = String(s || '').match(/^(\d{4})-(\d{2})/); retu
 const semanaBR = (s) => String(s || '').replace(/(\d{4})-(\d{2})-(\d{2})/g, '$3/$2/$1');
 const get = (o, p) => p.split('.').reduce((a, k) => (a == null ? a : a[k]), o);
 
-const TIPOS = {
-  financiamento_veiculo: 'Financiamento de veículo', emprestimo_pessoal: 'Empréstimo pessoal', consignado: 'Consignado',
-  ccb_capital_giro: 'CCB / capital de giro', cartao_credito: 'Cartão de crédito', cheque_especial: 'Cheque especial',
-  financiamento_imobiliario: 'Financiamento imobiliário', outro: 'Outro'
-};
+const TIPOS = { financiamento_veiculo: 'Financiamento de veículo', emprestimo_pessoal: 'Empréstimo pessoal', consignado: 'Consignado', renegociacao: 'Renegociação / composição de dívidas', ccb_capital_giro: 'CCB / capital de giro', conta_garantida: 'Conta garantida', desconto_recebiveis: 'Desconto de duplicatas / cheques', antecipacao_cartao: 'Antecipação de recebíveis de cartão', cartao_credito: 'Cartão de crédito', cheque_especial: 'Cheque especial', financiamento_bens: 'Financiamento de outros bens', arrendamento_mercantil: 'Arrendamento mercantil (leasing)', vendor: 'Vendor', compror: 'Compror', cambio: 'Adiantamento de câmbio (ACC)', comercio_exterior: 'Financiamento de importação/exportação', financiamento_imobiliario: 'Financiamento imobiliário', outro: 'Outro' };
 const SITUACOES = { em_dia: 'Em dia', atrasado: 'Em atraso', busca_apreensao: 'Busca e apreensão', executado: 'Em execução', quitado: 'Quitado' };
 
 function paragrafo(doc, y, txt, { tam = 9, cor = '#1f2937', fonte = 'Helvetica', recuo = 0 } = {}) {

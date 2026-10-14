@@ -172,7 +172,12 @@ function calcular(dados = {}, opts = {}) {
   const SIMPLIFICADO = {
     cartao_credito: 'Cartão de crédito: o rotativo muda de saldo e taxa todo mês — o cálculo trata como parcela fixa e é uma aproximação; confira com as faturas.',
     cheque_especial: 'Cheque especial: os juros incidem sobre o saldo diário — o cálculo por parcela fixa é uma aproximação; confira com os extratos.',
-    financiamento_imobiliario: 'Financiamento imobiliário: correção pela TR e seguros MIP/DFI não entram neste cálculo — use como estimativa e confira com a planilha do banco.'
+    financiamento_imobiliario: 'Financiamento imobiliário: correção pela TR e seguros MIP/DFI não entram neste cálculo — use como estimativa e confira com a planilha do banco.',
+    conta_garantida: 'Conta garantida: crédito rotativo, com juros sobre o saldo utilizado — o cálculo por parcela fixa é uma aproximação; confira com os extratos.',
+    desconto_recebiveis: 'Desconto de títulos: cada título é uma operação de pagamento único — o cálculo por parcela fixa é uma aproximação; confira com os borderôs.',
+    cambio: 'Adiantamento de câmbio: pagamento único em moeda estrangeira — o cálculo por parcela fixa é só referência.',
+    vendor: 'Vendor: operação de prazo curto e pagamento único — o cálculo por parcela fixa é só referência.',
+    compror: 'Compror: operação de prazo curto e pagamento único — o cálculo por parcela fixa é só referência.'
   };
   if (SIMPLIFICADO[dados.tipo_operacao]) alertas.push(`Cálculo simplificado. ${SIMPLIFICADO[dados.tipo_operacao]}`);
   const faltando = [];

@@ -40,8 +40,8 @@ const TOOL_EXTRACAO = {
       classificacao: {
         type: 'object', description: 'Classificação da operação para escolher a série da taxa média do Banco Central.',
         properties: {
-          tipo_operacao: { type: ['string', 'null'], enum: ['financiamento_veiculo', 'emprestimo_pessoal', 'consignado', 'ccb_capital_giro', 'cartao_credito', 'cheque_especial', 'financiamento_imobiliario', 'outro', null] },
-          subtipo: { type: ['string', 'null'], enum: ['inss', 'publico', 'privado', 'parcelado', 'ate_365', null], description: 'Consignado: inss/publico/privado; cartão: parcelado; capital de giro até 365 dias: ate_365.' },
+          tipo_operacao: { type: ['string', 'null'], enum: ['financiamento_veiculo', 'emprestimo_pessoal', 'consignado', 'renegociacao', 'ccb_capital_giro', 'conta_garantida', 'desconto_recebiveis', 'antecipacao_cartao', 'cartao_credito', 'cheque_especial', 'financiamento_bens', 'arrendamento_mercantil', 'vendor', 'compror', 'cambio', 'comercio_exterior', 'financiamento_imobiliario', 'outro', null] },
+          subtipo: { type: ['string', 'null'], enum: ['inss', 'publico', 'privado', 'parcelado', 'ate_365', 'rotativo', 'cheques', 'veiculo', 'outros', 'importacao', 'exportacao', null], description: 'Consignado: inss/publico/privado; cartão: parcelado; capital de giro: ate_365 ou rotativo; desconto: cheques; leasing: veiculo/outros; comércio exterior: importacao/exportacao.' },
           pfpj: { type: ['string', 'null'], enum: ['PF', 'PJ', null] }
         }
       },

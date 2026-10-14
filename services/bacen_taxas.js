@@ -39,7 +39,7 @@ async function valorSgsNoMes(codigo, a, m) {
   });
   if (!Array.isArray(dados) || !dados.length) return null;
   const v = Number(String(dados[dados.length - 1].valor).replace(',', '.'));
-  return Number.isFinite(v) ? v : null;
+  return Number.isFinite(v) && v > 0 ? v : null;   // 0,00% = sem operações no mês, não é média
 }
 
 // Posição do banco na Olinda — Best-effort, não entra no cálculo.
@@ -118,6 +118,11 @@ async function buscarTaxaMedia({ tipoOperacao, pfpj = 'PF', subtipo = null, data
         };
       }
       mes -= 1; if (mes === 0) { mes = 12; a -= 1; }
+    }
+    // Série sem dado/zerada (ex.: arrendamento de veículos PF): usa a modalidade de reserva
+    if (serie.reserva) {
+      const r = await buscarTaxaMedia({ tipoOperacao: serie.reserva, pfpj, subtipo: null, dataContratacao, banco });
+      if (r.ok) return { ...r, serie_original: serie.am, nome_serie_original: serie.nome, nome_serie: `${r.nome_serie} (a série de ${serie.nome.split(' - ').pop()} não tem dado no período)` };
     }
     return { ok: false, erro: `Sem taxa média na série ${serie.am} para o mês da contratação nem nos 6 anteriores.` };
   } catch (e) {
