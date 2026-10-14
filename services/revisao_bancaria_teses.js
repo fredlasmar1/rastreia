@@ -10,7 +10,7 @@
  * `d` = dados_conferidos; `calc` = saída do motor (pode ser null na 1ª passada,
  * usada só para descobrir os itens questionáveis do cenário B).
  */
-const VERSAO_TESES = 'rb-teses-1.0.0 (2026-10-13)';
+const VERSAO_TESES = 'rb-teses-1.1.0 (2026-10-13)';
 
 const pct = (x) => (x == null ? '—' : `${(x * 100).toFixed(2).replace('.', ',')}%`);
 const reTAC = /\b(tac|abertura de cr[eé]dito|tec|emiss[aã]o de (carn[eê]|boleto|ficha)|tarifa de emiss)/i;
@@ -129,6 +129,20 @@ const TESES = [
       if (!calc?.taxa || calc.taxa.implicita_am == null || calc.taxa.declarada_am == null) return { resultado: 'verificar', detalhe: 'Sem taxa declarada ou parcela para comparar.' };
       if (calc.taxa.taxa_efetiva_maior_que_declarada) return { resultado: 'aplicavel', detalhe: `Taxa implícita ${pct(calc.taxa.implicita_am)} a.m. × declarada ${pct(calc.taxa.declarada_am)} a.m. (+${calc.taxa.diferenca_pp_am.toFixed(4).replace('.', ',')} p.p.).` };
       return { resultado: 'nao_aplicavel', detalhe: 'Taxa implícita compatível com a declarada.' };
+    }
+  },
+  {
+    id: 'cet_informado',
+    nome: 'Custo Efetivo Total (CET) informado errado',
+    fundamento: 'Res. CMN 3.517/2007: o CET deve ser informado antes da contratação, com todos os encargos e despesas; CDC arts. 6º, III, 46 e 52: informação clara e prévia sobre o custo total.',
+    explicacao_cliente: 'Calculamos o custo total real comparando o dinheiro que você recebeu com as parcelas que paga. Se ele sai maior que o CET escrito no contrato, o banco informou um custo menor do que o verdadeiro.',
+    regra(d, calc) {
+      const c = calc?.cet;
+      if (!c || c.real_am == null) return { resultado: 'verificar', detalhe: 'Sem o valor liberado ao cliente: não dá para calcular o CET real.' };
+      const real = `CET real ${pct(c.real_am)} a.m. (${pct(c.real_aa)} a.a.), considerando ${c.pagos_a_parte > 0 ? 'o valor liberado menos o que foi pago à parte' : 'o valor liberado'}`;
+      if (c.declarado_am == null) return { resultado: 'verificar', detalhe: `${real}. O CET não foi localizado no contrato — se de fato não consta, a falta de informação já é irregular (Res. CMN 3.517/2007).` };
+      if (c.real_maior_que_declarado) return { resultado: 'aplicavel', detalhe: `${real} × CET informado ${pct(c.declarado_am)} a.m. (+${c.diferenca_pp_am.toFixed(4).replace('.', ',')} p.p.).`, trecho_contrato: `CET informado: ${(c.declarado_am * 100).toFixed(2).replace('.', ',')}% a.m.` };
+      return { resultado: 'nao_aplicavel', detalhe: `${real}, compatível com o CET informado (${pct(c.declarado_am)} a.m.).` };
     }
   },
   {

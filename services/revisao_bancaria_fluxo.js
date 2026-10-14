@@ -46,6 +46,8 @@ function casoParaParecer(dados, taxa, calc, ts) {
       taxa_implicita_am: pct(calc.taxa.implicita_am, 4), taxa_declarada_am: pct(calc.taxa.declarada_am, 4),
       taxa_bacen_am: calc.bacen ? pct(calc.bacen.am, 4) : null, razao_taxa_bacen: calc.razao != null ? calc.razao.toFixed(2).replace('.', ',') : null,
       economia_estimada: brl(calc.economia_estimada),
+      cet_real_am: calc.cet && calc.cet.real_am != null ? pct(calc.cet.real_am, 4) : null,
+      cet_informado_am: calc.cet && calc.cet.declarado_am != null ? pct(calc.cet.declarado_am, 4) : null,
       valor_incontroverso_mensal: calc.valor_incontroverso ? brl(calc.valor_incontroverso.parcela_mensal) : null, economia_pct_valor_financiado: calc.veredito?.economia_pct != null ? `${calc.veredito.economia_pct.toFixed(1).replace('.', ',')}%` : null
     },
     veredito: calc.veredito, cenario_principal: calc.cenario_principal, cenarios: cen, alertas: calc.alertas,

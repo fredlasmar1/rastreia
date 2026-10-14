@@ -257,5 +257,31 @@ teste('Parcelas do extrato valem mais que a estimativa pela data', () => {
   assert.strictEqual(d.parcelas_pagas_origem, 'extrato'); assert.strictEqual(d.situacao, 'atrasado');
 });
 
+console.log('\n10) CET real × CET informado');
+teste('TIR confere com a taxa da Price quando recebido = financiado', () => {
+  const tab = C.tabelaPrice(10000, 0.02, 24);
+  perto(C.taxaInternaRetorno(10000, tab.map(l => l.parcela)), 0.02, 1e-10, 'tir');
+});
+teste('Liberado menor que o financiado ⇒ CET real acima da taxa de juros', () => {
+  const d = contratoPan(); d.operacao.valor_liberado = 41000; d.operacao.cet_mensal = 2.30;
+  const calc = C.calcular(d, { taxaMediaBacenAM: 2.08, questionaveis: [] });
+  assert.ok(calc.cet && calc.cet.real_am > calc.taxa.efetiva_am, 'CET > juros');
+  assert.strictEqual(calc.cet.recebido_liquido, 41000);
+  assert.ok(calc.cet.real_maior_que_declarado, 'real > 2,30% declarado');
+  const ts = T.aplicarTeses(d, calc).teses.find(t => t.id === 'cet_informado');
+  assert.strictEqual(ts.resultado, 'aplicavel');
+});
+teste('Tarifa paga à parte reduz o que o cliente recebeu', () => {
+  const d = contratoPan(); d.operacao.valor_liberado = 41000; d.tarifas = [{ nome: 'Cadastro', valor: 600, financiada: false }];
+  const calc = C.calcular(d, { taxaMediaBacenAM: 2.08, questionaveis: [] });
+  assert.strictEqual(calc.cet.recebido_liquido, 40400);
+});
+teste('Sem CET no contrato ⇒ "verificar"; sem valor liberado ⇒ sem CET', () => {
+  const d = contratoPan(); d.operacao.valor_liberado = 41000; delete d.operacao.cet_mensal;
+  const calc = C.calcular(d, { taxaMediaBacenAM: 2.08, questionaveis: [] });
+  assert.strictEqual(T.aplicarTeses(d, calc).teses.find(t => t.id === 'cet_informado').resultado, 'verificar');
+  assert.strictEqual(C.calcular(contratoPan(), { taxaMediaBacenAM: 2.08 }).cet, null);
+});
+
 console.log(`\n${ok} passaram, ${falhas} falharam.`);
 process.exit(falhas ? 1 : 0);

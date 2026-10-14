@@ -10,7 +10,7 @@
  * PMT = parcela, n = prazo em meses, i = taxa mensal (fração: 0.02 = 2%).
  * Testes: scripts/test-revisao-bancaria.js (node).
  */
-const VERSAO_CALCULO = 'rb-calc-1.1.0 (2026-10-13)';
+const VERSAO_CALCULO = 'rb-calc-1.2.0 (2026-10-13)';
 
 const EPS = 1e-12;
 
@@ -48,6 +48,22 @@ function taxaImplicitaPrice(PV, PMT, n) {
     i = novo;
   }
   return i;
+}
+
+// Taxa interna de retorno mensal de um fluxo: recebe `recebido` em t=0 e paga
+// parcelas[t-1] em t=1..n. Bissecção (robusta para qualquer fluxo de parcelas).
+function taxaInternaRetorno(recebido, parcelas) {
+  if (!(recebido > 0) || !parcelas.length) return null;
+  const vp = (i) => parcelas.reduce((s, p, t) => s + p / Math.pow(1 + i, t + 1), 0);
+  if (vp(0) <= recebido) return null;                       // paga menos do que recebeu
+  let lo = 0, hi = 1;
+  while (vp(hi) > recebido && hi < 64) hi *= 2;
+  for (let k = 0; k < 200; k++) {
+    const mid = (lo + hi) / 2;
+    if (vp(mid) > recebido) lo = mid; else hi = mid;
+    if (hi - lo < 1e-14) break;
+  }
+  return (lo + hi) / 2;
 }
 
 // SAC: 1ª parcela = PV/n + PV·i  ⇒  i = (PMT₁ − PV/n) / PV
@@ -198,6 +214,30 @@ function calcular(dados = {}, opts = {}) {
   const tabContr = tabela(sistema, PV, efetivaAM, n);
   resultado.tabela_contratada = tabContr;
 
+  // CET real (Res. CMN 3.517/2007): taxa interna de retorno entre o que o
+  // cliente EFETIVAMENTE recebeu (valor liberado − tarifas, seguros e IOF pagos
+  // à parte) e as parcelas. Comparado com o CET declarado no contrato.
+  const liberado = Number(op.valor_liberado) || 0;
+  if (liberado > 0) {
+    const aVista = [...(dados.tarifas || []).filter(t => !t.financiada), ...(dados.seguros || []).filter(x => !x.financiado)]
+      .reduce((s, it) => s + (Number(it.valor) || 0), 0) + ((dados.iof && !dados.iof.financiado) ? Number(dados.iof.valor) || 0 : 0);
+    const recebido = liberado - aVista;
+    const cetAm = taxaInternaRetorno(recebido, tabContr.map(l => l.parcela));
+    const declAmCet = cetAM != null ? cetAM : (op.cet_anual != null ? anualParaMensal(Number(op.cet_anual) / 100) : null);
+    const difCet = cetAm != null && declAmCet != null ? (cetAm - declAmCet) * 100 : null;
+    resultado.cet = {
+      recebido_liquido: recebido, pagos_a_parte: aVista,
+      real_am: cetAm, real_aa: cetAm != null ? mensalParaAnual(cetAm) : null,
+      declarado_am: declAmCet, declarado_aa: declAmCet != null ? mensalParaAnual(declAmCet) : null,
+      declarado_origem: cetAM != null ? 'mensal' : (op.cet_anual != null ? 'anual' : null),
+      diferenca_pp_am: difCet,
+      real_maior_que_declarado: difCet != null && difCet > 0.05
+    };
+    if (resultado.cet.real_maior_que_declarado) alertas.push(`CET real (${(cetAm * 100).toFixed(4)}% a.m.) maior que o CET informado no contrato (${(declAmCet * 100).toFixed(4)}% a.m.).`);
+  } else {
+    resultado.cet = null;
+  }
+
   // 4) Cenários
   const bacenAM = opts.taxaMediaBacenAM != null ? Number(opts.taxaMediaBacenAM) / 100 : null;
   if (bacenAM != null) {
@@ -263,5 +303,5 @@ function calcular(dados = {}, opts = {}) {
 
 module.exports = {
   VERSAO_CALCULO, mensalParaAnual, anualParaMensal, parcelaPrice,
-  taxaImplicitaPrice, taxaImplicitaSAC, tabelaPrice, tabelaSAC, comparar, separarQuestionaveis, calcular
+  taxaImplicitaPrice, taxaImplicitaSAC, taxaInternaRetorno, tabelaPrice, tabelaSAC, comparar, separarQuestionaveis, calcular
 };

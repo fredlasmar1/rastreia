@@ -191,6 +191,10 @@ function render(doc, pedido, dados, score, checklist, produto) {
   if (t.implicita_am != null) y = linha(doc, 'Taxa real (calculada da parcela)', `${pct(t.implicita_am, 4)} a.m.`, y, 12);
   if (t.declarada_am != null) y = linha(doc, 'Taxa declarada no contrato', `${pct(t.declarada_am, 4)} a.m.`, y, 12);
   if (t.taxa_efetiva_maior_que_declarada) y = linha(doc, 'Diferença real × declarada', `${String((t.diferenca_pp_am ?? 0).toFixed(4)).replace('.', ',')} p.p. a.m. acima`, y, 12);
+  if (calc.cet && calc.cet.real_am != null) {
+    y = linha(doc, 'CET real (custo total)', `${pct(calc.cet.real_am, 4)} a.m.  |  ${pct(calc.cet.real_aa)} a.a. — sobre ${brl(calc.cet.recebido_liquido)} efetivamente recebidos`, y, 12);
+    if (calc.cet.declarado_am != null) y = linha(doc, 'CET informado no contrato', `${pct(calc.cet.declarado_am, 4)} a.m.${calc.cet.real_maior_que_declarado ? `  —  real ${calc.cet.diferenca_pp_am.toFixed(4).replace('.', ',')} p.p. acima` : '  —  confere'}`, y, 12);
+  }
   if (calc.bacen) {
     y = linha(doc, 'Taxa média BACEN', `${pct(calc.bacen.am, 4)} a.m.  |  ${pct(calc.bacen.aa)} a.a.`, y, 12);
     y = linha(doc, 'Razão contratada ÷ média', calc.razao != null ? calc.razao.toFixed(2).replace('.', ',') + ' vez(es)' : '—', y, 12);

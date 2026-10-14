@@ -572,6 +572,7 @@
       <div class="an-card"><h3>Juros: contrato × mercado</h3>
         ${barra('Taxa real do contrato', efet, c.razao == null ? '#475569' : c.razao >= 1.1 ? '#dc2626' : c.razao > 1 ? '#ea580c' : '#16a34a', `${pct(c.taxa?.efetiva_aa)} ao ano${c.taxa?.declarada_am != null ? ` · no papel: ${pct(c.taxa.declarada_am, 2)} a.m.` : ''}`)}
         ${barra(`Média do Banco Central${tx.mes_referencia ? ' (' + esc(tx.mes_referencia.split('-').reverse().join('/')) + ')' : ''}`, med, '#94a3b8', tx.ok === false ? esc(tx.erro || 'indisponível') : (tx.nome_serie ? esc(tx.nome_serie) : ''))}
+        ${c.cet && c.cet.real_am != null ? `<div class="an-linha" style="margin-top:4px"><span>CET real (custo total)</span><b style="color:${c.cet.real_maior_que_declarado ? '#dc2626' : '#0f172a'}">${pct(c.cet.real_am, 2)} a.m.${c.cet.declarado_am != null ? ` · contrato diz ${pct(c.cet.declarado_am, 2)}` : ' · contrato não informa'}</b></div>` : ''}
         <div class="an-razao">${c.razao != null ? `O contrato cobra <b>${c.razao.toFixed(2).replace('.', ',')}×</b> a média do mercado.` : ''}${tx.olinda?.banco ? ` O ${esc(tx.olinda.banco.nome)} era o <b>${tx.olinda.banco.posicao}º de ${tx.olinda.total_instituicoes}</b> bancos (do mais barato ao mais caro).` : ''}</div>
       </div>
       <div class="an-card"><h3>Dinheiro em jogo</h3>
