@@ -67,10 +67,12 @@ async function parcelarPedido(pedidoId, { parcelas, primeiroVencimento, usuarioI
   const ja = await pool.query("SELECT 1 FROM cobrancas WHERE pedido_id = $1 AND status <> 'cancelada' LIMIT 1", [pedidoId]);
   if (ja.rows.length) return { ok: false, erro: 'Este pedido já tem cobranças. Cancele as abertas para refazer.' };
   const v1 = dataPura(primeiroVencimento) || new Date();
-  const parte = Math.floor(total / n * 100) / 100;
+  // Em centavos: 19,90 / 2 em ponto flutuante dá 9,9499… e virava 9,94 + 9,96
+  const centavos = Math.round(total * 100);
+  const parteC = Math.floor(centavos / n);
   const criadas = [];
   for (let i = 0; i < n; i++) {
-    const valor = i === n - 1 ? Math.round((total - parte * (n - 1)) * 100) / 100 : parte;
+    const valor = (i === n - 1 ? centavos - parteC * (n - 1) : parteC) / 100;
     const cob = await inserir({
       origem: 'parcela', pedido_id: p.id, cliente_id: p.cliente_id, numero: i + 1, total: n, valor,
       vencimento: iso(somarMeses(v1, i)), descricao: `Pedido #${p.numero} — parcela ${i + 1}/${n}`, criado_por: usuarioId

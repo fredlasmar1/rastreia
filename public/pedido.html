@@ -848,7 +848,7 @@
       const hoje = new Date(); const v = `${hoje.getFullYear()}-${String(hoje.getMonth() + 1).padStart(2, '0')}-${String(hoje.getDate()).padStart(2, '0')}`;
       h += `<div style="font-size:13px;color:#374151;margin-bottom:8px">Para quem não tem limite no cartão: divide ${brlC(p.valor)} em cobranças mensais, cada uma com seu link (Pix, boleto ou cartão). O pedido é liberado quando a 1ª for paga.</div>
         <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end">
-          <label style="font-size:12px">Parcelas<select id="cob-n" style="display:block;padding:7px;border:1px solid #cbd5e1;border-radius:6px">${[2,3,4,5,6,7,8,9,10,11,12].map(n => `<option value="${n}">${n}× de ${brlC(Math.floor(p.valor / n * 100) / 100)}</option>`).join('')}</select></label>
+          <label style="font-size:12px">Parcelas<select id="cob-n" style="display:block;padding:7px;border:1px solid #cbd5e1;border-radius:6px">${[2,3,4,5,6,7,8,9,10,11,12].map(n => `<option value="${n}">${n}× de ${brlC(Math.floor(Math.round(p.valor * 100) / n) / 100)}</option>`).join('')}</select></label>
           <label style="font-size:12px">1º vencimento<input type="date" id="cob-v" value="${v}" style="display:block;padding:6px;border:1px solid #cbd5e1;border-radius:6px"></label>
           <button class="btn btn-sm" style="background:#7c3aed;color:#fff" onclick="parcelarPedido(this)">Dividir e gerar os links</button>
           <span id="cob-msg" style="font-size:12px"></span></div>`;
