@@ -231,6 +231,13 @@ function render(doc, pedido, dados, score, checklist, produto) {
     });
     y = paragrafo(doc, y, 'A restituição em dobro (CDC, art. 42, parágrafo único) é referência: depende de decisão judicial sobre a cobrança indevida.', { tam: 7.5, cor: COR.cinza });
   }
+  // Pago a mais corrigido pelo IPCA (estimativa, sem juros de mora)
+  const ic = calc.indebito_corrigido;
+  if (ic && ic.nominal > 0) {
+    y = verificarPagina(doc, y + 4, 40);
+    y = linha(doc, `Pago a mais corrigido (IPCA até ${mesBR(ic.ate_mes)})`, `${brl(ic.corrigido)}  —  nominal ${brl(ic.nominal)} + correção ${brl(ic.correcao)}; em dobro (referência) ${brl(ic.repeticao_dobro_corrigida)}`, y, 12);
+    y = paragrafo(doc, y, 'Correção monetária pelo IPCA desde cada pagamento (Súmula 43 do STJ; CC, art. 389, parágrafo único, na redação da Lei 14.905/2024). Juros de mora não incluídos: na repetição do indébito correm da citação (CC, art. 405). Para pagamentos anteriores a 30/08/2024, conferir o índice adotado pelo tribunal (há tabelas com INPC).', { tam: 7.5, cor: COR.cinza });
+  }
   // Valor incontroverso — o que se reconhece e segue pagando (CPC art. 330, §§ 2º e 3º)
   const vi = calc.valor_incontroverso;
   if (vi) {
@@ -321,6 +328,7 @@ function render(doc, pedido, dados, score, checklist, produto) {
     `Entradas do cálculo: valor financiado ${brl(e.valor_financiado)}, parcela ${brl(e.parcela)}, ${e.prazo_meses || '—'} meses, sistema ${String(e.sistema || '').toUpperCase()}, ${e.parcelas_pagas || 0} parcela(s) paga(s).`,
     'Taxa real: na Tabela Price, é a taxa i que iguala o valor financiado ao valor presente das parcelas, PV = PMT × [1 - (1+i)^(-n)] ÷ i, resolvida por Newton-Raphson (equivale à função TAXA do Excel). No SAC, i = (1ª parcela - PV÷n) ÷ PV.',
     'Taxa anual equivalente: (1 + i)^12 - 1. Capitalização: taxa anual declarada maior que 12 vezes a mensal indica pactuação expressa (Súmula 541 STJ).',
+    'Pago a mais corrigido: soma de cada diferença paga × Π(1 + IPCA do mês) do mês seguinte ao pagamento até o último IPCA divulgado; parcela tida como paga no vencimento (1º vencimento + n − 1 meses).',
     'Cenário A recalcula com a taxa média do BACEN; B retira tarifas e seguros questionáveis do principal (com o IOF proporcional) e devolve os pagos à vista; C combina A e B. "Pago a mais" soma as diferenças das parcelas já pagas; "economia futura", as das parcelas restantes.',
     `Versão do cálculo: ${calc.versao_calculo || reg.versao_calculo || '—'}. Versão das teses: ${(reg.teses && reg.teses.versao) || '—'}.`
   ].join('\n'), { tam: 8 });

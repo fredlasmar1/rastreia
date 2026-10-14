@@ -69,6 +69,7 @@ function caso(pedido, reg, revisor) {
     olinda: tx.olinda?.banco ? `${tx.olinda.banco.posicao}º lugar entre ${tx.olinda.total_instituicoes} instituições (da menor para a maior taxa)` : null,
     cp, teses,
     vi: c.valor_incontroverso || null,
+    ic: c.indebito_corrigido && c.indebito_corrigido.nominal > 0 ? c.indebito_corrigido : null,
     economia: brl(c.economia_estimada),
     buscaApreensao: d.situacao === 'busca_apreensao',
     atrasado: ['atrasado', 'busca_apreensao', 'executado'].includes(d.situacao),
@@ -116,7 +117,7 @@ ${tabelaCalculo(k)}
 <p>A revisão judicial de contratos bancários é admitida quando demonstrada abusividade em relação à média de mercado ou a cobrança de encargos e tarifas indevidos (STJ, REsp 1.061.530/RS, repetitivo), o que se comprova pelo laudo anexo.</p>
 ${tesesTxt || '<p>[Descrever as teses aplicáveis ao caso.]</p>'}
 <h2>II.${k.teses.length + 3} – Da repetição do indébito</h2>
-<p>Os valores pagos a maior, que somam ${k.cp ? brl(k.cp.total_pago_a_mais) : '[valor]'} até o momento, devem ser restituídos, de forma simples ou em dobro (CDC, art. 42, parágrafo único, e STJ, EAREsp 676.608/RS [conferir a modulação: cobranças a partir de 30/03/2021]), com correção monetária e juros, admitida a compensação com o saldo devedor.</p>
+<p>Os valores pagos a maior, que somam ${k.cp ? brl(k.cp.total_pago_a_mais) : '[valor]'} até o momento${k.ic ? ` (${brl(k.ic.corrigido)} corrigidos pelo IPCA até ${mesBR(k.ic.ate_mes)}, sem juros de mora)` : ''}, devem ser restituídos, de forma simples ou em dobro (CDC, art. 42, parágrafo único, e STJ, EAREsp 676.608/RS [conferir a modulação: cobranças a partir de 30/03/2021]), com correção monetária e juros, admitida a compensação com o saldo devedor.</p>
 
 <h2>III – Da tutela de urgência e do valor incontroverso</h2>
 <p>Em cumprimento ao art. 330, §§ 2º e 3º, do CPC, a parte autora discrimina as obrigações que pretende controverter e quantifica o valor incontroverso: ${k.vi ? `<b>${brl(k.vi.parcela_mensal)} por mês</b>, em lugar de ${brl(k.vi.parcela_contratada)}, para as ${k.vi.parcelas_restantes} parcela(s) restante(s), com saldo devedor revisado de ${brl(k.vi.saldo_devedor_revisado)}` : '[valor incontroverso]'}, que continuará a pagar no tempo e modo contratados.</p>

@@ -10,7 +10,7 @@
  * PMT = parcela, n = prazo em meses, i = taxa mensal (fração: 0.02 = 2%).
  * Testes: scripts/test-revisao-bancaria.js (node).
  */
-const VERSAO_CALCULO = 'rb-calc-1.2.0 (2026-10-13)';
+const VERSAO_CALCULO = 'rb-calc-1.3.0 (2026-10-13)';
 
 const EPS = 1e-12;
 
@@ -155,6 +155,49 @@ function separarQuestionaveis(dados, questionaveis = []) {
  *              limiares: { razaoForte, razaoModerada, economiaFortePct, economiaModeradaPct, prescricaoAnos },
  *              hoje: Date }
  */
+// Soma mês a mês + 'AAAA-MM' (sem fuso: data pura vira o mês dela)
+function somarMeses(anoMes, n) {
+  let [a, m] = anoMes.split('-').map(Number);
+  m += n; a += Math.floor((m - 1) / 12); m = ((m - 1) % 12 + 12) % 12 + 1;
+  return `${a}-${String(m).padStart(2, '0')}`;
+}
+// Fator do IPCA de um mês até o último mês disponível (exclusive o mês do
+// pagamento: a correção começa no mês seguinte, como nas tabelas dos tribunais)
+function fatorIPCA(ipca, desdeMes, ateMes) {
+  let f = 1, mes = somarMeses(desdeMes, 1);
+  while (mes <= ateMes) { const v = ipca[mes]; if (v != null) f *= 1 + Number(v) / 100; mes = somarMeses(mes, 1); }
+  return f;
+}
+function corrigirIndebito({ tabContr, tabRev, k, extrasAVista, primeiroVenc, dataContr, ipca }) {
+  const meses = Object.keys(ipca || {}).sort();
+  if (!meses.length || !(k > 0 || extrasAVista > 0)) return null;
+  const ate = meses[meses.length - 1];
+  const base = /^\d{4}-\d{2}/.test(String(primeiroVenc || '')) ? String(primeiroVenc).slice(0, 7)
+    : (/^\d{4}-\d{2}/.test(String(dataContr || '')) ? somarMeses(String(dataContr).slice(0, 7), 1) : null);
+  if (!base) return null;
+  let nominal = 0, corrigido = 0;
+  const linhas = [];
+  for (let t = 0; t < Math.min(k, tabContr.length); t++) {
+    const d = tabContr[t].parcela - tabRev[t].parcela;
+    const mes = somarMeses(base, t);
+    if (mes > ate) break;
+    const f = fatorIPCA(ipca, mes, ate);
+    nominal += d; corrigido += d * f;
+    linhas.push({ parcela_n: t + 1, mes, diferenca: d, fator: f, corrigido: d * f });
+  }
+  if (extrasAVista > 0 && dataContr) {
+    const mes = String(dataContr).slice(0, 7);
+    const f = fatorIPCA(ipca, mes, ate);
+    nominal += extrasAVista; corrigido += extrasAVista * f;
+    linhas.unshift({ parcela_n: 0, mes, diferenca: extrasAVista, fator: f, corrigido: extrasAVista * f, descricao: 'tarifas/seguros pagos à parte' });
+  }
+  return {
+    indice: 'IPCA (BCB/SGS 433)', ate_mes: ate, nominal, corrigido, correcao: corrigido - nominal,
+    repeticao_simples_corrigida: corrigido, repeticao_dobro_corrigida: 2 * corrigido,
+    sem_juros_de_mora: true, linhas
+  };
+}
+
 function calcular(dados = {}, opts = {}) {
   const op = dados.operacao || {};
   const L = { razaoForte: 1.5, razaoModerada: 1.2, economiaFortePct: 15, economiaModeradaPct: 5, prescricaoAnos: 10, ...(opts.limiares || {}) };
@@ -275,6 +318,16 @@ function calcular(dados = {}, opts = {}) {
   const economia = melhor ? Math.max(0, melhor.economia_total) : 0;
   resultado.economia_estimada = economia;
   resultado.cenario_principal = melhor ? (cen.C ? 'C' : cen.A ? 'A' : 'B') : null;
+  // Pago a mais CORRIGIDO (estimativa): cada diferença paga é corrigida pelo
+  // IPCA desde o mês do pagamento (Súmula 43 STJ; CC art. 389, par. único,
+  // Lei 14.905/2024). Juros de mora ficam de fora — na repetição correm da
+  // citação (CC art. 405). Parcela t vence no 1º vencimento + (t−1) meses e é
+  // tida como paga no vencimento. opts.ipcaMensal = { 'AAAA-MM': % do mês }.
+  resultado.indebito_corrigido = melhor && opts.ipcaMensal ? corrigirIndebito({
+    tabContr, tabRev: melhor.tabela, k, extrasAVista: resultado.cenario_principal === 'A' ? 0 : q.aVista,
+    primeiroVenc: op.data_primeiro_vencimento, dataContr: op.data_contratacao, ipca: opts.ipcaMensal
+  }) : null;
+
   // Valor incontroverso (CPC art. 330, §§ 2º e 3º): na revisional o autor diz
   // quanto reconhece dever e segue pagando — é a parcela do cenário revisado.
   resultado.valor_incontroverso = melhor ? {
@@ -308,5 +361,5 @@ function calcular(dados = {}, opts = {}) {
 
 module.exports = {
   VERSAO_CALCULO, mensalParaAnual, anualParaMensal, parcelaPrice,
-  taxaImplicitaPrice, taxaImplicitaSAC, taxaInternaRetorno, tabelaPrice, tabelaSAC, comparar, separarQuestionaveis, calcular
+  taxaImplicitaPrice, taxaImplicitaSAC, taxaInternaRetorno, corrigirIndebito, fatorIPCA, somarMeses, tabelaPrice, tabelaSAC, comparar, separarQuestionaveis, calcular
 };

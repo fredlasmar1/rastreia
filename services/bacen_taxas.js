@@ -130,6 +130,24 @@ async function buscarTaxaMedia({ tipoOperacao, pfpj = 'PF', subtipo = null, data
   }
 }
 
+// IPCA mensal (SGS 433) de um mês até hoje → { 'AAAA-MM': % }. Cache em memória
+// por 12 h (a série muda uma vez por mês). Falha ⇒ null: o laudo sai sem o
+// valor corrigido, nunca com número inventado.
+const _cacheIPCA = { em: 0, dados: null };
+async function buscarIPCA(desdeAnoMes) {
+  try {
+    if (!_cacheIPCA.dados || Date.now() - _cacheIPCA.em > 12 * 3600 * 1000) {
+      const lista = await getComRetry(SGS(433), { formato: 'json', dataInicial: '01/01/2000', dataFinal: '31/12/2099' });
+      const mapa = {};
+      for (const r of lista || []) { const m = String(r.data).match(/^(\d{2})\/(\d{2})\/(\d{4})$/); if (m) mapa[`${m[3]}-${m[2]}`] = Number(String(r.valor).replace(',', '.')); }
+      _cacheIPCA.dados = mapa; _cacheIPCA.em = Date.now();
+    }
+    const out = {};
+    for (const [k, v] of Object.entries(_cacheIPCA.dados)) if (!desdeAnoMes || k >= desdeAnoMes) out[k] = v;
+    return Object.keys(out).length ? out : null;
+  } catch (e) { return null; }
+}
+
 // Taxa informada pelo operador quando o BACEN falha — o laudo mostra a origem "manual".
 function taxaManual({ valorAm, mesReferencia, fonte, usuario }) {
   const v = Number(valorAm);
@@ -158,4 +176,4 @@ async function obterComCache(pedidoId, params) {
   return r;
 }
 
-module.exports = { buscarTaxaMedia, obterComCache, taxaManual, valorSgsNoMes, posicaoBancoOlinda };
+module.exports = { buscarTaxaMedia, obterComCache, taxaManual, valorSgsNoMes, posicaoBancoOlinda, buscarIPCA };

@@ -283,5 +283,27 @@ teste('Sem CET no contrato ⇒ "verificar"; sem valor liberado ⇒ sem CET', () 
   assert.strictEqual(C.calcular(contratoPan(), { taxaMediaBacenAM: 2.08 }).cet, null);
 });
 
+console.log('\n11) Pago a mais corrigido pelo IPCA');
+teste('Fator do IPCA começa no mês seguinte ao pagamento', () => {
+  const ipca = { '2026-01': 1, '2026-02': 1, '2026-03': 1 };
+  perto(C.fatorIPCA(ipca, '2026-01', '2026-03'), 1.01 * 1.01, 1e-12, 'fev+mar');
+  perto(C.fatorIPCA(ipca, '2026-03', '2026-03'), 1, 1e-12, 'mês corrente sem correção');
+  assert.strictEqual(C.somarMeses('2025-11', 3), '2026-02');
+});
+teste('Corrigido = soma das diferenças pagas × fator de cada mês', () => {
+  const d = contratoPan(); d.operacao.data_primeiro_vencimento = '2025-01-10'; d.parcelas_pagas = 3;
+  const ipca = {}; for (let m = 1; m <= 12; m++) ipca[`2025-${String(m).padStart(2, '0')}`] = 0.5;
+  const calc = C.calcular(d, { taxaMediaBacenAM: 2.08, questionaveis: [], ipcaMensal: ipca });
+  const ic = calc.indebito_corrigido, cp = calc.cenarios[calc.cenario_principal];
+  perto(ic.nominal, cp.total_pago_a_mais, 1e-6, 'nominal = pago a mais');
+  const dif = cp.parcela_contratada - cp.parcela_revisada;
+  const esperado = dif * (Math.pow(1.005, 11) + Math.pow(1.005, 10) + Math.pow(1.005, 9));   // jan, fev, mar → até dez
+  perto(ic.corrigido, esperado, 1e-6, 'corrigido');
+  assert.ok(ic.sem_juros_de_mora && ic.ate_mes === '2025-12');
+});
+teste('Sem IPCA (BACEN fora) ⇒ sem valor corrigido, nunca número inventado', () => {
+  assert.strictEqual(C.calcular(contratoPan(), { taxaMediaBacenAM: 2.08 }).indebito_corrigido, null);
+});
+
 console.log(`\n${ok} passaram, ${falhas} falharam.`);
 process.exit(falhas ? 1 : 0);

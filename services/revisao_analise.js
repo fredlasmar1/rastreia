@@ -84,7 +84,8 @@ async function taxaPara(d, anterior) {
 async function calcularAnalise(d, taxaAnterior) {
   const taxa = await taxaPara(d, taxaAnterior);
   const { limiares } = require('./revisao_bancaria_fluxo');
-  const calc = calculo.calcular(d, { taxaMediaBacenAM: taxa && taxa.ok ? taxa.valor_am : null, questionaveis: teses.itensQuestionaveis(d), limiares: await limiares() });
+  const ipcaMensal = await bacen.buscarIPCA(String(d.operacao?.data_contratacao || '').slice(0, 7) || null);
+  const calc = calculo.calcular(d, { taxaMediaBacenAM: taxa && taxa.ok ? taxa.valor_am : null, questionaveis: teses.itensQuestionaveis(d), limiares: await limiares(), ipcaMensal });
   if (!taxa || !taxa.ok) calc.alertas.unshift(`Taxa média do Banco Central indisponível${taxa?.erro ? ` (${taxa.erro})` : ''}: o veredito considera só tarifas e seguros. Informe a taxa para comparar os juros.`);
   if (d.parcelas_pagas_estimadas) calc.alertas.push('Parcelas pagas ESTIMADAS pela data do 1º vencimento: confirme com o cliente (extrato ou carnê).');
   const ts = teses.aplicarTeses(d, calc);

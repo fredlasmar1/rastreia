@@ -48,6 +48,7 @@ function casoParaParecer(dados, taxa, calc, ts) {
       economia_estimada: brl(calc.economia_estimada),
       cet_real_am: calc.cet && calc.cet.real_am != null ? pct(calc.cet.real_am, 4) : null,
       cet_informado_am: calc.cet && calc.cet.declarado_am != null ? pct(calc.cet.declarado_am, 4) : null,
+      pago_a_mais_corrigido_ipca: calc.indebito_corrigido && calc.indebito_corrigido.nominal > 0 ? brl(calc.indebito_corrigido.corrigido) : null,
       valor_incontroverso_mensal: calc.valor_incontroverso ? brl(calc.valor_incontroverso.parcela_mensal) : null, economia_pct_valor_financiado: calc.veredito?.economia_pct != null ? `${calc.veredito.economia_pct.toFixed(1).replace('.', ',')}%` : null
     },
     veredito: calc.veredito, cenario_principal: calc.cenario_principal, cenarios: cen, alertas: calc.alertas,
@@ -78,7 +79,8 @@ async function processarCalculo(pedidoId, usuarioId = null) {
   }
 
   // 2) Cálculo (cenário B usa os itens que as teses marcam)
-  const calc = calculo.calcular(d, { taxaMediaBacenAM: taxa.valor_am, questionaveis: teses.itensQuestionaveis(d), limiares: await limiares() });
+  const ipcaMensal = await bacen.buscarIPCA(String(d.operacao?.data_contratacao || '').slice(0, 7) || null);
+  const calc = calculo.calcular(d, { taxaMediaBacenAM: taxa.valor_am, questionaveis: teses.itensQuestionaveis(d), limiares: await limiares(), ipcaMensal });
   // 3) Teses completas (com o cálculo)
   const ts = teses.aplicarTeses(d, calc);
 

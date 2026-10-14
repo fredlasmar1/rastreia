@@ -589,6 +589,7 @@
         <div class="an-linha"><span>Parcela hoje</span><b>${cp ? brl(cp.parcela_contratada) : brl(d.operacao?.valor_parcela)}</b></div>
         <div class="an-linha"><span>Parcela revisada</span><b>${cp ? brl(cp.parcela_revisada) : '—'}</b></div>
         <div class="an-linha"><span>Já pago a mais</span><b>${cp ? brl(cp.total_pago_a_mais) : '—'}</b></div>
+        ${c.indebito_corrigido && c.indebito_corrigido.nominal > 0 ? `<div class="an-linha"><span>Já pago a mais, corrigido (IPCA até ${esc(c.indebito_corrigido.ate_mes.split('-').reverse().join('/'))})</span><b>${brl(c.indebito_corrigido.corrigido)}</b></div>` : ''}
         <div class="an-linha"><span>Economia nas parcelas a vencer</span><b>${cp ? brl(cp.economia_futura) : '—'}</b></div>
         <div class="an-linha"><span>Restituição em dobro (referência)</span><b>${cp ? brl(cp.repeticao_dobro) : '—'}</b></div>
         ${c.valor_incontroverso ? `<div style="margin-top:10px;background:#eff6ff;border:1px solid #bfdbfe;border-radius:10px;padding:10px 12px"><div style="font-size:11px;font-weight:800;color:#1e3a8a;letter-spacing:.05em">VALOR INCONTROVERSO (CPC art. 330, § 2º)</div><div style="font-size:20px;font-weight:900;color:#0f172a">${brl(c.valor_incontroverso.parcela_mensal)} <span style="font-size:12px;font-weight:600;color:#475569">por mês</span></div><div style="font-size:12px;color:#475569">o que o cliente reconhece e segue pagando na ação · ${c.valor_incontroverso.parcelas_restantes} parcela(s) restante(s)</div></div>` : ''}
