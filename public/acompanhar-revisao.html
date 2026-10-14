@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Acompanhe sua revisão</title>
+  <meta name="robots" content="noindex">
+  <style>
+    :root { --azul:#1e3a8a; --azul2:#2563eb; --verde:#16a34a; --cinza:#64748b; --linha:#e2e8f0; }
+    * { box-sizing:border-box; margin:0; padding:0; }
+    body { font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-serif; background:#f1f5f9; color:#0f172a; line-height:1.5; }
+    .topo { background:linear-gradient(135deg,#1e3a8a,#172554); color:#fff; padding:22px 18px 60px; text-align:center; }
+    .topo img { height:34px; border-radius:6px; }
+    .topo h1 { font-size:20px; margin-top:10px; }
+    .topo p { font-size:13px; opacity:.85; }
+    .caixa { max-width:560px; margin:-44px auto 30px; background:#fff; border-radius:18px; box-shadow:0 10px 30px rgba(15,23,42,.1); padding:22px 20px; }
+    .prot { font-size:12px; color:var(--cinza); text-align:center; margin-bottom:14px; }
+    .passo { display:flex; gap:14px; position:relative; padding-bottom:20px; }
+    .passo:last-child { padding-bottom:0; }
+    .passo::before { content:''; position:absolute; left:13px; top:28px; bottom:0; width:2px; background:var(--linha); }
+    .passo:last-child::before { display:none; }
+    .passo.feito::before { background:var(--verde); }
+    .bola { flex:none; width:28px; height:28px; border-radius:50%; border:2px solid var(--linha); background:#fff; display:flex; align-items:center; justify-content:center; font-size:13px; font-weight:800; color:var(--cinza); z-index:1; }
+    .feito .bola { background:var(--verde); border-color:var(--verde); color:#fff; }
+    .atual .bola { border-color:var(--azul2); color:var(--azul2); box-shadow:0 0 0 5px rgba(37,99,235,.15); }
+    .nome { font-weight:700; font-size:15px; }
+    .atual .nome { color:var(--azul2); }
+    .data { font-size:12px; color:var(--cinza); }
+    .agora { display:inline-block; margin-top:3px; font-size:12px; font-weight:700; color:var(--azul2); background:#eff6ff; padding:2px 8px; border-radius:99px; }
+    .btn { display:block; text-align:center; text-decoration:none; padding:13px; border-radius:12px; font-weight:700; margin-top:16px; }
+    .btn-laudo { background:var(--azul); color:#fff; }
+    .btn-wpp { background:#25d366; color:#fff; }
+    .rodape { text-align:center; font-size:11px; color:var(--cinza); padding:0 18px 26px; }
+    .erro { text-align:center; color:#b91c1c; padding:20px 0; }
+  </style>
+</head>
+<body>
+  <div class="topo">
+    <img src="/img/logo-recobro.jpg" alt="Recobro">
+    <h1 id="titulo">Acompanhe sua revisão</h1>
+    <p>Revisão de Contrato Bancário · Recobro e Balladão Advogados</p>
+  </div>
+  <div class="caixa" id="caixa"><div style="text-align:center;color:#64748b">Carregando…</div></div>
+  <div class="rodape">Esta página mostra só a etapa do serviço. Dúvidas? Fale com quem enviou este link.</div>
+<script>
+  const esc = (s) => { const d = document.createElement('div'); d.textContent = s == null ? '' : String(s); return d.innerHTML; };
+  const dataBR = (s) => s ? new Date(s).toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' }) : '';
+  const MSG_ATUAL = {
+    pagamento: 'Aguardando a confirmação do pagamento.',
+    documentos: 'Estamos lendo o seu contrato.',
+    conferencia: 'Nossa equipe está conferindo os dados do contrato.',
+    calculo: 'Recalculando o contrato e comparando com a taxa média do Banco Central.',
+    juridico: 'O advogado está analisando o caso e redigindo o parecer.'
+  };
+  (async () => {
+    const t = new URLSearchParams(location.search).get('t') || '';
+    const caixa = document.getElementById('caixa');
+    try {
+      const r = await fetch(`/api/revisao-bancaria/publico/${encodeURIComponent(t)}`);
+      const j = await r.json();
+      if (!r.ok) { caixa.innerHTML = `<div class="erro">${esc(j.erro || 'Link inválido.')}</div>`; return; }
+      if (j.primeiro_nome) document.getElementById('titulo').textContent = `Olá, ${j.primeiro_nome}!`;
+      let h = `<div class="prot">Protocolo #${esc(j.numero)} · iniciado em ${dataBR(j.criado_em)}</div>`;
+      if (j.atual === 'cancelado') { caixa.innerHTML = h + '<div class="erro">Esta revisão foi cancelada.</div>'; return; }
+      h += j.passos.map((p, i) => `<div class="passo ${p.feito ? 'feito' : ''} ${p.atual ? 'atual' : ''}">
+          <div class="bola">${p.feito ? '✓' : i + 1}</div>
+          <div><div class="nome">${esc(p.nome)}</div>${p.feito && p.data ? `<div class="data">${dataBR(p.data)}</div>` : ''}${p.atual ? `<div class="agora">Agora: ${esc(MSG_ATUAL[p.id] || 'em andamento')}</div>` : ''}</div>
+        </div>`).join('');
+      if (j.laudo_url) h += `<a class="btn btn-laudo" href="${esc(j.laudo_url)}" target="_blank" rel="noopener">📄 Abrir o laudo</a>`;
+      if (j.balladao_whatsapp) h += `<a class="btn btn-wpp" href="https://wa.me/${String(j.balladao_whatsapp).replace(/\D/g, '')}" target="_blank" rel="noopener">Falar com o Balladão Advogados</a>`;
+      caixa.innerHTML = h;
+    } catch (e) { caixa.innerHTML = '<div class="erro">Não foi possível carregar agora. Tente de novo em instantes.</div>'; }
+  })();
+</script>
+</body>
+</html>

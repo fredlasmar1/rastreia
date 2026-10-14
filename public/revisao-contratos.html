@@ -110,7 +110,21 @@
 
     /* Janela: nova revisão */
     .rc-modal { position: fixed; inset: 0; background: rgba(15,23,42,.55); display: flex; align-items: flex-start; justify-content: center; padding: 30px 16px; overflow-y: auto; z-index: 1000; }
-    .rc-modal[hidden], #forma-parc[hidden], .an-hero[hidden], #an-resultado[hidden], #painel-analises[hidden], #painel-revisoes[hidden] { display: none; }
+    .rc-modal[hidden], #forma-parc[hidden], .an-hero[hidden], #an-resultado[hidden], #painel-analises[hidden], #painel-revisoes[hidden], #painel-clientes[hidden], #cli-sel[hidden], #rc-cli[hidden] { display: none; }
+    .rc-vista { display:flex; gap:4px; margin-left:auto; padding:0 12px 6px; }
+    .rc-vista button { border:1px solid #cbd5e1; background:#fff; padding:5px 12px; font-size:12px; border-radius:8px; cursor:pointer; }
+    .rc-vista button.on { background:var(--rc-azul); color:#fff; border-color:var(--rc-azul); }
+    .rc-quadro { display:grid; grid-template-columns:repeat(6, minmax(170px, 1fr)); gap:10px; padding:14px 16px; overflow-x:auto; }
+    .rc-col { background:#f8fafc; border:1px solid var(--rc-linha); border-radius:12px; padding:8px; min-height:120px; }
+    .rc-col-t { font-size:11px; font-weight:800; letter-spacing:.04em; text-transform:uppercase; color:var(--rc-suave); padding:4px 6px 8px; display:flex; justify-content:space-between; }
+    .rc-cartao { background:#fff; border:1px solid var(--rc-linha); border-left:4px solid var(--c, #94a3b8); border-radius:10px; padding:9px 10px; margin-bottom:8px; cursor:pointer; font-size:12.5px; }
+    .rc-cartao:hover { box-shadow:0 4px 12px rgba(15,23,42,.08); }
+    .rc-cartao b { font-size:13px; color:var(--rc-tinta); }
+    .rc-cartao .p { color:#b45309; font-size:11px; font-weight:700; }
+    .cli-sug { border:1px solid var(--rc-linha); border-radius:10px; margin-top:4px; max-height:180px; overflow:auto; background:#fff; }
+    .cli-sug div { padding:8px 10px; cursor:pointer; font-size:13px; border-bottom:1px solid #f1f5f9; }
+    .cli-sug div:hover { background:#eff6ff; }
+    .cli-chip { display:flex; justify-content:space-between; align-items:center; background:#eff6ff; border:1px solid #bfdbfe; border-radius:10px; padding:10px 12px; font-size:13px; margin-bottom:8px; }
     .rc-janela { background: #fff; border-radius: 18px; width: 100%; max-width: 820px; box-shadow: 0 20px 60px rgba(0,0,0,.25); }
     .rc-janela-topo { display: flex; justify-content: space-between; align-items: center; padding: 18px 22px; border-bottom: 1px solid var(--rc-linha); }
     .rc-janela-topo h2 { margin: 0; font-size: 18px; color: var(--rc-tinta); }
@@ -200,11 +214,20 @@
     <div class="rc-abas">
       <button class="rc-aba on" id="aba-analises" onclick="trocarAba('analises')">Análises <span class="q" id="q-analises">0</span></button>
       <button class="rc-aba" id="aba-revisoes" onclick="trocarAba('revisoes')">Revisões <span class="q" id="q-revisoes">0</span></button>
+      <button class="rc-aba" id="aba-clientes" onclick="trocarAba('clientes')">Clientes <span class="q" id="q-clientes">0</span></button>
+      <div class="rc-vista" id="rc-vista" hidden><button id="v-quadro" class="on" onclick="trocarVista('quadro')">Quadro</button><button id="v-lista" onclick="trocarVista('lista')">Lista</button></div>
     </div>
     <div id="painel-analises"><div id="an-recentes"><div class="loading"><div class="spinner"></div>Carregando...</div></div></div>
     <div id="painel-revisoes" hidden>
       <div class="rc-filtros" id="filtros"></div>
       <div id="lista"><div class="loading"><div class="spinner"></div>Carregando...</div></div>
+    </div>
+    <div id="painel-clientes" hidden>
+      <div style="display:flex;gap:8px;padding:12px 16px 0;flex-wrap:wrap">
+        <input type="text" id="cli-busca" placeholder="Buscar por nome, CPF, WhatsApp ou e-mail" style="flex:1;min-width:220px;padding:9px 12px;border:1px solid #cbd5e1;border-radius:10px" oninput="clearTimeout(window._tb);window._tb=setTimeout(carregarClientes,300)">
+        <button class="btn btn-primary" onclick="abrirCliente(null)">+ Novo cliente</button>
+      </div>
+      <div id="cli-lista"><div class="loading"><div class="spinner"></div>Carregando...</div></div>
     </div>
   </div>
 </div>
@@ -218,6 +241,8 @@
 
       <div class="rc-sec">
         <div class="rc-sec-t"><span class="n">1</span> Cliente <small>quem recebe o laudo</small></div>
+        <div id="cli-sel" class="cli-chip" hidden></div>
+        <div style="margin-bottom:8px"><input type="text" id="cli-procura" placeholder="🔎 Buscar cliente já cadastrado (nome, CPF ou WhatsApp) — ou preencha abaixo para cadastrar" style="width:100%" oninput="clearTimeout(window._tp);window._tp=setTimeout(procurarCliente,250)"><div id="cli-sug" class="cli-sug" hidden></div></div>
         <div class="rc-grade">
           <div><label>Nome *</label><input type="text" id="cli_nome"></div>
           <div><label>WhatsApp</label><input type="text" id="cli_wpp" inputmode="tel" placeholder="(62) 99999-0000"></div>
@@ -302,6 +327,29 @@
   </div>
 </div>
 
+<!-- Janela: cliente (cadastro + revisões) -->
+<div class="rc-modal" id="rc-cli" hidden onclick="if (event.target === this) fecharCliente()">
+  <div class="rc-janela">
+    <div class="rc-janela-topo"><h2 id="cli-titulo">Cliente</h2><button class="rc-fechar" onclick="fecharCliente()" aria-label="Fechar">✕</button></div>
+    <div class="rc-janela-corpo">
+      <div class="rc-grade">
+        <div class="c2"><label>Nome *</label><input type="text" id="cf-nome"></div>
+        <div><label>CPF/CNPJ</label><input type="text" id="cf-doc" placeholder="CPF ou CNPJ"></div>
+        <div><label>WhatsApp</label><input type="text" id="cf-wpp" inputmode="tel"></div>
+        <div class="c2"><label>E-mail</label><input type="email" id="cf-email"></div>
+        <div style="grid-column:1/-1"><label>Endereço</label><input type="text" id="cf-end"></div>
+        <div style="grid-column:1/-1"><label>Observações</label><input type="text" id="cf-obs" placeholder="Ex.: indicado por…, melhor horário para ligar…"></div>
+      </div>
+      <div id="cli-revs" style="margin-top:16px"></div>
+    </div>
+    <div class="rc-janela-pe">
+      <button class="btn btn-primary" onclick="salvarCliente(this)">Salvar</button>
+      <button class="btn btn-outline" id="cli-nova-rev" onclick="novaRevisaoDoCliente()">⚖ Nova revisão para este cliente</button>
+      <span id="cli-msg" style="font-size:13px;color:#64748b"></span>
+    </div>
+  </div>
+</div>
+
 <div class="footer">
   Recobro Recuperação de Crédito · Balladão Advogados | Anápolis - GO |
   <a href="/termos.html#revisao-bancaria" target="_blank">Termos de Uso</a> |
@@ -350,12 +398,119 @@
 
   // ═══════ Abas ═══════
   function trocarAba(a) {
-    ['analises', 'revisoes'].forEach(k => {
+    ['analises', 'revisoes', 'clientes'].forEach(k => {
       document.getElementById('aba-' + k).classList.toggle('on', k === a);
       document.getElementById('painel-' + k).hidden = k !== a;
     });
+    document.getElementById('rc-vista').hidden = a !== 'revisoes';
+    if (a === 'clientes') carregarClientes();
     try { localStorage.setItem('rc_aba', a); } catch (_) {}
   }
+  let VISTA = (() => { try { return localStorage.getItem('rc_vista') || 'quadro'; } catch (_) { return 'quadro'; } })();
+  function trocarVista(v) {
+    VISTA = v; try { localStorage.setItem('rc_vista', v); } catch (_) {}
+    document.getElementById('v-quadro').classList.toggle('on', v === 'quadro'); document.getElementById('v-lista').classList.toggle('on', v === 'lista');
+    render();
+  }
+
+  // ═══════ Quadro: situação do serviço por etapa ═══════
+  const COLUNAS = [['pagamento', 'Pagamento', '#dc2626'], ['documentos', 'Contrato / leitura', '#d97706'], ['conferencia', 'Conferência', '#ea580c'], ['calculo', 'Cálculo', '#2563eb'], ['juridico', 'Advogado', '#7c3aed'], ['laudo', 'Laudo entregue', '#16a34a']];
+  const diasDesde = (d) => d ? Math.floor((Date.now() - new Date(d).getTime()) / 86400000) : null;
+  function quadroHtml(lista) {
+    return `<div class="rc-quadro">${COLUNAS.map(([id, nome, cor]) => {
+      const cs = lista.filter(r => r.passo === id);
+      return `<div class="rc-col"><div class="rc-col-t"><span>${nome}</span><span>${cs.length}</span></div>${cs.map(r => {
+        const v = VER[r.veredito]; const parado = diasDesde(r.criado_em);
+        return `<div class="rc-cartao" style="--c:${cor}" onclick="location.href='/pedido.html?id=${r.id}'"><b>${esc(r.cliente_nome)}</b><div class="sub">#${r.numero}${r.banco ? ' · ' + esc(r.banco) : ''}</div>
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-top:6px;gap:6px">${v ? pill(v[0], v[1], v[2]) : '<span class="sub">sem veredito</span>'}<strong>${Number(r.valor) > 0 ? brl0(r.valor) : 'cortesia'}</strong></div>
+          ${id === 'pagamento' && (r.cob_link || r.mp_init_point) ? `<button class="btn btn-sm btn-primary" style="margin-top:6px;width:100%" onclick="event.stopPropagation();cobrarRevisao('${r.id}', this)">💳 Cobrar</button>` : ''}
+          ${id !== 'laudo' && parado != null && parado >= 3 ? `<div class="p" style="margin-top:4px">há ${parado} dia(s) aberto</div>` : ''}</div>`;
+      }).join('') || '<div class="sub" style="padding:6px">—</div>'}</div>`;
+    }).join('')}</div>`;
+  }
+
+  // ═══════ Clientes ═══════
+  let CLIENTE = null;
+  async function carregarClientes() {
+    const busca = (document.getElementById('cli-busca') || {}).value || '';
+    const r = await fetch(`/api/revisao-bancaria/clientes?busca=${encodeURIComponent(busca)}`, { headers: auth() });
+    const j = await r.json().catch(() => ({}));
+    const el = document.getElementById('cli-lista');
+    const ls = j.clientes || [];
+    if (!busca) document.getElementById('q-clientes').textContent = ls.length;
+    if (!r.ok) { el.innerHTML = `<div class="rc-vazio" style="color:#b91c1c">${esc(j.erro || 'Erro')}</div>`; return; }
+    if (!ls.length) { el.innerHTML = `<div class="rc-vazio">${busca ? 'Nenhum cliente encontrado.' : 'Nenhum cliente ainda. Eles entram aqui ao abrir uma revisão, ou pelo botão "+ Novo cliente".'}</div>`; return; }
+    el.innerHTML = `<div style="overflow-x:auto"><table class="rc-tab"><thead><tr><th>Cliente</th><th class="rc-oculta">Contato</th><th class="rc-num">Revisões</th><th class="rc-num rc-oculta">Pago</th><th class="rc-oculta">Última</th></tr></thead><tbody>${ls.map(c => `
+      <tr class="lin" onclick="abrirCliente('${c.id}')"><td><strong>${esc(c.nome)}</strong><div class="sub">${esc(c.documento || '')}</div></td>
+      <td class="rc-oculta">${esc(c.whatsapp || '')}<div class="sub">${esc(c.email || '')}</div></td>
+      <td class="rc-num">${c.revisoes}${c.em_andamento ? ` <span class="sub">(${c.em_andamento} em andamento)</span>` : ''}</td>
+      <td class="rc-num rc-oculta">${brl(c.total_pago)}</td><td class="rc-oculta sub">${c.ultima_revisao ? new Date(c.ultima_revisao).toLocaleDateString('pt-BR') : '—'}</td></tr>`).join('')}</tbody></table></div>`;
+  }
+  const PASSO_NOME = Object.fromEntries(COLUNAS.map(c => [c[0], c[1]]));
+  async function abrirCliente(id) {
+    CLIENTE = null;
+    ['cf-nome', 'cf-doc', 'cf-wpp', 'cf-email', 'cf-end', 'cf-obs'].forEach(k => document.getElementById(k).value = '');
+    document.getElementById('cli-revs').innerHTML = ''; document.getElementById('cli-msg').textContent = '';
+    document.getElementById('cli-titulo').textContent = id ? 'Cliente' : 'Novo cliente';
+    document.getElementById('cli-nova-rev').hidden = !id;
+    document.getElementById('rc-cli').hidden = false; document.body.style.overflow = 'hidden';
+    if (!id) { setTimeout(() => document.getElementById('cf-nome').focus(), 50); return; }
+    const r = await fetch(`/api/revisao-bancaria/clientes/${id}`, { headers: auth() });
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok) { document.getElementById('cli-msg').textContent = j.erro || 'Erro'; return; }
+    CLIENTE = j.cliente;
+    const c = j.cliente;
+    document.getElementById('cli-titulo').textContent = c.nome;
+    document.getElementById('cf-nome').value = c.nome || ''; document.getElementById('cf-doc').value = c.documento || '';
+    document.getElementById('cf-wpp').value = c.whatsapp || ''; document.getElementById('cf-email').value = c.email || '';
+    document.getElementById('cf-end').value = c.endereco || ''; document.getElementById('cf-obs').value = c.observacoes || '';
+    const rs = j.revisoes || [];
+    document.getElementById('cli-revs').innerHTML = `<div class="rc-sec-t">Revisões deste cliente (${rs.length})</div>` + (rs.length ? rs.map(x => { const v = VER[x.veredito];
+      return `<div class="an-chip" style="cursor:pointer" onclick="location.href='/pedido.html?id=${x.id}'"><span><strong>#${x.numero}</strong> ${esc(x.banco || '')} · ${new Date(x.criado_em).toLocaleDateString('pt-BR')}</span><span style="display:flex;gap:6px;align-items:center">${v ? pill(v[0], v[1], v[2]) : ''}${pill(PASSO_NOME[x.passo] || x.passo, '#eff6ff', '#1e3a8a')}<strong>${Number(x.valor) > 0 ? brl(x.valor) : 'cortesia'}</strong></span></div>`; }).join('') : '<div class="sub">Nenhuma revisão ainda.</div>');
+  }
+  function fecharCliente() { document.getElementById('rc-cli').hidden = true; document.body.style.overflow = ''; }
+  async function salvarCliente(btn) {
+    const corpo = { nome: document.getElementById('cf-nome').value.trim(), cnpj: document.getElementById('cf-doc').value.trim() || null, whatsapp: document.getElementById('cf-wpp').value.trim() || null,
+      email: document.getElementById('cf-email').value.trim() || null, endereco: document.getElementById('cf-end').value.trim() || null, observacoes: document.getElementById('cf-obs').value.trim() || null, nicho: 'revisao_bancaria' };
+    const m = document.getElementById('cli-msg');
+    if (!corpo.nome) { m.style.color = '#b91c1c'; m.textContent = 'Informe o nome.'; return; }
+    btn.disabled = true;
+    const r = await fetch(CLIENTE ? `/api/clientes/${CLIENTE.id}` : '/api/clientes', { method: CLIENTE ? 'PATCH' : 'POST', headers: { ...auth(), 'Content-Type': 'application/json' }, body: JSON.stringify(corpo) });
+    const j = await r.json().catch(() => ({}));
+    btn.disabled = false;
+    if (!r.ok) { m.style.color = '#b91c1c'; m.textContent = j.erro || 'Erro ao salvar'; return; }
+    m.style.color = '#15803d'; m.textContent = 'Salvo.';
+    carregarClientes();
+    if (!CLIENTE) abrirCliente(j.id || (j.cliente && j.cliente.id));
+  }
+  function novaRevisaoDoCliente() {
+    const c = CLIENTE; if (!c) return;
+    fecharCliente(); abrirForm(); selecionarCliente(c);
+  }
+
+  // Busca de cliente na janela de abrir revisão
+  let CLI_FORM = null;
+  async function procurarCliente() {
+    const q = document.getElementById('cli-procura').value.trim();
+    const box = document.getElementById('cli-sug');
+    if (q.length < 2) { box.hidden = true; return; }
+    const r = await fetch(`/api/revisao-bancaria/clientes?busca=${encodeURIComponent(q)}`, { headers: auth() });
+    const j = await r.json().catch(() => ({}));
+    const ls = (j.clientes || []).slice(0, 8);
+    window._sug = ls;
+    box.innerHTML = ls.length ? ls.map((c, i) => `<div onclick="selecionarCliente(window._sug[${i}])"><strong>${esc(c.nome)}</strong> <span class="sub">${esc(c.documento || '')} ${esc(c.whatsapp || '')}</span></div>`).join('') : '<div class="sub" style="cursor:default">Nenhum cliente com esse nome — preencha abaixo para cadastrar.</div>';
+    box.hidden = false;
+  }
+  function selecionarCliente(c) {
+    CLI_FORM = c;
+    document.getElementById('cli-sug').hidden = true; document.getElementById('cli-procura').value = '';
+    document.getElementById('cli_nome').value = c.nome || ''; document.getElementById('cli_wpp').value = c.whatsapp || ''; document.getElementById('cli_email').value = c.email || '';
+    if (c.documento && !document.getElementById('alvo_doc').value) document.getElementById('alvo_doc').value = c.documento;
+    const chip = document.getElementById('cli-sel');
+    chip.innerHTML = `<span>👤 Cliente cadastrado: <strong>${esc(c.nome)}</strong> ${esc(c.documento || '')}</span><button type="button" class="btn btn-sm btn-outline" onclick="limparClienteForm()">trocar</button>`;
+    chip.hidden = false;
+  }
+  function limparClienteForm() { CLI_FORM = null; document.getElementById('cli-sel').hidden = true; ['cli_nome', 'cli_wpp', 'cli_email'].forEach(k => document.getElementById(k).value = ''); }
 
   // ═══════ Revisões ═══════
   let REVISOES = [], filtro = 'abertas';
@@ -387,6 +542,12 @@
     document.getElementById('q-revisoes').textContent = abertas.length;
 
     document.getElementById('filtros').innerHTML = FILTROS.map(([k, t]) => `<button class="${filtro === k ? 'on' : ''}" onclick="filtro='${k}';render()">${t}</button>`).join('');
+    document.getElementById('filtros').style.display = VISTA === 'quadro' ? 'none' : '';
+    if (VISTA === 'quadro') {
+      const noQuadro = s.filter(r => r.sit !== 'cancelado' && !(r.passo === 'laudo' && r.concluido_em && Date.now() - new Date(r.concluido_em).getTime() > 30 * 86400000));
+      document.getElementById('lista').innerHTML = noQuadro.length ? quadroHtml(noQuadro) : `<div class="rc-vazio">Nenhuma revisão ainda. Analise um contrato e clique em "Abrir revisão".</div>`;
+      return;
+    }
     const vis = s.filter(r => filtro === 'todas' ? true : filtro === 'abertas' ? !['concluido', 'cancelado'].includes(r.sit) : r.sit === filtro);
     if (!vis.length) { document.getElementById('lista').innerHTML = `<div class="rc-vazio">Nenhuma revisão aqui.</div>`; return; }
     document.getElementById('lista').innerHTML = `<div style="overflow-x:auto"><table class="rc-tab"><thead><tr>
@@ -428,7 +589,7 @@
   let docs = [];
   let ANALISE_FORM = null;
   function abrirForm() {
-    ANALISE_FORM = null;
+    ANALISE_FORM = null; limparClienteForm(); document.getElementById('cli-procura').value = ''; document.getElementById('cli-sug').hidden = true;
     document.getElementById('form-da-analise').hidden = true;
     document.getElementById('form-docs').hidden = false;
     document.getElementById('rc-form').hidden = false;
@@ -444,7 +605,7 @@
   }
   document.addEventListener('input', e => { if (e.target && e.target.id === 'valor') montarParcelas(); });
   function fecharForm() { document.getElementById('rc-form').hidden = true; document.body.style.overflow = ''; }
-  document.addEventListener('keydown', e => { if (e.key === 'Escape' && !document.getElementById('rc-form').hidden) fecharForm(); });
+  document.addEventListener('keydown', e => { if (e.key !== 'Escape') return; if (!document.getElementById('rc-form').hidden) fecharForm(); if (!document.getElementById('rc-cli').hidden) fecharCliente(); });
   function adicionarDocs(files) {
     for (const f of Array.from(files || [])) {
       if (docs.length >= 10) { msg('Máximo de 10 documentos.', true); break; }
@@ -493,6 +654,13 @@
       }
     };
     try {
+      // Cliente: o escolhido na busca ou um cadastro novo (fica na aba Clientes)
+      if (CLI_FORM) payload.cliente_id = CLI_FORM.id;
+      else {
+        const rc = await fetch('/api/clientes', { method: 'POST', headers: { ...auth(), 'Content-Type': 'application/json' }, body: JSON.stringify({ nome: cliente_nome, whatsapp: payload.cliente_whatsapp, email: payload.cliente_email, cnpj: payload.alvo_documento || null, nicho: 'revisao_bancaria' }) });
+        const jc = await rc.json().catch(() => ({}));
+        if (rc.ok && (jc.id || (jc.cliente && jc.cliente.id))) payload.cliente_id = jc.id || jc.cliente.id;
+      }
       const r = await fetch('/api/pedidos', { method: 'POST', headers: { ...auth(), 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
       const j = await r.json().catch(() => ({}));
       if (!r.ok) { btn.disabled = false; return msg(j.erro || 'Erro ao criar', true); }
@@ -731,6 +899,8 @@
 
   const _q = new URLSearchParams(location.search);
   try { const ab = localStorage.getItem('rc_aba'); if (ab) trocarAba(ab); } catch (_) {}
+  trocarVista(VISTA);
+  fetch('/api/revisao-bancaria/clientes', { headers: auth() }).then(r => r.json()).then(j => { document.getElementById('q-clientes').textContent = (j.clientes || []).length; }).catch(() => {});
   if (_q.get('nova') === '1') abrirForm();
   if (_q.get('analise')) anAbrir(_q.get('analise'));
   carregar();

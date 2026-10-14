@@ -17,7 +17,7 @@ const revisao = require('../services/revisao_bancaria');
 const { assinar } = require('../services/link_relatorio');
 
 async function carregarPedido(id) {
-  const r = await pool.query("SELECT id, numero, tipo, status, valor, mp_init_point, relatorio_url, alvo_nome, alvo_documento, alvo_tipo FROM pedidos WHERE id = $1 AND deletado_em IS NULL", [id]);
+  const r = await pool.query("SELECT id, numero, tipo, status, valor, mp_init_point, relatorio_url, alvo_nome, alvo_documento, alvo_tipo, token_publico, cliente_id, criado_em, pago_em, concluido_em FROM pedidos WHERE id = $1 AND deletado_em IS NULL", [id]);
   return r.rows[0] && r.rows[0].tipo === revisao.TIPO ? r.rows[0] : null;
 }
 
@@ -146,6 +146,89 @@ router.post('/analises/:id/reler', autenticar, async (req, res) => {
   } catch (e) { res.status(500).json({ erro: 'Erro ao reler' }); }
 });
 
+// ── Situação do serviço: etapas, datas e link de acompanhamento ──────────────
+const PASSOS = [
+  ['pagamento', 'Pagamento'], ['documentos', 'Contrato recebido'], ['conferencia', 'Conferência dos dados'],
+  ['calculo', 'Cálculo e comparação com o Banco Central'], ['juridico', 'Análise do advogado'], ['laudo', 'Laudo entregue']
+];
+function passoAtual(status, etapa) {
+  if (status === 'cancelado') return 'cancelado';
+  if (status === 'aguardando_pagamento') return 'pagamento';
+  if (status === 'concluido' || etapa === 'aprovado') return 'laudo';
+  return { aguardando_documentos: 'documentos', extraindo: 'documentos', conferencia_operador: 'conferencia', reprovado_juridico: 'conferencia', calculando: 'calculo', revisao_juridica: 'juridico' }[etapa] || 'documentos';
+}
+// Datas de cada passo pelo histórico (logs) — sem dado pessoal
+async function linhaDoTempo(pedido, reg) {
+  const logs = (await pool.query('SELECT acao, criado_em FROM logs WHERE pedido_id = $1 ORDER BY criado_em', [pedido.id])).rows;
+  const primeira = (re) => { const l = logs.find(x => re.test(x.acao || '')); return l ? l.criado_em : null; };
+  const datas = {
+    pagamento: pedido.pago_em || primeira(/pagamento confirmado|cobrança paga/i),
+    documentos: primeira(/extração IA|aberta a partir da análise|conferência manual|^Revisão bancária: conferência$/i),
+    conferencia: primeira(/dados confirmados pelo operador/i),
+    calculo: primeira(/cálculo concluído/i),
+    juridico: primeira(/aprovada pelo jurídico/i),
+    laudo: pedido.concluido_em || primeira(/laudo de revisão bancária gerado/i)
+  };
+  const atual = passoAtual(pedido.status, reg && reg.etapa);
+  const idx = PASSOS.findIndex(p => p[0] === atual);
+  return {
+    atual, criado_em: pedido.criado_em,
+    passos: PASSOS.map(([id, nome], i) => ({ id, nome, feito: atual === 'laudo' ? true : i < idx, atual: i === idx && atual !== 'laudo', data: datas[id] || null }))
+  };
+}
+const linkAcompanhamento = (token) => token ? `${process.env.BASE_URL || 'https://www.recobrorastreia.com.br'}/acompanhar-revisao.html?t=${token}` : null;
+
+// Público (sem login): o cliente vê em que etapa está a revisão dele
+router.get('/publico/:token', async (req, res) => {
+  try {
+    if (!/^[a-f0-9]{32,64}$/.test(req.params.token)) return res.status(404).json({ erro: 'Link inválido' });
+    const p = (await pool.query('SELECT id, numero, tipo, status, cliente_nome, criado_em, pago_em, concluido_em, relatorio_url FROM pedidos WHERE token_publico = $1 AND deletado_em IS NULL', [req.params.token])).rows[0];
+    if (!p || p.tipo !== revisao.TIPO) return res.status(404).json({ erro: 'Revisão não encontrada' });
+    const reg = await revisao.obter(p.id);
+    const lt = await linhaDoTempo(p, reg);
+    const { VALIDADE } = require('../services/link_relatorio');
+    res.json({
+      numero: p.numero, primeiro_nome: String(p.cliente_nome || '').trim().split(/\s+/)[0] || null,
+      ...lt, laudo_url: lt.atual === 'laudo' && p.relatorio_url ? assinar(p.relatorio_url, VALIDADE.PUBLICO) : null,
+      balladao_whatsapp: (await revisao.config('balladao_whatsapp', '')) || null
+    });
+  } catch (e) { console.error('[revisao-bancaria] publico:', e); res.status(500).json({ erro: 'Erro ao consultar' }); }
+});
+
+// ── Clientes da Revisão de Contratos (tabela clientes, nicho 'revisao_bancaria') ──
+router.get('/clientes', autenticar, async (req, res) => {
+  try {
+    const busca = String(req.query.busca || '').trim();
+    const params = [revisao.TIPO];
+    let filtro = '';
+    if (busca) { params.push(`%${busca}%`); filtro = `AND (c.nome ILIKE $2 OR c.cnpj ILIKE $2 OR c.whatsapp ILIKE $2 OR c.email ILIKE $2)`; }
+    const r = await pool.query(
+      `SELECT c.id, c.nome, c.cnpj AS documento, c.whatsapp, c.email, c.endereco, c.observacoes, c.criado_em,
+              COUNT(p.id)::int AS revisoes,
+              COUNT(p.id) FILTER (WHERE p.status NOT IN ('concluido', 'cancelado'))::int AS em_andamento,
+              COALESCE(SUM(p.valor) FILTER (WHERE p.pago_em IS NOT NULL), 0)::float AS total_pago,
+              MAX(p.criado_em) AS ultima_revisao
+         FROM clientes c
+         LEFT JOIN pedidos p ON p.cliente_id = c.id AND p.tipo = $1 AND p.deletado_em IS NULL
+        WHERE c.ativo = true AND (c.nicho = 'revisao_bancaria' OR EXISTS (SELECT 1 FROM pedidos x WHERE x.cliente_id = c.id AND x.tipo = $1)) ${filtro}
+        GROUP BY c.id ORDER BY MAX(p.criado_em) DESC NULLS LAST, c.nome LIMIT 300`, params);
+    res.json({ clientes: r.rows });
+  } catch (e) { console.error('[revisao-bancaria] clientes:', e); res.status(500).json({ erro: 'Erro ao listar os clientes' }); }
+});
+
+router.get('/clientes/:id', autenticar, async (req, res) => {
+  try {
+    const c = (await pool.query('SELECT id, nome, cnpj AS documento, whatsapp, email, endereco, observacoes, criado_em FROM clientes WHERE id = $1 AND ativo = true', [req.params.id])).rows[0];
+    if (!c) return res.status(404).json({ erro: 'Cliente não encontrado' });
+    const revs = (await pool.query(
+      `SELECT p.id, p.numero, p.status, p.valor, p.criado_em, p.pago_em, p.concluido_em, rb.etapa, rb.veredito, rb.economia_estimada,
+              COALESCE(rb.dados_conferidos->'instituicao'->>'nome', rb.dados_extraidos->'instituicao'->>'nome', rb.dados_informados->>'banco') AS banco
+         FROM pedidos p JOIN revisao_bancaria rb ON rb.pedido_id = p.id
+        WHERE p.cliente_id = $1 AND p.tipo = $2 AND p.deletado_em IS NULL ORDER BY p.criado_em DESC`, [c.id, revisao.TIPO])).rows;
+    res.json({ cliente: c, revisoes: revs.map(r => ({ ...r, passo: passoAtual(r.status, r.etapa) })) });
+  } catch (e) { console.error('[revisao-bancaria] cliente:', e); res.status(500).json({ erro: 'Erro ao buscar o cliente' }); }
+});
+
 // Lista da aba "Revisão de Contratos" (módulo à parte do Rastreia)
 router.get('/', autenticar, async (req, res) => {
   try {
@@ -163,7 +246,7 @@ router.get('/', autenticar, async (req, res) => {
          LEFT JOIN usuarios u ON u.id = p.operador_id
         WHERE p.tipo = $1 AND p.deletado_em IS NULL
         ORDER BY p.criado_em DESC LIMIT 300`, [revisao.TIPO]);
-    res.json({ revisoes: r.rows });
+    res.json({ revisoes: r.rows.map(x => ({ ...x, passo: passoAtual(x.status, x.etapa) })) });
   } catch (e) { console.error('[revisao-bancaria] lista:', e); res.status(500).json({ erro: 'Erro ao listar as revisões' }); }
 });
 
@@ -177,7 +260,8 @@ router.get('/:pedidoId', autenticar, async (req, res) => {
     const extr = reg.dados_extraidos || {};
     const u = (await pool.query('SELECT perfil, pode_revisar_juridico FROM usuarios WHERE id = $1', [req.usuario.id])).rows[0] || {};
     res.json({
-      pedido: { ...pedido, relatorio_url: pedido.relatorio_url ? assinar(pedido.relatorio_url) : null }, etapa: reg.etapa, documentos: docs,
+      pedido: { ...pedido, token_publico: undefined, relatorio_url: pedido.relatorio_url ? assinar(pedido.relatorio_url) : null }, etapa: reg.etapa, documentos: docs,
+      linha_do_tempo: await linhaDoTempo(pedido, reg), link_acompanhamento: linkAcompanhamento(pedido.token_publico),
       campos: camposIniciais(reg, pedido),
       confianca: extr.confianca_por_campo || {},
       paginas: extr.paginas_relevantes || [],

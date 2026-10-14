@@ -146,6 +146,9 @@ pago → aguardando_documentos (upload até 10 docs) → extraindo (Claude lê o
 - Módulo à PARTE do Rastreia: aba própria `/revisao-contratos.html`, fora do dashboard/lista/números do Rastreia; sem preço fixo (o operador digita `valor_customizado`, 0 = cortesia).
 - Valor incontroverso (CPC art. 330 §§2º-3º) = parcela revisada do cenário principal (`calculo.valor_incontroverso`).
 - Parcelas pagas: a IA conta em extrato/carnê (`dados_extraidos.pagamentos`); sem documento, estimativa pela data (marcada).
+- Clientes da revisão: tabela `clientes` com `nicho = 'revisao_bancaria'` (aba Clientes; busca na janela de abrir revisão).
+- Situação do serviço: 6 passos (pagamento → contrato → conferência → cálculo → advogado → laudo), quadro na aba,
+  linha do tempo pelos `logs` e página pública `/acompanhar-revisao.html?t=<token_publico>` (sem dado pessoal).
 - Entrega hoje é MANUAL: "Copiar mensagem"/"Abrir no WhatsApp" na tela da revisão (Evolution/SMTP não configurados).
 - Só aprova quem tem `usuarios.pode_revisar_juridico` (admin liga em Usuários, com OAB).
 - `/concluir` recusa sem parecer jurídico aprovado. Limiares do veredito e prescrição em `configuracoes`.

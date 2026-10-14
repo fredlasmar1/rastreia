@@ -239,6 +239,18 @@
   const RB_RES = { aplicavel: ['#dcfce7', '#14532d', 'Aplicável'], verificar: ['#fef9c3', '#713f12', 'Verificar'], nao_aplicavel: ['#f3f4f6', '#4b5563', 'Não aplicável'] };
   function renderRevisaoResultado(e) {
     let h = '';
+    // Situação do serviço: linha do tempo + link para o cliente acompanhar
+    const lt = e.linha_do_tempo;
+    if (lt && lt.passos) {
+      const dt = (d) => d ? new Date(d).toLocaleDateString('pt-BR') : '';
+      h += `<div style="margin:0 0 14px;border:1px solid #e2e8f0;border-radius:10px;padding:12px 14px;background:#fff">
+        <div style="display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;align-items:center"><div style="font-weight:800">Situação do serviço</div>
+          ${e.link_acompanhamento ? `<div style="display:flex;gap:6px;flex-wrap:wrap"><button class="btn btn-sm btn-outline" onclick="rbCopiarAcomp(this)">🔗 Copiar link de acompanhamento</button><button class="btn btn-sm" style="background:#25d366;color:#fff" onclick="rbAcompWpp()">📱 Enviar ao cliente</button></div>` : ''}</div>
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:6px;margin-top:10px">${lt.passos.map((p, i) => `
+          <div style="border-top:4px solid ${p.feito ? '#16a34a' : p.atual ? '#2563eb' : '#e2e8f0'};padding-top:6px">
+            <div style="font-size:11px;font-weight:800;color:${p.feito ? '#15803d' : p.atual ? '#1d4ed8' : '#94a3b8'}">${p.feito ? '✓' : i + 1}. ${esc(p.nome)}</div>
+            <div style="font-size:11px;color:#64748b">${p.feito && p.data ? dt(p.data) : p.atual ? 'agora' : ''}</div></div>`).join('')}</div></div>`;
+    }
     // Cobrança da revisão: mensagem que mostra o que a análise achou + valor + link
     if (e.pedido && e.pedido.status === 'aguardando_pagamento') {
       h += `<div style="margin:0 0 14px;border:1px solid #fecaca;background:#fef2f2;border-radius:10px;padding:12px 14px">
@@ -363,6 +375,13 @@
     }
     try { await navigator.clipboard.writeText(j.texto); out.style.color = '#15803d'; out.textContent = 'Mensagem copiada — o link vale 30 dias.'; }
     catch (_) { out.style.color = '#b91c1c'; out.textContent = 'Não consegui copiar; use "Abrir no WhatsApp".'; }
+  }
+  async function rbCopiarAcomp(btn) { try { await navigator.clipboard.writeText(rbEstado.link_acompanhamento); btn.textContent = '✓ Link copiado'; } catch (_) {} }
+  function rbAcompWpp() {
+    const p = pedidoAtual || {};
+    const fone = String(p.cliente_whatsapp || '').replace(/\D/g, '').replace(/^(?!55)(?=\d)/, '55');
+    const txt = `Olá${p.cliente_nome ? ', ' + String(p.cliente_nome).split(' ')[0] : ''}! Por este link você acompanha cada etapa da revisão do seu contrato (protocolo #${p.numero || ''}): ${rbEstado.link_acompanhamento}`;
+    window.open(`https://wa.me/${fone}?text=${encodeURIComponent(txt)}`, '_blank', 'noopener');
   }
   async function rbCobrar(btn) {
     const out = document.getElementById('rb-cob-msg');
