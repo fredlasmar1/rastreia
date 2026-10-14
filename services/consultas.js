@@ -2618,6 +2618,11 @@ async function executarConsultasParaAlvo(alvo, { precisaVinculos, precisaVeiculo
   // consultou — só as fontes que faltam vão para a API. cache = {fonte: dados}.
   const c = cache || {};
   const usar = (fonte, fn) => (c[fonte] != null ? Promise.resolve(c[fonte]) : fn());
+  // Diários oficiais municipais (Querido Diário, grátis e lento): começa já e roda em
+  // paralelo com o resto; falha vira "indisponível" sem travar o dossiê.
+  const diariosPromise = (['dossie_pj', 'dossie_pj_socios', 'due_diligence'].includes(tipo) && tipoAlvo === 'PJ')
+    ? usar('diarios_oficiais', () => require('./diarios_oficiais').buscarPorCNPJ(documento)).catch(e => ({ disponivel: false, erro: e.message }))
+    : null;
   const cadastral = c.receita_federal || (tipoAlvo === 'PJ' ? await consultarCNPJ(documento) : await consultarCPF(documento));
   // Negativações do Nome Limpo vêm sem a lista de credores (sem Boa Vista): no
   // upgrade busca só a Boa Vista quando houver pendência, sem repetir o DetalhamentoNegativo.
@@ -2765,6 +2770,8 @@ async function executarConsultasParaAlvo(alvo, { precisaVinculos, precisaVeiculo
     }
   }
 
+  const diarios_oficiais = diariosPromise ? await diariosPromise : null;
+
   return {
     receita_federal: cadastral,
     processos,
@@ -2794,7 +2801,8 @@ async function executarConsultasParaAlvo(alvo, { precisaVinculos, precisaVeiculo
     ...(contratos_publicos ? { contratos_publicos } : {}),
     ...(veiculos_pj ? { veiculos_pj } : {}),
     ...(socios_enriquecidos ? { socios_enriquecidos } : {}),
-    ...(certidao_conjunta ? { certidao_conjunta } : {})
+    ...(certidao_conjunta ? { certidao_conjunta } : {}),
+    ...(diarios_oficiais ? { diarios_oficiais } : {})
   };
 }
 

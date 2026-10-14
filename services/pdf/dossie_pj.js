@@ -13,7 +13,7 @@ const {
   secaoCadastralPJ, secaoRegimeTributario,
   secaoProcessos, secaoListasNegrasDetalhadas,
   secaoProtestos, secaoVinculosSocietarios,
-  secaoChecklist, secaoParecerAnalista
+  secaoChecklist, secaoParecerAnalista, secaoDiariosOficiais
 } = require('./sections');
 const { secao, linha, boxEmIntegracao, COR, MARGEM, LARGURA, verificarPagina } = require('./helpers');
 
@@ -71,10 +71,11 @@ function render(doc, pedido, dados, score, checklist, produto) {
   y = secaoListasNegrasDetalhadas(doc, y, dados);
   y = secaoProtestos(doc, y, dados);
   y = secaoVinculosSocietarios(doc, y, dados);
+  y = secaoDiariosOficiais(doc, y, dados);
   y = secaoChecklist(doc, y, checklist);
   y = secaoParecerAnalista(doc, y, pedido);
 
-  chrome.blocoFinal(doc, y);
+  chrome.blocoFinal(doc, y, dados.diarios_oficiais ? ['Querido Diário (Open Knowledge Brasil) — diários oficiais municipais'] : null);
 }
 
 module.exports = { render, secaoSituacaoFiscalPJ };

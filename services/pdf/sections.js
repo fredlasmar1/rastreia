@@ -613,7 +613,41 @@ function secaoPerfilFinanceiroPF(doc, y, dados) {
   return y + 14;
 }
 
+// Diários oficiais municipais (Querido Diário): onde o CNPJ aparece publicado —
+// contratos/licitações, sanções, débitos com o município. Fonte grátis; a
+// cobertura ainda é parcial e o próprio bloco diz isso.
+function secaoDiariosOficiais(doc, y, dados) {
+  const d = dados.diarios_oficiais;
+  if (!d) return y;
+  y = secao(doc, 'DIÁRIOS OFICIAIS MUNICIPAIS', y);
+  if (d.disponivel === false) {
+    y = linha(doc, 'Situação', `Consulta indisponível no momento — ${d.erro || 'sem retorno'}`, y, 13);
+  } else if (!d.total) {
+    y = linha(doc, 'Resultado', `Nenhuma publicação com este CNPJ desde ${String(d.desde || '').split('-').reverse().join('/')}`, y, 13);
+  } else {
+    const pc = d.por_categoria || {};
+    const resumo = [pc.procon ? `${pc.procon} no Procon` : null, pc.contrato ? `${pc.contrato} contrato(s)/licitação(ões)` : null, pc.sancao ? `${pc.sancao} sanção(ões)` : null, pc.debito ? `${pc.debito} débito(s) com município` : null, pc.outros ? `${pc.outros} outra(s) menção(ões)` : null].filter(Boolean).join(' · ');
+    y = linha(doc, 'Publicações', `${d.total} desde ${String(d.desde || '').split('-').reverse().join('/')}${d.total > (d.publicacoes || []).length ? ` (as ${(d.publicacoes || []).length} mais recentes abaixo)` : ''}`, y, 13);
+    if (resumo) y = linha(doc, 'Entre as mais recentes', resumo, y, 13);
+    const COR_CAT = { sancao: COR.vermelho, debito: COR.laranja, procon: COR.laranja, contrato: COR.azul, outros: COR.cinza };
+    (d.publicacoes || []).slice(0, 8).forEach(p => {
+      doc.font('Helvetica').fontSize(7.5);
+      const trecho = p.trecho ? `“${p.trecho.length > 260 ? p.trecho.slice(0, 259) + '…' : p.trecho}”` : '';
+      const h = doc.heightOfString(trecho, { width: LARGURA - 12 }) + 16;
+      y = verificarPagina(doc, y, h + 4);
+      doc.fillColor(COR_CAT[p.categoria?.id] || COR.cinza).font('Helvetica-Bold').fontSize(8)
+        .text(`${String(p.data || '').split('-').reverse().join('/')}  ·  ${p.cidade || ''}/${p.uf || ''}  ·  ${p.categoria?.nome || ''}`, MARGEM + 6, y, { width: LARGURA - 12 });
+      if (trecho) doc.fillColor('#374151').font('Helvetica').fontSize(7.5).text(trecho, MARGEM + 6, y + 10, { width: LARGURA - 12 });
+      y += h;
+    });
+  }
+  y = verificarPagina(doc, y, 14);
+  doc.fillColor(COR.cinza).font('Helvetica').fontSize(7).text(d.cobertura || 'Cobertura parcial dos municípios.', MARGEM, y + 2, { width: LARGURA });
+  return y + 16;
+}
+
 module.exports = {
+  secaoDiariosOficiais,
   secaoCadastralPJ, secaoRegimeTributario, secaoCadastralPF,
   secaoProcessos, secaoListasNegras, secaoListasNegrasDetalhadas,
   secaoScoreCredito, secaoProtestos, secaoVinculosSocietarios,

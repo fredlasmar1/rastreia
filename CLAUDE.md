@@ -163,6 +163,7 @@ pago → aguardando_documentos (upload até 10 docs) → extraindo (Claude lê o
 | CNPJ.ws | Fallback dados CNPJ | — |
 | Datajud CNJ | Processos judiciais | `DATAJUD_API_KEY` (opcional) |
 | Portal da Transparência | Listas negras CEIS/CNEP | `TRANSPARENCIA_TOKEN` |
+| Querido Diário (OKBR) | Diários oficiais municipais por CNPJ — Dossiê PJ, PJ + Sócios, Due Diligence (`services/diarios_oficiais.js`). 510 municípios; em GO só Goiânia e Aparecida. Domínio novo `api.queridodiario.org.br` (o `.ok.org.br` tem falha de TLS) | `QUERIDO_DIARIO_URL` (opcional) |
 
 ### Pagas (essenciais para o produto completo)
 | API | Finalidade | Variável | URL cadastro |

@@ -17,7 +17,7 @@ const {
   secaoCadastralPJ, secaoRegimeTributario,
   secaoProcessos, secaoListasNegrasDetalhadas,
   secaoProtestos, secaoVinculosSocietarios,
-  secaoChecklist, secaoParecerAnalista
+  secaoChecklist, secaoParecerAnalista, secaoDiariosOficiais
 } = require('./sections');
 const {
   COR, MARGEM, LARGURA, verificarPagina,
@@ -344,6 +344,7 @@ function render(doc, pedido, dados, score, checklist, produto) {
   // ── Bloco 4: Patrimônio ─────────────────────────────────────────
   y = secaoPatrimonioEmpresa(doc, y, dados);
   y = secaoVinculosSocietarios(doc, y, dados);
+  y = secaoDiariosOficiais(doc, y, dados);
 
   // ── Bloco 5: Conclusão ──────────────────────────────────────────
   y = secaoRiscoSegmentado(doc, y, dados);
@@ -356,7 +357,8 @@ function render(doc, pedido, dados, score, checklist, produto) {
     'InfoSimples — CND Trabalhista (TST/CNDT)',
     'InfoSimples — Regularidade FGTS (Caixa)',
     'InfoSimples — Marcas e Patentes (INPI)',
-    'API Portal da Transparência (CGU) — Contratos públicos'
+    'API Portal da Transparência (CGU) — Contratos públicos',
+    ...(dados.diarios_oficiais ? ['Querido Diário (Open Knowledge Brasil) — diários oficiais municipais'] : [])
   ]);
 }
 
