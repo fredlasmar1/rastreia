@@ -227,6 +227,21 @@ function blocoProximoDegrau(doc, y, sug) {
 
 // opts.fontes: substitui a lista padrão (ex.: relatório veicular, que não usa
 // Receita/Direct Data/Escavador).
+// Cabeçalho dos documentos que vão ao cliente da Revisão: Recobro + Balladão, sem "Rastreia"
+function cabecalhoParceria(doc, pedido, titulo) {
+  doc.rect(0, 0, 595, 80).fill('#ffffff');
+  const rec = path.join(__dirname, '../../public/img/logo-recobro.png');
+  if (fs.existsSync(rec)) { try { doc.image(rec, MARGEM, 24, { height: 26 }); } catch (e) { console.error('[PDF] Erro logo:', e.message); } }
+  const bal = path.join(__dirname, '../../public/img/logo-balladao.png');
+  if (fs.existsSync(bal)) { try { doc.image(bal, 595 - MARGEM - 150, 16, { fit: [150, 44], align: 'right', valign: 'center' }); } catch (e) { console.error('[PDF] Erro logo:', e.message); } }
+  else doc.fillColor('#111827').font('Times-Bold').fontSize(16).text('BALLADÃO ADVOGADOS', 0, 26, { width: 595 - MARGEM, align: 'right' });
+  doc.rect(0, 78, 595, 2).fill(COR.azul);
+  doc.rect(0, 80, 595, 24).fill(COR.azul);
+  doc.fillColor('#ffffff').fontSize(11).font('Helvetica-Bold').text(String(titulo || '').toUpperCase(), 0, 85, { width: 595, align: 'center' });
+  doc.fillColor(COR.cinza).fontSize(6.5).font('Helvetica').text(`Emitido em: ${new Date().toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' })}  |  Protocolo: #${pedido.numero || String(pedido.id || '').substring(0, 8).toUpperCase()}`, 0, 108, { width: 595 - MARGEM, align: 'right' });
+  return 124;
+}
+
 function blocoFinal(doc, y, fontesExtras, opts = {}) {
   y = blocoProximoDegrau(doc, y, doc.__proximoDegrau);
   const fontes = Array.isArray(opts.fontes) ? [...opts.fontes] : [
@@ -271,13 +286,13 @@ function blocoFinal(doc, y, fontesExtras, opts = {}) {
   y += hRessalva + 6;
 
   doc.fillColor(COR.cinza).fontSize(5.5).font('Helvetica')
-    .text('Documento gerado pelo sistema Rastreia. Não substitui consulta jurídica especializada. Recobro Recuperação de Crédito | Anápolis - GO', MARGEM, y, { align: 'center', width: LARGURA });
+    .text(opts.rodape || 'Documento gerado pelo sistema Rastreia. Não substitui consulta jurídica especializada. Recobro Recuperação de Crédito | Anápolis - GO', MARGEM, y, { align: 'center', width: LARGURA });
 
   return y;
 }
 
 module.exports = {
-  cabecalho, resumoExecutivo, blocoAlvo,
+  cabecalho, cabecalhoParceria, resumoExecutivo, blocoAlvo,
   blocoAlertasDetalhados, blocoComposicaoScore, blocoHistoricoScores,
   blocoFinal
 };

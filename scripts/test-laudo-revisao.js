@@ -98,6 +98,9 @@ async function teste(nome, fn) { try { await fn(); ok++; console.log('  ✔', no
     for (const k of ['DIAGNÓSTICO', 'O banco deve alegar', 'O banco vai alegar', 'NÃO É ABUSO', 'PROVIDÊNCIAS IMEDIATAS', 'CAMINHOS POSSÍVEIS'])
       assert.ok(!txt.includes(k), 'vazou para o cliente: ' + k);
     assert.ok(!/NaN|undefined/.test(txt), 'NaN/undefined no PDF');
+    assert.ok(!/rastreia/i.test(txt), 'laudo do cliente não leva a marca Rastreia');
+    assert.ok(!/clique|peça ao cliente/i.test(txt), 'instrução interna no laudo');
+    assert.ok(txt.includes('Recobro Recuperação de Crédito e Balladão Advogados'), 'rodapé da parceria');
     console.log(`      ${out.filepath}`);
   });
   await teste('Mensagem ao cliente de contrato sem taxa não mostra NaN', () => {

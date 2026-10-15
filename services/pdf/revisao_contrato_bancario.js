@@ -107,7 +107,7 @@ function render(doc, pedido, dados, score, checklist, produto) {
   doc.__proximoDegrau = null;   // o laudo encaminha ao advogado, não a outro dossiê
 
   // ── 1. Capa ──
-  let y = chrome.cabecalho(doc, pedido, { nome: 'Laudo de Revisão de Contrato Bancário' });
+  let y = chrome.cabecalhoParceria(doc, pedido, 'Laudo de Revisão de Contrato Bancário');
   y = verificarPagina(doc, y, 90);
   doc.fillColor(COR.azul).font('Helvetica-Bold').fontSize(16).text('Laudo de Revisão de Contrato Bancário', MARGEM, y + 2, { width: LARGURA });
   y = doc.y + 6;
@@ -136,7 +136,10 @@ function render(doc, pedido, dados, score, checklist, produto) {
     const vv = calc.veredito;
     const motivo = vv.razao != null || vv.economia_pct != null
       ? `Taxa contratada ÷ média BACEN: ${vv.razao != null ? vv.razao.toFixed(2).replace('.', ',') + ' vez(es)' : 'sem média BACEN'}; economia estimada: ${vv.economia_pct != null ? vv.economia_pct.toFixed(1).replace('.', ',') + '% do valor financiado' : '—'}.`
-      : vv.motivo;
+      : nivel === 'incompleto'
+        // o motivo do cálculo é escrito para a equipe ("peça ao cliente", "clique em"): o laudo fala com o cliente
+        ? (/LIMITE/.test(vv.motivo || '') ? 'Este é um contrato de limite de crédito: cada empréstimo tirado dele tem taxa, prazo e parcela próprios. O cálculo depende do comprovante de cada empréstimo.' : 'O cálculo depende de documentos ou dados que ainda não foram enviados.')
+        : vv.motivo;
     if (motivo) y = paragrafo(doc, y, motivo, { tam: 8, cor: COR.cinza });
   }
 
@@ -316,8 +319,9 @@ function render(doc, pedido, dados, score, checklist, produto) {
       'Contrato e documentos enviados pelo contratante (leitura assistida por IA e conferida por operador)',
       'Banco Central do Brasil — SGS, taxas médias de juros por modalidade',
       'Banco Central do Brasil — Olinda, taxas de juros por instituição financeira',
-      'Cálculo determinístico Rastreia (Price/SAC) e checklist de teses revisado pelo Balladão Advogados'
-    ]
+      'Cálculo determinístico (Price/SAC) e checklist de teses revisado pelo Balladão Advogados'
+    ],
+    rodape: 'Recobro Recuperação de Crédito e Balladão Advogados | Anápolis - GO. Laudo técnico; a orientação jurídica é do advogado revisor.'
   });
 
   // ── 11. Anexo técnico ──

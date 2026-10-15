@@ -58,7 +58,10 @@ function gerarDossie(pedido, dadosDB) {
   return new Promise((resolve, reject) => {
     try {
       const doc = new PDFDocument({ margin: 50, size: 'A4' });
-      const filename = `rastreia_${pedido.tipo}_${pedido.id.substring(0, 8)}_${Date.now()}.pdf`;
+      // O laudo da revisão vai ao cliente com a marca Recobro + Balladão: sem "rastreia" no link
+      const filename = pedido.tipo === 'revisao_contrato_bancario'
+        ? `laudo_revisao_${pedido.numero || pedido.id.substring(0, 8)}_${Date.now()}.pdf`
+        : `rastreia_${pedido.tipo}_${pedido.id.substring(0, 8)}_${Date.now()}.pdf`;
       // BUG #2: usa RELATORIOS_DIR (Railway Volume) com fallback ./public/relatorios em dev.
       const dirRelatorios = storagePaths.RELATORIOS_DIR;
       storagePaths.garantirDiretorio(dirRelatorios);
