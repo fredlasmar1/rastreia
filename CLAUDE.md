@@ -159,6 +159,12 @@ pago → aguardando_documentos (upload até 10 docs) → extraindo (Claude lê o
 - CET real (TIR do recebido líquido × parcelas) × CET informado; pago a mais corrigido pelo IPCA (SGS 433),
   sem juros de mora (correm da citação).
 - Teses: toda Súmula/Tema citado precisa estar na lista conferida no STJ (teste 12 de test-revisao-bancaria.js).
+- **Diagnóstico estratégico** (`services/revisao_diagnostico.js`, coluna `revisao_analises.diagnostico`, 15/10/2026):
+  sem IA, a partir das cláusulas que a IA lê (`dados_extraidos.clausulas`). Responde: resumo honesto, esta semana +
+  linha do tempo de risco, achados com força e defesa do banco, o que NÃO é abuso, garantias, maior prejuízo, caminhos,
+  documentos e mensagem ao cliente. Regras validadas no caso GiroCaixa (skill `revisao-contrato-bancario` em
+  ~/.claude/skills). Contrato de limite: veredito `incompleto`, Súmula 530 quando a taxa de cada saque não está provada.
+  Citações do diagnóstico travadas no teste 14.
 - Opus 5.5 / Sonnet 5.5 recusam `tool_choice` forçado: `revisao_bancaria_ia.js` usa `auto` e confere o tool_use.
 
 ---
