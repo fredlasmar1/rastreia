@@ -360,5 +360,79 @@ teste('Com o demonstrativo da operação, o limite calcula normalmente', () => {
   assert.strictEqual(d.operacao.valor_financiado_total, 80000);
 });
 
+console.log('\n14) Diagnóstico estratégico (caso GiroCaixa, validado 15/10/2026)');
+const DG = require('../services/revisao_diagnostico');
+const clausulasGiro = () => ({
+  taxa_reduzida_condicionada: { presente: true, perde_por_atraso: true, perde_por_cancelar_debito: true, aviso_previo: false, clausula: 'Cl. 7ª §§3º-4º', trecho: 'o redutor será cancelado, sem necessidade de comunicação prévia' },
+  debito_em_limite_rotativo: { autorizado: true, revogavel: true, clausula: 'Cl. 7ª' },
+  garantia_dividas_futuras: { presente: true, clausula: 'Cl. 9ª §4º' },
+  limite_aumentado_pelo_banco: { presente: true, clausula: 'Cl. 2ª p.ú.' },
+  vencimento_antecipado: { presente: true, sem_notificacao: true, cruzado_outras_operacoes: true, por_fato_de_avalista: true, por_debito_fiscal: true, clausula: 'Cl. 11ª' },
+  fundo_garantidor: { tipo: 'FGM', percentual: 80, devedor_segue_cobrado: true, honra_atualiza_pela_selic: true, clausula: 'Cl. 18ª' },
+  liquidacao_antecipada: { presente: true, cita_res_3516: true, clausula: 'Cl. 8ª' },
+  canal_renegociacao: { presente: true, contato: '0800 726 8068, opção 8', clausula: 'Cl. 17ª' },
+  juros_mora_sobre_juros: { presente: true, clausula: 'Cl. 12ª III' },
+  honorarios_extrajudiciais_percentual: 10, avalistas_quantidade: 2, aval_com_anuencia_conjuge: true, renuncia_beneficio_ordem: true,
+  foro: 'justica_federal', vigencia_dias: 7200,
+  prazos_de_risco: [{ evento: 'Bloqueio do limite', dias: 5, clausula: 'Cl. 4ª p.ú.' }]
+});
+const diagGiro = (extra = {}) => {
+  const ex = exGiro(); ex.clausulas = clausulasGiro(); ex.instituicao = { nome: 'CAIXA ECONOMICA FEDERAL' }; ex.garantia = { tipo: 'aval' }; Object.assign(ex, extra);
+  const d = AN.montarDados(ex);
+  const calc = C.calcular(d, { taxaMediaBacenAM: 1.75 });
+  AN.limiteDeCredito(d, calc, { ok: true, valor_am: 1.75 });
+  return DG.montarDiagnostico(d, calc, { ok: true, valor_am: 1.75 }, T.aplicarTeses(d, calc));
+};
+teste('Limite sem taxa provada: achado ALTO pela Súmula 530, com a defesa do banco', () => {
+  const g = diagGiro();
+  assert.strictEqual(g.achados[0].id, 'taxa_em_faixa');
+  assert.strictEqual(g.achados[0].forca, 'alta');
+  assert.ok(/Súmula 530/.test(g.achados[0].base) && g.achados[0].defesa_banco);
+  assert.ok(/Súmula 530/.test(g.resumo.join(' ')));
+});
+teste('O que NÃO é abuso: piso 1,29× a média, capitalização expressa, CDC em capital de giro PJ', () => {
+  const g = diagGiro();
+  const t = g.nao_e_abuso.map(x => x.titulo).join(' | ');
+  assert.ok(/piso/.test(t) && /capitalizados/.test(t) && /Consumidor/.test(t), t);
+  assert.strictEqual(g.estrutura.cdc.aplica, false);
+});
+teste('Esta semana: revogar SÓ o débito no rotativo (sem perder o redutor) e pedir documentos com protocolo', () => {
+  const g = diagGiro();
+  assert.ok(/SÓ o débito/.test(g.esta_semana[0].acao) && /desconto na taxa/.test(g.esta_semana[0].porque));
+  assert.ok(g.esta_semana.some(x => /protocolo/.test(x.acao)));
+  assert.ok(g.esta_semana.some(x => /0800 726 8068/.test(x.acao)));
+});
+teste('Garantias: avalistas, execução direta, Súmula 581, dívidas futuras por ~20 anos', () => {
+  const g = diagGiro().garantias.join(' ');
+  assert.ok(/2 avalista/.test(g) && /cônjuge/.test(g) && /Súmula 581/.test(g) && /cerca de 20 anos/.test(g) && /benefício de ordem/.test(g), g);
+});
+teste('Alavancas: quitação Res. 3.516, FGM pela Selic; linha do tempo começa no bloqueio de 5 dias', () => {
+  const g = diagGiro();
+  const neg = g.caminhos[0].como.join(' ');
+  assert.ok(/3\.516/.test(neg) && /FGM \(80%\)/.test(neg) && /Selic/.test(neg), neg);
+  assert.strictEqual(g.linha_do_tempo[0].dias, 5);
+  assert.strictEqual(g.maior_prejuizo.length, 3);
+});
+teste('Com comprovante de saque a 4% a.m. (2,29×): juros viram achado ALTO e a revisional tem base', () => {
+  const g = diagGiro({ operacoes_do_limite: [{ data: '2025-07-01', valor_liberado: 50000, taxa_mensal: 4, prazo_meses: 36 }] });
+  assert.ok(!g.achados.some(a => a.id === 'taxa_em_faixa'));
+  const j = g.achados.find(a => a.id === 'juros_acima_media');
+  assert.ok(j && j.forca === 'alta', JSON.stringify(j));
+  assert.ok(/Há base/.test(g.caminhos[2].quando));
+});
+teste('Saque a 2,3% a.m. (1,31×): o tamanho da taxa entra em "não é abuso"', () => {
+  const g = diagGiro({ operacoes_do_limite: [{ data: '2025-07-01', valor_liberado: 50000, taxa_mensal: 2.3 }] });
+  assert.ok(g.nao_e_abuso.some(x => /1,31×/.test(x.titulo)));
+  assert.ok(/não sustenta/.test(g.resumo.join(' ')));
+});
+teste('Toda Súmula/Tema citado no diagnóstico está na lista conferida', () => {
+  const OK = { sumulas: [297, 381, 472, 530, 539, 541, 581], temas: [648, 1085] };
+  const txt = require('fs').readFileSync(require('path').join(__dirname, '../services/revisao_diagnostico.js'), 'utf8');
+  const sum = [...txt.matchAll(/Súmulas? (\d+)/g)].map(m => Number(m[1]));
+  const tem = [...txt.matchAll(/Temas? (\d+)/g)].map(m => Number(m[1]));
+  const fora = [...sum.filter(n => !OK.sumulas.includes(n)).map(n => 'Súmula ' + n), ...tem.filter(n => !OK.temas.includes(n)).map(n => 'Tema ' + n)];
+  assert.deepStrictEqual(fora, [], 'citação não conferida: ' + fora.join(', '));
+});
+
 console.log(`\n${ok} passaram, ${falhas} falharam.`);
 process.exit(falhas ? 1 : 0);

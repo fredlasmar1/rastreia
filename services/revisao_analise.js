@@ -90,6 +90,7 @@ function montarDados(ex = {}) {
     iof: ex.iof || {},
     encargos_mora: ex.encargos_mora || {},
     operacoes_do_limite: Array.isArray(ex.operacoes_do_limite) ? ex.operacoes_do_limite : [],
+    clausulas: ex.clausulas || {},
     campos_editados: []
   };
 }
@@ -139,7 +140,9 @@ async function calcularAnalise(d, taxaAnterior) {
   if (d.parcelas_pagas_estimadas) calc.alertas.push('Parcelas pagas ESTIMADAS pela data do 1º vencimento: confirme com o cliente (extrato ou carnê).');
   limiteDeCredito(d, calc, taxa);
   const ts = teses.aplicarTeses(d, calc);
+  const diagnostico = require('./revisao_diagnostico').montarDiagnostico(d, calc, taxa, ts);
   return {
+    diagnostico,
     taxa_media_bacen: taxa && taxa.ok ? taxa : { ok: false, erro: taxa?.erro || 'indisponível' },
     calculo: calc, teses: ts, veredito: calc.veredito.nivel,
     economia_estimada: Math.round((calc.economia_estimada || 0) * 100) / 100

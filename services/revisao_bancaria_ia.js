@@ -61,9 +61,31 @@ const TOOL_EXTRACAO = {
           taxa_maxima_mensal: { type: ['number', 'null'], description: 'O teto da faixa, em % a.m.' }
         }
       },
+      clausulas: {
+        type: 'object', description: 'Cláusulas que pesam na estratégia (negociação, risco, garantias). Para cada uma: presente (true/false), número da cláusula (ex.: "Cl. 7ª §3º") e o trecho exato curto. null se o documento não trata do assunto.',
+        properties: {
+          taxa_reduzida_condicionada: { type: ['object', 'null'], description: 'Taxa com desconto/redutor que é perdida (volta à "taxa balcão") por atraso ou cancelamento do débito automático.', properties: { presente: b, perde_por_atraso: b, perde_por_cancelar_debito: b, aviso_previo: { type: ['boolean', 'null'], description: 'true se o contrato exige avisar o cliente antes de retirar o desconto.' }, clausula: s, trecho: s } },
+          debito_em_limite_rotativo: { type: ['object', 'null'], description: 'Autorização para debitar parcelas no limite rotativo / cheque especial quando falta saldo.', properties: { autorizado: b, revogavel: b, clausula: s, trecho: s } },
+          garantia_dividas_futuras: { type: ['object', 'null'], description: 'Garantia/aval que cobre operações futuras ou derivadas.', properties: { presente: b, clausula: s, trecho: s } },
+          limite_aumentado_pelo_banco: { type: ['object', 'null'], description: 'O banco pode aumentar/renovar o limite por decisão ou aviso próprio.', properties: { presente: b, clausula: s, trecho: s } },
+          vencimento_antecipado: { type: ['object', 'null'], properties: { presente: b, sem_notificacao: b, cruzado_outras_operacoes: b, por_fato_de_avalista: { type: ['boolean', 'null'], description: 'Ex.: falta de saldo na conta do avalista, insolvência do avalista.' }, por_debito_fiscal: b, clausula: s, trecho: s } },
+          fundo_garantidor: { type: ['object', 'null'], properties: { tipo: { type: ['string', 'null'], enum: ['FGM', 'FGO', 'FAMPE', 'FGI', 'outro', null] }, percentual: n, devedor_segue_cobrado: b, honra_atualiza_pela_selic: b, clausula: s, trecho: s } },
+          liquidacao_antecipada: { type: ['object', 'null'], description: 'Quitação/amortização antecipada com desconto (Res. CMN 3.516/2007).', properties: { presente: b, cita_res_3516: b, clausula: s, trecho: s } },
+          canal_renegociacao: { type: ['object', 'null'], properties: { presente: b, contato: s, clausula: s, trecho: s } },
+          compensacao_ampla: { type: ['object', 'null'], description: 'Banco pode compensar/debitar a dívida em qualquer conta, aplicação ou crédito do devedor.', properties: { presente: b, clausula: s, trecho: s } },
+          juros_mora_sobre_juros: { type: ['object', 'null'], description: 'Juros de mora incidindo sobre juros remuneratórios/compensatórios no atraso.', properties: { presente: b, clausula: s, trecho: s } },
+          honorarios_extrajudiciais_percentual: n,
+          avalistas_quantidade: n,
+          aval_com_anuencia_conjuge: b,
+          renuncia_beneficio_ordem: b,
+          foro: { type: ['string', 'null'], enum: ['justica_federal', 'justica_estadual', null] },
+          vigencia_dias: n,
+          prazos_de_risco: { type: 'array', description: 'Prazos que disparam consequências: ex. "bloqueio do limite" com 5 dias de atraso.', items: { type: 'object', properties: { evento: s, dias: n, clausula: s } } }
+        }
+      },
       operacoes_do_limite: {
         type: 'array', description: 'Só para limite_de_credito: cada empréstimo/saque que aparece nos demonstrativos, extratos ou comprovantes enviados. Vazio se só veio o contrato do limite.',
-        items: { type: 'object', properties: { data: s, numero: s, valor_liberado: n, taxa_mensal: n, prazo_meses: n, valor_parcela: n, documento: s } }
+        items: { type: 'object', properties: { data: s, numero: s, valor_liberado: n, taxa_mensal: n, cet_mensal: n, prazo_meses: n, valor_parcela: n, saldo_devedor: n, fgm: b, documento: s } }
       },
       garantia: { type: 'object', properties: { tipo: { type: ['string', 'null'], enum: ['alienacao_fiduciaria', 'consignacao', 'aval', 'nenhuma', 'outro', null] }, bem_descricao: s } },
       tarifas: { type: 'array', items: { type: 'object', properties: { nome: s, valor: n, financiada: b, trecho: s } } },
@@ -90,7 +112,7 @@ const TOOL_EXTRACAO = {
   }
 };
 
-const SYSTEM_EXTRACAO = 'Você é um analista de contratos bancários brasileiros. Sua tarefa é EXTRAIR dados do contrato exatamente como estão escritos, sem calcular, sem opinar e sem completar lacunas. Se um campo não estiver no documento, use null e registre em alertas_leitura. Transcreva em "trecho" a frase exata do contrato que sustenta cada tarifa, seguro, cláusula de capitalização e encargo de mora. Valores em reais como número (1234.56). Taxas em percentual como número (2.19 para 2,19%). Datas no formato AAAA-MM-DD. Identifique a página de onde tirou cada dado. Se houver extrato, carnê, boletos pagos ou demonstrativo, preencha pagamentos com o que os documentos comprovam (quantas parcelas pagas, a última, em atraso); sem esses documentos, deixe pagamentos nulo — nunca estime pela data. Se o contrato só abre um LIMITE de crédito (estrutura = limite_de_credito), NÃO coloque o limite em valor_financiado_total; registre-o em limite_credito, a faixa de juros em taxa_minima_mensal/taxa_maxima_mensal, e liste em operacoes_do_limite cada empréstimo que os demonstrativos/extratos mostrarem; se houver um demonstrativo de operação, preencha os campos de operacao (valor, prazo, parcela, taxa, datas) com a operação MAIS RECENTE do demonstrativo. Em classificacao, diga o tipo da operação (veículo, empréstimo pessoal, consignado, capital de giro etc.) e se o contratante é pessoa física (PF) ou jurídica (PJ). Responda sempre em português do Brasil usando a ferramenta.';
+const SYSTEM_EXTRACAO = 'Você é um analista de contratos bancários brasileiros. Sua tarefa é EXTRAIR dados do contrato exatamente como estão escritos, sem calcular, sem opinar e sem completar lacunas. Se um campo não estiver no documento, use null e registre em alertas_leitura. Transcreva em "trecho" a frase exata do contrato que sustenta cada tarifa, seguro, cláusula de capitalização e encargo de mora. Valores em reais como número (1234.56). Taxas em percentual como número (2.19 para 2,19%). Datas no formato AAAA-MM-DD. Identifique a página de onde tirou cada dado. Se houver extrato, carnê, boletos pagos ou demonstrativo, preencha pagamentos com o que os documentos comprovam (quantas parcelas pagas, a última, em atraso); sem esses documentos, deixe pagamentos nulo — nunca estime pela data. Se o contrato só abre um LIMITE de crédito (estrutura = limite_de_credito), NÃO coloque o limite em valor_financiado_total; registre-o em limite_credito, a faixa de juros em taxa_minima_mensal/taxa_maxima_mensal, e liste em operacoes_do_limite cada empréstimo que os demonstrativos/extratos mostrarem; se houver um demonstrativo de operação, preencha os campos de operacao (valor, prazo, parcela, taxa, datas) com a operação MAIS RECENTE do demonstrativo. Preencha clausulas com as cláusulas que pesam na estratégia (redutor de taxa perdido, débito no cheque especial, garantia de dívidas futuras, vencimento antecipado, fundo garantidor, quitação antecipada, canal de renegociação, compensação, juros de mora sobre juros, prazos que disparam bloqueio/vencimento), sempre com o número da cláusula e o trecho. Em classificacao, diga o tipo da operação (veículo, empréstimo pessoal, consignado, capital de giro etc.) e se o contratante é pessoa física (PF) ou jurídica (PJ). Responda sempre em português do Brasil usando a ferramenta.';
 
 function bloco(doc) {
   const data = fs.readFileSync(doc.filepath).toString('base64');

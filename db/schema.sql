@@ -496,6 +496,8 @@ CREATE TABLE IF NOT EXISTS revisao_analises (
   atualizado_em TIMESTAMPTZ DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS idx_revisao_analises_criado ON revisao_analises(criado_em DESC);
+-- Diagnóstico estratégico (regras do caso GiroCaixa, 15/10/2026): services/revisao_diagnostico.js
+ALTER TABLE revisao_analises ADD COLUMN IF NOT EXISTS diagnostico JSONB;
 
 -- ==========================================================================
 -- Cobranças (parcelas, lote, mensalidade) e assinatura no cartão — ver db/migrations/005_cobrancas.sql

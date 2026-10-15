@@ -64,6 +64,33 @@
     .an-banner .eco .det { font-size: 12px; opacity: .85; }
     .an-arquivos { display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; padding: 10px 26px; border-bottom: 1px solid var(--rc-linha); font-size: 12px; color: var(--rc-suave); background: #f8fafc; }
     .an-corpo { padding: 22px 26px; }
+    /* Diagnóstico estratégico */
+    .dg { padding: 20px 26px 4px; }
+    .dg h3 { font-size: 12px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; color: var(--rc-suave); margin: 18px 0 10px; }
+    .dg-resumo { background: #0f172a; color: #e2e8f0; border-radius: 14px; padding: 16px 18px; font-size: 14px; line-height: 1.55; }
+    .dg-resumo p { margin: 0 0 6px; } .dg-resumo p:first-child { color: #fff; font-weight: 700; }
+    .dg-semana { border: 2px solid #f59e0b; background: #fffbeb; border-radius: 14px; padding: 12px 16px; }
+    .dg-semana li { margin-bottom: 8px; font-size: 13px; } .dg-semana li span { display: block; color: #78350f; font-size: 12px; }
+    .dg-tempo { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
+    .dg-tempo div { background: #fff; border: 1px solid #fcd34d; border-radius: 10px; padding: 6px 10px; font-size: 12px; }
+    .dg-tempo b { color: #b45309; }
+    .dg-achado { border: 1px solid var(--rc-linha); border-left: 5px solid var(--c); border-radius: 10px; padding: 10px 14px; margin-bottom: 8px; font-size: 13px; background: #fff; }
+    .dg-achado .tt { font-weight: 700; color: var(--rc-tinta); margin-bottom: 3px; }
+    .dg-achado .tr { font-style: italic; color: var(--rc-suave); font-size: 12px; margin: 3px 0; }
+    .dg-achado .ln { margin-top: 3px; } .dg-achado .ln b { color: var(--rc-tinta); }
+    .dg-forca { display: inline-block; font-size: 10px; font-weight: 800; padding: 1px 7px; border-radius: 99px; margin-right: 6px; vertical-align: 1px; }
+    .dg-duas { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+    .dg-lista { margin: 0; padding-left: 18px; font-size: 13px; } .dg-lista li { margin-bottom: 6px; }
+    .dg-msg { white-space: pre-wrap; font-size: 13px; background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 12px; padding: 12px 14px; }
+    .dg-nota { font-size: 11px; color: var(--rc-suave); margin: 10px 0 0; }
+    @media (max-width: 900px) { .dg-duas { grid-template-columns: 1fr; } .dg { padding: 16px; } }
+    @media print {
+      body:has(> .nav) { padding-left: 0 !important; background: #fff; }
+      .nav, .rc-topo, .rc-kpis, #alerta, .rc-abas, .an-arquivos button, .an-acoes, .no-print, #an-detalhes { display: none !important; }
+      .rc-painel { box-shadow: none !important; border: 0 !important; }
+      .dg-achado, .dg-semana, .dg-resumo, .an-card { break-inside: avoid; }
+      .dg-resumo { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    }
     .an-metricas { display: grid; grid-template-columns: 1.4fr 1fr; gap: 14px; margin-bottom: 18px; }
     .an-card { border: 1px solid var(--rc-linha); border-radius: 14px; padding: 16px; background: #fff; }
     .an-card h3 { font-size: 12px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; color: var(--rc-suave); margin: 0 0 12px; }
@@ -761,6 +788,38 @@
   const getP = (o, p) => p.split('.').reduce((x, k) => (x == null ? x : x[k]), o);
   const setP = (o, p, v) => { const ks = p.split('.'); let x = o; ks.slice(0, -1).forEach(k => { if (x[k] == null || typeof x[k] !== 'object') x[k] = {}; x = x[k]; }); x[ks[ks.length - 1]] = v; };
 
+  // Diagnóstico estratégico: o que fazer, abusos (e o que não é), garantias, caminhos
+  const FORCA = { alta: ['ALTO', '#fee2e2', '#991b1b', '#dc2626'], media: ['MÉDIO', '#fef3c7', '#92400e', '#d97706'], baixa: ['BAIXO', '#e0f2fe', '#075985', '#0284c7'] };
+  function dgRender(g) {
+    if (!g) return '';
+    const li = (arr) => arr.length ? `<ul class="dg-lista">${arr.map(x => `<li>${esc(x)}</li>`).join('')}</ul>` : '<div style="font-size:13px;color:#64748b">—</div>';
+    let h = `<div class="dg"><div class="dg-resumo">${g.resumo.map(x => `<p>${esc(x)}</p>`).join('')}</div>`;
+    if (g.esta_semana.length || g.linha_do_tempo.length) h += `<h3>⚡ Esta semana</h3><div class="dg-semana">
+      ${g.esta_semana.length ? `<ol style="margin:0;padding-left:18px">${g.esta_semana.map(x => `<li><b>${esc(x.acao)}</b><span>${esc(x.porque)}</span></li>`).join('')}</ol>` : ''}
+      ${g.linha_do_tempo.length ? `<div style="font-size:12px;font-weight:700;color:#92400e;margin-top:6px">Linha do tempo de risco</div><div class="dg-tempo">${g.linha_do_tempo.map(t => `<div>${t.dias != null ? `<b>${t.dias} dia(s)</b> · ` : ''}${esc(t.evento)}${t.clausula ? ` <span style="color:#64748b">(${esc(t.clausula)})</span>` : ''}</div>`).join('')}</div>` : ''}
+    </div>`;
+    if (g.operacoes && g.operacoes.length) h += `<h3>Operações (saques)</h3><table style="width:100%;font-size:12px;border-collapse:collapse"><tr style="text-align:left;color:#64748b"><th>Data</th><th>Valor</th><th>Taxa a.m.</th><th>× média</th><th>CET a.m.</th><th>Prazo</th><th>Saldo</th><th>FGM</th></tr>${g.operacoes.map(o => `<tr style="border-top:1px solid #e2e8f0"><td>${esc(o.data ? o.data.split('-').reverse().join('/') : '—')}</td><td>${brl(o.valor_liberado)}</td><td>${o.taxa_mensal != null ? String(o.taxa_mensal).replace('.', ',') + '%' : '—'}</td><td style="font-weight:700;color:${o.razao >= 1.5 ? '#dc2626' : '#0f172a'}">${o.razao != null ? o.razao.toFixed(2).replace('.', ',') + '×' : '—'}</td><td>${o.cet_mensal != null ? String(o.cet_mensal).replace('.', ',') + '%' : '—'}</td><td>${esc(o.prazo_meses ?? '—')}</td><td>${brl(o.saldo_devedor)}</td><td>${o.fgm === true ? 'sim' : o.fgm === false ? 'não' : '—'}</td></tr>`).join('')}</table>`;
+    h += `<h3>O que pode ser questionado</h3>` + (g.achados.length ? g.achados.map(x => { const f = FORCA[x.forca] || FORCA.baixa; return `<div class="dg-achado" style="--c:${f[3]}">
+      <div class="tt"><span class="dg-forca" style="background:${f[1]};color:${f[2]}">${f[0]}</span>${esc(x.titulo)}${x.clausula ? ` <span style="font-weight:400;color:#64748b">· ${esc(x.clausula)}</span>` : ''}</div>
+      ${x.trecho ? `<div class="tr">“${esc(x.trecho)}”</div>` : ''}
+      <div>${esc(x.porque)}</div>
+      ${x.base ? `<div class="ln"><b>Base:</b> ${esc(x.base)}</div>` : ''}
+      ${x.defesa_banco ? `<div class="ln"><b>O banco vai alegar:</b> ${esc(x.defesa_banco)}</div>` : ''}
+    </div>`; }).join('') : '<div style="font-size:13px;color:#64748b">Nenhum ponto forte encontrado.</div>');
+    h += `<div class="dg-duas">
+      <div><h3>✅ O que NÃO é abuso</h3>${g.nao_e_abuso.length ? g.nao_e_abuso.map(x => `<div class="dg-achado" style="--c:#16a34a"><div class="tt">${esc(x.titulo)}</div><div>${esc(x.porque)}</div></div>`).join('') : '<div style="font-size:13px;color:#64748b">—</div>'}</div>
+      <div><h3>💸 Maior prejuízo para o cliente</h3>${li(g.maior_prejuizo)}<h3>🛡 Garantias e exposição</h3>${li(g.garantias)}</div>
+    </div>`;
+    h += `<h3>Caminhos</h3><div class="dg-duas" style="grid-template-columns:repeat(auto-fit,minmax(240px,1fr))">${g.caminhos.map(c => `<div class="an-card"><div style="font-weight:800;color:#0f172a;margin-bottom:4px">${esc(c.nome)}</div><div style="font-size:12px;color:#475569;margin-bottom:6px">${esc(c.quando)}</div>${li(c.como || [])}<div style="font-size:12px;color:#64748b;margin-top:6px">${esc(c.custo_risco)}</div></div>`).join('')}</div>`;
+    h += `<div class="dg-duas"><div><h3>📎 Documentos a pedir</h3><ul class="dg-lista">${g.documentos.map(x => `<li><b>${esc(x.doc)}</b> — ${esc(x.onde)}. <span style="color:#64748b">Destrava: ${esc(x.destrava)}</span></li>`).join('')}</ul></div>
+      <div><h3>💬 Mensagem para o cliente <button class="btn btn-sm btn-outline no-print" style="float:right;margin-top:-4px" onclick="dgCopiar(this)">Copiar</button></h3><div class="dg-msg" id="dg-msg">${esc(g.mensagem_cliente)}</div></div></div>`;
+    h += `<p class="dg-nota">${esc(g.nota)} · ${esc(g.estrutura.cdc.motivo)}</p></div>`;
+    return h;
+  }
+  async function dgCopiar(btn) {
+    try { await navigator.clipboard.writeText(document.getElementById('dg-msg').textContent); btn.textContent = 'Copiado ✓'; } catch (_) { btn.textContent = 'Selecione e copie'; }
+  }
+
   function anRender() {
     const a = ANALISE, box = document.getElementById('an-resultado');
     document.getElementById('an-upload').hidden = true; box.hidden = false;
@@ -783,7 +842,7 @@
     let h = `<div class="an-banner" style="background:${v[1]};color:${v[2]}">
       <div><div class="rot">Veredito preliminar</div><div class="ver">${v[0]}</div><div class="mot">${esc(c.veredito?.motivo || v[4])}${c.veredito?.economia_pct != null ? ` Economia de ${c.veredito.economia_pct.toFixed(1).replace('.', ',')}% do valor financiado.` : ''}</div></div>
       <div class="eco"><div class="rot">Economia estimada</div><div class="val">${brl(a.economia_estimada)}</div><div class="det">${cp ? `${esc(cp.nome)}` : 'sem cenário de revisão'}</div></div>
-    </div>` + arquivos;
+    </div>` + arquivos + dgRender(a.diagnostico) + (a.diagnostico ? `<div class="no-print" style="padding:6px 26px 0;display:flex;gap:8px;flex-wrap:wrap"><button class="btn btn-primary btn-sm" onclick="window.print()">🖨 Salvar diagnóstico em PDF</button><button class="btn btn-outline btn-sm" onclick="const e=document.getElementById('an-detalhes');e.hidden=!e.hidden">Detalhes técnicos (cálculo e dados lidos)</button></div><div id="an-detalhes" hidden>` : '<div>');
 
     // 2) Taxas (barras) + dinheiro
     // Sem cálculo (faltam dados) a média vem da série; contrato de limite mostra o piso da faixa
@@ -841,6 +900,8 @@
         <button class="btn btn-outline" style="margin-top:12px;width:100%" onclick="anRecalcular(this)">↻ Recalcular com as correções</button>
       </div>
     </div></div>`;
+
+    h += '</div>';   // fecha #an-detalhes
 
     // 5) Ações
     h += `<div class="an-acoes">
