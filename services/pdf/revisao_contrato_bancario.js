@@ -67,6 +67,75 @@ function item(doc, y, txt, cor = '#1f2937', tam = 9) {
   return y + h + 3;
 }
 
+// Cartão de achado do diagnóstico: faixa colorida pela força + textos
+const FORCA = { alta: ['ALTO', '#dc2626'], media: ['MÉDIO', '#d97706'], baixa: ['BAIXO', '#0284c7'], ok: ['', '#16a34a'], acao: ['', '#d97706'], caminho: ['', '#1e3a8a'] };
+function cartao(doc, y, forca, titulo, linhas) {
+  const [rot, cor] = FORCA[forca] || FORCA.baixa;
+  const w = LARGURA - 14;
+  const blocos = linhas.filter(l => l && l.txt);
+  doc.font('Helvetica-Bold').fontSize(9.5);
+  let h = doc.heightOfString((rot ? rot + '  ' : '') + titulo, { width: w }) + 6;
+  blocos.forEach(l => { doc.font(l.fonte || 'Helvetica').fontSize(l.tam || 8.5); h += doc.heightOfString(l.txt, { width: w }) + 2; });
+  y = verificarPagina(doc, y, Math.min(h, 200) + 6);
+  const y0 = y;
+  doc.fillColor(cor).font('Helvetica-Bold').fontSize(9.5).text(rot ? `${rot}  ` : '', MARGEM + 10, y, { continued: !!rot, width: w });
+  doc.fillColor('#111827').text(titulo, { width: w });
+  y = doc.y + 2;
+  blocos.forEach(l => { doc.font(l.fonte || 'Helvetica').fontSize(l.tam || 8.5).fillColor(l.cor || '#1f2937').text(l.txt, MARGEM + 10, y, { width: w }); y = doc.y + 2; });
+  // faixa lateral só na parte que ficou nesta página
+  if (y > y0) doc.rect(MARGEM, y0 - 2, 3, y - y0 + 2).fill(cor);
+  return y + 5;
+}
+
+// Diagnóstico estratégico no laudo (services/revisao_diagnostico.js)
+function secoesDiagnostico(doc, y, g) {
+  y = secao(doc, 'O QUE PODE SER QUESTIONADO', y + 4);
+  if (!g.achados.length) y = paragrafo(doc, y, 'Nenhum ponto forte com os documentos analisados.', { tam: 9 });
+  g.achados.forEach(a => {
+    y = cartao(doc, y, a.forca, `${a.titulo}${a.clausula ? ` (${a.clausula})` : ''}`, [
+      { txt: a.trecho ? `“${a.trecho}”` : null, fonte: 'Helvetica-Oblique', tam: 8, cor: '#4b5563' },
+      { txt: a.porque },
+      { txt: a.base ? `Fundamento: ${a.base}` : null, tam: 8, cor: '#374151' },
+      { txt: a.defesa_banco ? `O banco deve alegar: ${a.defesa_banco}` : null, tam: 8, cor: '#6b7280' }
+    ]);
+  });
+  if ((g.nao_e_abuso || []).length) {
+    y = secao(doc, 'O QUE NÃO É ABUSO', y + 4);
+    g.nao_e_abuso.forEach(x => { y = cartao(doc, y, 'ok', x.titulo, [{ txt: x.porque }]); });
+  }
+  if ((g.garantias || []).length || (g.maior_prejuizo || []).length) {
+    y = secao(doc, 'GARANTIAS, EXPOSIÇÃO E MAIOR PREJUÍZO', y + 4);
+    (g.garantias || []).forEach(t => { y = item(doc, y, t, '#1f2937', 8.5); });
+    if ((g.maior_prejuizo || []).length) {
+      y = verificarPagina(doc, y + 2, 24);
+      doc.fillColor(COR.laranja).font('Helvetica-Bold').fontSize(9).text('O que mais encarece a dívida', MARGEM, y); y = doc.y + 3;
+      g.maior_prejuizo.forEach(t => { y = item(doc, y, t, '#1f2937', 8.5); });
+    }
+  }
+  return y;
+}
+function secoesCaminhos(doc, y, g) {
+  if ((g.esta_semana || []).length || (g.linha_do_tempo || []).length) {
+    y = secao(doc, 'PROVIDÊNCIAS IMEDIATAS', y + 4);
+    (g.esta_semana || []).forEach((x, i) => { y = cartao(doc, y, 'acao', `${i + 1}. ${x.acao}`, [{ txt: x.porque, tam: 8 }]); });
+    if ((g.linha_do_tempo || []).length) {
+      y = verificarPagina(doc, y + 2, 24);
+      doc.fillColor(COR.laranja).font('Helvetica-Bold').fontSize(9).text('Prazos do contrato que disparam consequências', MARGEM, y); y = doc.y + 3;
+      g.linha_do_tempo.forEach(t => { y = item(doc, y, `${t.dias != null ? t.dias + ' dia(s): ' : ''}${t.evento}${t.clausula ? ` (${t.clausula})` : ''}`, '#1f2937', 8.5); });
+    }
+  }
+  y = secao(doc, 'CAMINHOS POSSÍVEIS', y + 4);
+  (g.caminhos || []).forEach(c => {
+    y = cartao(doc, y, 'caminho', c.nome, [{ txt: c.quando, cor: '#374151' }, ...(c.como || []).map(t => ({ txt: '•  ' + t, tam: 8 })), { txt: c.custo_risco, tam: 8, cor: '#6b7280' }]);
+  });
+  if ((g.documentos || []).length) {
+    y = verificarPagina(doc, y + 2, 24);
+    doc.fillColor(COR.azul).font('Helvetica-Bold').fontSize(9).text('Documentos que completam a análise', MARGEM, y); y = doc.y + 3;
+    g.documentos.forEach(x => { y = item(doc, y, `${x.doc} — ${x.onde}. Destrava: ${x.destrava}.`, '#1f2937', 8.5); });
+  }
+  return y;
+}
+
 // Tabela simples com cabeçalho repetido a cada página.
 // cols: [{ t: 'Título', w: 80, a: 'right' }]; linhas: array de arrays de texto
 function tabela(doc, y, cols, linhas, { tam = 7.5, alturaLinha = 11, destaque = () => false } = {}) {
@@ -100,6 +169,7 @@ function render(doc, pedido, dados, score, checklist, produto) {
   const calc = reg.calculo || {};
   const tx = reg.taxa_media_bacen || {};
   const teses = (reg.teses && reg.teses.teses) || [];
+  const diag = reg.diagnostico && Array.isArray(reg.diagnostico.achados) ? reg.diagnostico : null;
   const revisor = rv.revisor || {};
   const editados = new Set(d.campos_editados || []);
   let pia = {};
@@ -138,6 +208,11 @@ function render(doc, pedido, dados, score, checklist, produto) {
       ? `Taxa contratada ÷ média BACEN: ${vv.razao != null ? vv.razao.toFixed(2).replace('.', ',') + ' vez(es)' : 'sem média BACEN'}; economia estimada: ${vv.economia_pct != null ? vv.economia_pct.toFixed(1).replace('.', ',') + '% do valor financiado' : '—'}.`
       : vv.motivo;
     if (motivo) y = paragrafo(doc, y, motivo, { tam: 8, cor: COR.cinza });
+  }
+
+  if (diag) {
+    y = secao(doc, 'DIAGNÓSTICO EM 5 LINHAS', y + 4);
+    diag.resumo.forEach((t, i) => { y = paragrafo(doc, y, t, { tam: 9, fonte: i ? 'Helvetica' : 'Helvetica-Bold' }); });
   }
 
   // ── 3. Resumo para o cliente ──
@@ -255,9 +330,10 @@ function render(doc, pedido, dados, score, checklist, produto) {
   // ── 7. Pontos encontrados ──
   const aplic = teses.filter(x => x.resultado === 'aplicavel');
   const verif = teses.filter(x => x.resultado === 'verificar');
-  y = secao(doc, 'PONTOS ENCONTRADOS', y + 4);
-  if (!aplic.length) y = paragrafo(doc, y, 'Nenhuma tese foi considerada aplicável com os dados do contrato.', { tam: 9 });
-  aplic.forEach(x => {
+  if (diag) y = secoesDiagnostico(doc, y, diag);
+  else y = secao(doc, 'PONTOS ENCONTRADOS', y + 4);
+  if (!diag && !aplic.length) y = paragrafo(doc, y, 'Nenhuma tese foi considerada aplicável com os dados do contrato.', { tam: 9 });
+  (diag ? [] : aplic).forEach(x => {
     y = verificarPagina(doc, y, 40);
     doc.fillColor(COR.verde).font('Helvetica-Bold').fontSize(9.5).text(`${x.nome}`, MARGEM, y, { width: LARGURA }); y = doc.y + 2;
     y = paragrafo(doc, y, x.explicacao_cliente ? `${x.explicacao_cliente} ${x.detalhe}` : x.detalhe, { tam: 8.5, recuo: 8 });
@@ -282,8 +358,7 @@ function render(doc, pedido, dados, score, checklist, produto) {
   y += 44;
 
   // ── 9. Próximos passos ──
-  y = secao(doc, 'PRÓXIMOS PASSOS', y + 4);
-  const passos = Array.isArray(pia.proximos_passos) && pia.proximos_passos.length ? pia.proximos_passos : (() => {
+  const passos = Array.isArray(pia.proximos_passos) && pia.proximos_passos.length ? pia.proximos_passos : diag ? [] : (() => {
     const p = [];
     if (['forte', 'moderada'].includes(nivel)) p.push(`Ação revisional do contrato, com pedido de recálculo e restituição do que foi pago a mais${vi ? `, seguindo o pagamento do valor incontroverso (${brl(vi.parcela_mensal)} por mês)` : ''}.`);
     if (d.situacao === 'busca_apreensao') p.push('Defesa na ação de busca e apreensão, com os pontos deste laudo.');
@@ -291,7 +366,9 @@ function render(doc, pedido, dados, score, checklist, produto) {
     if (!p.length) p.push('Guardar este laudo; se o contrato for renegociado ou houver cobrança judicial, reavaliar com o advogado.');
     return p;
   })();
+  if (passos.length) y = secao(doc, 'PRÓXIMOS PASSOS', y + 4);
   passos.forEach(p => { y = item(doc, y, p); });
+  if (diag) y = secoesCaminhos(doc, y, diag);
   const wpp = rv.balladaoWhatsapp ? String(rv.balladaoWhatsapp) : '';
   y = verificarPagina(doc, y + 4, 40);
   doc.rect(MARGEM, y, LARGURA, 36).fill('#eef2ff');
@@ -307,7 +384,8 @@ function render(doc, pedido, dados, score, checklist, produto) {
     'As estimativas não garantem resultado judicial: a decisão depende do juízo e das provas do processo.',
     'A taxa média do Banco Central é referência de mercado, não teto legal de juros.',
     'Não interrompa os pagamentos sem orientação jurídica: o atraso pode gerar mora, negativação e busca e apreensão.',
-    ...(Array.isArray(pia.ressalvas) ? pia.ressalvas : [])
+    ...(Array.isArray(pia.ressalvas) ? pia.ressalvas : []),
+    ...(diag ? ['O diagnóstico estratégico é gerado por regras a partir das cláusulas lidas e foi conferido pelo advogado revisor; precedentes recentes devem ser confirmados antes de uso em juízo.'] : [])
   ];
   ressalvas.forEach(r => { y = item(doc, y, r, '#374151', 8.5); });
 

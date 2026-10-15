@@ -71,7 +71,7 @@ async function obter(pedidoId) {
 async function atualizar(pedidoId, { etapa, campos = {}, usuarioId = null, acao, detalhes = '' } = {}) {
   if (etapa && !ETAPAS.includes(etapa)) throw new Error(`Etapa inválida: ${etapa}`);
   const permitidas = new Set(['dados_extraidos', 'dados_conferidos', 'taxa_media_bacen', 'calculo', 'teses', 'veredito',
-    'economia_estimada', 'parecer_ia', 'parecer_juridico', 'revisor_id', 'revisado_em', 'versao_calculo']);
+    'economia_estimada', 'parecer_ia', 'parecer_juridico', 'revisor_id', 'revisado_em', 'versao_calculo', 'diagnostico']);
   const sets = []; const vals = [];
   for (const [k, v] of Object.entries(campos)) {
     if (!permitidas.has(k)) throw new Error(`Campo não permitido: ${k}`);

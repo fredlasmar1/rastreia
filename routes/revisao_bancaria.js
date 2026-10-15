@@ -294,7 +294,7 @@ router.get('/:pedidoId', autenticar, async (req, res) => {
       extraido: !!reg.dados_extraidos,
       conferido: !!reg.dados_conferidos,
       taxa_media_bacen: reg.taxa_media_bacen, calculo: reg.calculo ? { ...reg.calculo, tabela_contratada: undefined } : null,
-      teses: reg.teses, veredito: reg.veredito, economia_estimada: reg.economia_estimada,
+      teses: reg.teses, diagnostico: reg.diagnostico || null, veredito: reg.veredito, economia_estimada: reg.economia_estimada,
       parecer_ia: reg.parecer_ia, parecer_juridico: reg.parecer_juridico,
       revisor_id: reg.revisor_id, revisado_em: reg.revisado_em, versao_calculo: reg.versao_calculo,
       pode_revisar_juridico: !!u.pode_revisar_juridico

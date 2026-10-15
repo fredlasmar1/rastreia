@@ -149,7 +149,7 @@ function montarDiagnostico(d = {}, calc = {}, taxa = null, ts = null) {
   if (sim(cl.canal_renegociacao)) semana.push({ acao: `Registrar pedido de renegociação no canal do contrato${cl.canal_renegociacao.contato ? ` (${cl.canal_renegociacao.contato})` : ''}, por escrito.`, porque: `Previsto no próprio contrato${ref(cl.canal_renegociacao) ? ` (${ref(cl.canal_renegociacao)})` : ''}; cria prova de boa-fé.` });
 
   caminhos.push({ nome: 'Negociação com o banco', quando: 'Primeiro passo, em qualquer cenário.', como: alavancas, custo_risco: 'Custo baixo. Não suspende cobrança: manter as parcelas em dia ou negociar antes do vencimento antecipado.' });
-  caminhos.push({ nome: 'Pedido de documentos → exibição na Justiça', quando: 'Se o banco não entregar os comprovantes em prazo razoável.', como: ['Pedido administrativo específico, com prova de entrega; sem isso a ação é extinta (Tema 648 STJ).'], custo_risco: 'Custo baixo; protege o caso antes de discutir mérito.' });
+  caminhos.push({ nome: 'Pedido de documentos e, se negado, exibição na Justiça', quando: 'Se o banco não entregar os comprovantes em prazo razoável.', como: ['Pedido administrativo específico, com prova de entrega; sem isso a ação é extinta (Tema 648 STJ).'], custo_risco: 'Custo baixo; protege o caso antes de discutir mérito.' });
   const temBase = achados.some(a => a.forca === 'alta') || (razao != null && razao >= 1.5);
   caminhos.push({
     nome: 'Ação revisional', quando: temBase ? 'Há base: avaliar com o advogado depois dos documentos.' : 'Só se os documentos mostrarem taxa de 1,5× a média ou mais, ou se o banco não provar a taxa.',

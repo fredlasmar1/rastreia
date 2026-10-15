@@ -196,8 +196,8 @@ async function vincularAoPedido(analiseId, pedidoId, uploadsRoot, usuarioId) {
       [pedidoId, null, f.filename, destino, f.size_bytes || null, f.mime_type || null]);
   }
   await pool.query(
-    `UPDATE revisao_bancaria SET dados_extraidos = $2, dados_conferidos = $3, taxa_media_bacen = COALESCE(taxa_media_bacen, $4), atualizado_em = now() WHERE pedido_id = $1`,
-    [pedidoId, JSON.stringify(a.dados_extraidos || null), a.dados ? JSON.stringify(a.dados) : null, a.taxa_media_bacen && a.taxa_media_bacen.ok ? JSON.stringify(a.taxa_media_bacen) : null]);
+    `UPDATE revisao_bancaria SET dados_extraidos = $2, dados_conferidos = $3, taxa_media_bacen = COALESCE(taxa_media_bacen, $4), diagnostico = COALESCE(diagnostico, $5), atualizado_em = now() WHERE pedido_id = $1`,
+    [pedidoId, JSON.stringify(a.dados_extraidos || null), a.dados ? JSON.stringify(a.dados) : null, a.taxa_media_bacen && a.taxa_media_bacen.ok ? JSON.stringify(a.taxa_media_bacen) : null, a.diagnostico ? JSON.stringify(a.diagnostico) : null]);
   if (Array.isArray(a.custo_ia)) for (const c of a.custo_ia) {
     await pool.query("INSERT INTO dados_consulta (pedido_id, fonte, dados) VALUES ($1, 'custo_ia_revisao', $2)", [pedidoId, JSON.stringify(c)]);
   }
@@ -207,4 +207,4 @@ async function vincularAoPedido(analiseId, pedidoId, uploadsRoot, usuarioId) {
   return { ok: true };
 }
 
-module.exports = { obter, salvar, processar, recalcular, montarDados, estimarPagas, calcularAnalise, vincularAoPedido, faixaDoTrecho, limiteDeCredito };
+module.exports = { obter, salvar, processar, recalcular, montarDados, estimarPagas, calcularAnalise, vincularAoPedido, faixaDoTrecho, limiteDeCredito, marcarLimite };

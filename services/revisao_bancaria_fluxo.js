@@ -25,7 +25,7 @@ async function limiares() {
 }
 
 // Resumo do cálculo para o parecer IA (sem tabelas, com números formatados)
-function casoParaParecer(dados, taxa, calc, ts) {
+function casoParaParecer(dados, taxa, calc, ts, diag) {
   const cen = {};
   for (const [k, c] of Object.entries(calc.cenarios || {})) {
     cen[k] = {
@@ -52,7 +52,9 @@ function casoParaParecer(dados, taxa, calc, ts) {
       valor_incontroverso_mensal: calc.valor_incontroverso ? brl(calc.valor_incontroverso.parcela_mensal) : null, economia_pct_valor_financiado: calc.veredito?.economia_pct != null ? `${calc.veredito.economia_pct.toFixed(1).replace('.', ',')}%` : null
     },
     veredito: calc.veredito, cenario_principal: calc.cenario_principal, cenarios: cen, alertas: calc.alertas,
-    teses: ts.teses.map(t => ({ nome: t.nome, resultado: t.resultado, detalhe: t.detalhe, trecho_contrato: t.trecho_contrato, fundamento: t.fundamento }))
+    teses: ts.teses.map(t => ({ nome: t.nome, resultado: t.resultado, detalhe: t.detalhe, trecho_contrato: t.trecho_contrato, fundamento: t.fundamento })),
+    // O parecer explica o diagnóstico; não cria tese nova
+    diagnostico: diag ? { resumo: diag.resumo, achados: diag.achados.map(a => ({ forca: a.forca, titulo: a.titulo, base: a.base, defesa_banco: a.defesa_banco })), nao_e_abuso: diag.nao_e_abuso, garantias: diag.garantias } : null
   };
 }
 
@@ -63,7 +65,13 @@ function casoParaParecer(dados, taxa, calc, ts) {
 async function processarCalculo(pedidoId, usuarioId = null) {
   const reg = await revisao.obter(pedidoId);
   if (!reg || !reg.dados_conferidos) return { ok: false, erro: 'Sem dados conferidos.' };
-  const d = reg.dados_conferidos;
+  // A conferência edita os números; cláusulas e saques vêm da leitura da IA
+  const ex = reg.dados_extraidos || {};
+  const d = { ...reg.dados_conferidos };
+  if (!d.clausulas && ex.clausulas) d.clausulas = ex.clausulas;
+  if (!d.operacoes_do_limite && Array.isArray(ex.operacoes_do_limite)) d.operacoes_do_limite = ex.operacoes_do_limite;
+  const analise = require('./revisao_analise');
+  if (d.operacao && !d.operacao.estrutura) d.operacao = analise.marcarLimite({ ...d.operacao });
 
   // 1) Taxa média: manual (se o operador informou) ou BACEN com cache
   let taxa = d.taxa_media_manual && d.taxa_media_manual.ok ? d.taxa_media_manual : null;
@@ -81,18 +89,20 @@ async function processarCalculo(pedidoId, usuarioId = null) {
   // 2) Cálculo (cenário B usa os itens que as teses marcam)
   const ipcaMensal = await bacen.buscarIPCA(String(d.operacao?.data_contratacao || '').slice(0, 7) || null);
   const calc = calculo.calcular(d, { taxaMediaBacenAM: taxa.valor_am, questionaveis: teses.itensQuestionaveis(d), limiares: await limiares(), ipcaMensal });
-  // 3) Teses completas (com o cálculo)
+  analise.limiteDeCredito(d, calc, taxa);
+  // 3) Teses completas (com o cálculo) + diagnóstico estratégico (sem IA)
   const ts = teses.aplicarTeses(d, calc);
+  const diag = require('./revisao_diagnostico').montarDiagnostico(d, calc, taxa, ts);
 
   // 4) Parecer IA explicativo (falha não trava: o advogado escreve)
   const ia = require('./revisao_bancaria_ia');
-  const par = await ia.gerarParecer(pedidoId, casoParaParecer(d, taxa, calc, ts));
+  const par = await ia.gerarParecer(pedidoId, casoParaParecer(d, taxa, calc, ts, diag));
 
   // Tabelas completas ficam no cálculo (anexo técnico do PDF)
   await revisao.atualizar(pedidoId, {
     etapa: 'revisao_juridica',
     campos: {
-      taxa_media_bacen: taxa, calculo: calc, teses: ts, veredito: calc.veredito.nivel,
+      taxa_media_bacen: taxa, calculo: calc, teses: ts, diagnostico: diag, veredito: calc.veredito.nivel,
       economia_estimada: Math.round(calc.economia_estimada * 100) / 100, versao_calculo: calc.versao_calculo,
       parecer_ia: par.ok ? JSON.stringify(par.parecer) : null
     },

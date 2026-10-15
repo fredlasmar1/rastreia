@@ -69,6 +69,40 @@ async function teste(nome, fn) { try { await fn(); ok++; console.log('  ✔', no
     assert.ok(m.includes('wa.me/62999990000'), 'CTA Balladão');
     assert.ok(m.includes(calc.veredito.nivel.toUpperCase()), 'veredito');
   });
+  // Contrato de LIMITE (GiroCaixa) sem a taxa dos saques: laudo com o diagnóstico estratégico
+  const AN = require('../services/revisao_analise');
+  const DG = require('../services/revisao_diagnostico');
+  const exGiro = {
+    classificacao: { tipo_operacao: 'ccb_capital_giro', pfpj: 'PJ' }, instituicao: { nome: 'CAIXA ECONOMICA FEDERAL' }, garantia: { tipo: 'aval' },
+    contratante: { nome: 'EMPRESA TESTE LTDA', cpf_cnpj: '00.000.000/0001-00' },
+    operacao: { tipo: 'GIROCAIXA Fácil (Limite de Crédito)', numero_contrato: 'TESTE-GIRO', valor_financiado_total: 150000, data_contratacao: '2025-06-17', capitalizacao_expressa: true, clausula_capitalizacao_trecho: 'podendo ser fixados entre a taxa mínima de 2,26% ao mês e a taxa máxima de 100,00% ao mês' },
+    clausulas: {
+      taxa_reduzida_condicionada: { presente: true, aviso_previo: false, clausula: 'Cl. 7ª §3º', trecho: 'o redutor será cancelado, sem necessidade de comunicação prévia' },
+      debito_em_limite_rotativo: { autorizado: true, revogavel: true, clausula: 'Cl. 7ª' }, garantia_dividas_futuras: { presente: true },
+      vencimento_antecipado: { presente: true, sem_notificacao: true, cruzado_outras_operacoes: true, por_fato_de_avalista: true, clausula: 'Cl. 11ª' },
+      fundo_garantidor: { tipo: 'FGM', percentual: 80, honra_atualiza_pela_selic: true }, liquidacao_antecipada: { presente: true, clausula: 'Cl. 8ª' },
+      canal_renegociacao: { presente: true, contato: '0800 726 8068, opção 8' }, avalistas_quantidade: 2, aval_com_anuencia_conjuge: true,
+      foro: 'justica_federal', vigencia_dias: 7200, prazos_de_risco: [{ evento: 'Bloqueio do limite', dias: 5, clausula: 'Cl. 4ª' }]
+    }
+  };
+  const dg = AN.montarDados(exGiro);
+  const txGiro = { ok: true, origem: 'bacen_sgs', serie_am: 25442, nome_serie: 'Capital de giro PJ > 365 dias', mes_referencia: '2025-06', valor_am: 1.75, data_consulta: '2026-10-15T12:00:00Z' };
+  const calcG = C.calcular(dg, { taxaMediaBacenAM: 1.75 });
+  AN.limiteDeCredito(dg, calcG, txGiro);
+  const tsG = T.aplicarTeses(dg, calcG);
+  const regG = { etapa: 'aprovado', dados_conferidos: dg, calculo: calcG, teses: tsG, diagnostico: DG.montarDiagnostico(dg, calcG, txGiro, tsG), taxa_media_bacen: txGiro, veredito: calcG.veredito.nivel, economia_estimada: 0, versao_calculo: calcG.versao_calculo, parecer_juridico: 'Parecer de teste.', revisado_em: '2026-10-15T15:00:00Z' };
+  await teste('Laudo de contrato de limite (FALTAM DADOS) traz o diagnóstico estratégico', async () => {
+    const out = await gerarDossie({ ...pedido, numero: 9998, alvo_nome: 'EMPRESA TESTE LTDA', __revisao: { registro: regG, revisor: { nome: 'Advogado Teste', oab: 'GO 00.000' } } }, []);
+    const txt = require('child_process').execFileSync('pdftotext', ['-layout', out.filepath, '-']).toString();
+    for (const k of ['FALTAM DADOS', 'DIAGNÓSTICO EM 5 LINHAS', 'O QUE PODE SER QUESTIONADO', 'Súmula 530', 'O banco deve alegar', 'O QUE NÃO É ABUSO', 'GARANTIAS, EXPOSIÇÃO', 'PROVIDÊNCIAS IMEDIATAS', 'CAMINHOS POSSÍVEIS', 'Res. CMN 3.516'])
+      assert.ok(txt.includes(k), 'falta no PDF: ' + k);
+    assert.ok(!/NaN|undefined/.test(txt), 'NaN/undefined no PDF');
+    console.log(`      ${out.filepath}`);
+  });
+  await teste('Mensagem ao cliente de contrato sem taxa não mostra NaN', () => {
+    const m = mensagemCliente({ ...pedido }, regG, 'https://x/relatorios/b.pdf?exp=1&sig=s', '62999990000');
+    assert.ok(!/NaN|undefined|null/.test(m), m);
+  });
   console.log(`\n${ok} passaram, ${falhas} falharam.`);
   process.exit(falhas ? 1 : 0);
 })();
