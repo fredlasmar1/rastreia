@@ -91,11 +91,12 @@ async function teste(nome, fn) { try { await fn(); ok++; console.log('  ✔', no
   AN.limiteDeCredito(dg, calcG, txGiro);
   const tsG = T.aplicarTeses(dg, calcG);
   const regG = { etapa: 'aprovado', dados_conferidos: dg, calculo: calcG, teses: tsG, diagnostico: DG.montarDiagnostico(dg, calcG, txGiro, tsG), taxa_media_bacen: txGiro, veredito: calcG.veredito.nivel, economia_estimada: 0, versao_calculo: calcG.versao_calculo, parecer_juridico: 'Parecer de teste.', revisado_em: '2026-10-15T15:00:00Z' };
-  await teste('Laudo de contrato de limite (FALTAM DADOS) traz o diagnóstico estratégico', async () => {
+  await teste('Laudo do CLIENTE não leva o diagnóstico interno (estratégia, defesa do banco)', async () => {
     const out = await gerarDossie({ ...pedido, numero: 9998, alvo_nome: 'EMPRESA TESTE LTDA', __revisao: { registro: regG, revisor: { nome: 'Advogado Teste', oab: 'GO 00.000' } } }, []);
     const txt = require('child_process').execFileSync('pdftotext', ['-layout', out.filepath, '-']).toString();
-    for (const k of ['FALTAM DADOS', 'DIAGNÓSTICO EM 5 LINHAS', 'O QUE PODE SER QUESTIONADO', 'Súmula 530', 'O banco deve alegar', 'O QUE NÃO É ABUSO', 'GARANTIAS, EXPOSIÇÃO', 'PROVIDÊNCIAS IMEDIATAS', 'CAMINHOS POSSÍVEIS', 'Res. CMN 3.516'])
-      assert.ok(txt.includes(k), 'falta no PDF: ' + k);
+    assert.ok(txt.includes('FALTAM DADOS'), 'veredito');
+    for (const k of ['DIAGNÓSTICO', 'O banco deve alegar', 'O banco vai alegar', 'NÃO É ABUSO', 'PROVIDÊNCIAS IMEDIATAS', 'CAMINHOS POSSÍVEIS'])
+      assert.ok(!txt.includes(k), 'vazou para o cliente: ' + k);
     assert.ok(!/NaN|undefined/.test(txt), 'NaN/undefined no PDF');
     console.log(`      ${out.filepath}`);
   });

@@ -165,6 +165,8 @@ pago → aguardando_documentos (upload até 10 docs) → extraindo (Claude lê o
   documentos e mensagem ao cliente. Regras validadas no caso GiroCaixa (skill `revisao-contrato-bancario` em
   ~/.claude/skills). Contrato de limite: veredito `incompleto`, Súmula 530 quando a taxa de cada saque não está provada.
   Citações do diagnóstico travadas no teste 14.
+  **É USO INTERNO**: não entra no laudo nem no parecer que vão ao cliente (teste do laudo confere). PDF interno pelo
+  botão da tela, com tarja. O material do cliente terá formato próprio, diferente do Rastreia.
 - Opus 5.5 / Sonnet 5.5 recusam `tool_choice` forçado: `revisao_bancaria_ia.js` usa `auto` e confere o tool_use.
 
 ---

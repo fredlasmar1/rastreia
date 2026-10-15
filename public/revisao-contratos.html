@@ -67,6 +67,8 @@
     /* Diagnóstico estratégico */
     .dg { padding: 20px 26px 4px; }
     .dg h3 { font-size: 12px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; color: var(--rc-suave); margin: 18px 0 10px; }
+    .dg-interno { display: inline-block; background: #fee2e2; color: #991b1b; font-size: 11px; font-weight: 800; padding: 3px 10px; border-radius: 99px; margin-bottom: 10px; }
+    @media print { .dg-interno { display: block; border: 2px solid #dc2626; border-radius: 8px; padding: 8px 12px; font-size: 13px; background: #fff; } }
     .dg-resumo { background: #0f172a; color: #e2e8f0; border-radius: 14px; padding: 16px 18px; font-size: 14px; line-height: 1.55; }
     .dg-resumo p { margin: 0 0 6px; } .dg-resumo p:first-child { color: #fff; font-weight: 700; }
     .dg-semana { border: 2px solid #f59e0b; background: #fffbeb; border-radius: 14px; padding: 12px 16px; }
@@ -793,7 +795,7 @@
   function dgRender(g) {
     if (!g) return '';
     const li = (arr) => arr.length ? `<ul class="dg-lista">${arr.map(x => `<li>${esc(x)}</li>`).join('')}</ul>` : '<div style="font-size:13px;color:#64748b">—</div>';
-    let h = `<div class="dg"><div class="dg-resumo">${g.resumo.map(x => `<p>${esc(x)}</p>`).join('')}</div>`;
+    let h = `<div class="dg"><div class="dg-interno">USO INTERNO — Recobro / Balladão. Este diagnóstico não vai para o cliente.</div><div class="dg-resumo">${g.resumo.map(x => `<p>${esc(x)}</p>`).join('')}</div>`;
     if (g.esta_semana.length || g.linha_do_tempo.length) h += `<h3>⚡ Esta semana</h3><div class="dg-semana">
       ${g.esta_semana.length ? `<ol style="margin:0;padding-left:18px">${g.esta_semana.map(x => `<li><b>${esc(x.acao)}</b><span>${esc(x.porque)}</span></li>`).join('')}</ol>` : ''}
       ${g.linha_do_tempo.length ? `<div style="font-size:12px;font-weight:700;color:#92400e;margin-top:6px">Linha do tempo de risco</div><div class="dg-tempo">${g.linha_do_tempo.map(t => `<div>${t.dias != null ? `<b>${t.dias} dia(s)</b> · ` : ''}${esc(t.evento)}${t.clausula ? ` <span style="color:#64748b">(${esc(t.clausula)})</span>` : ''}</div>`).join('')}</div>` : ''}
@@ -842,7 +844,7 @@
     let h = `<div class="an-banner" style="background:${v[1]};color:${v[2]}">
       <div><div class="rot">Veredito preliminar</div><div class="ver">${v[0]}</div><div class="mot">${esc(c.veredito?.motivo || v[4])}${c.veredito?.economia_pct != null ? ` Economia de ${c.veredito.economia_pct.toFixed(1).replace('.', ',')}% do valor financiado.` : ''}</div></div>
       <div class="eco"><div class="rot">Economia estimada</div><div class="val">${brl(a.economia_estimada)}</div><div class="det">${cp ? `${esc(cp.nome)}` : 'sem cenário de revisão'}</div></div>
-    </div>` + arquivos + dgRender(a.diagnostico) + (a.diagnostico ? `<div class="no-print" style="padding:6px 26px 0;display:flex;gap:8px;flex-wrap:wrap"><button class="btn btn-primary btn-sm" onclick="window.print()">🖨 Salvar diagnóstico em PDF</button><button class="btn btn-outline btn-sm" onclick="const e=document.getElementById('an-detalhes');e.hidden=!e.hidden">Detalhes técnicos (cálculo e dados lidos)</button></div><div id="an-detalhes" hidden>` : '<div>');
+    </div>` + arquivos + dgRender(a.diagnostico) + (a.diagnostico ? `<div class="no-print" style="padding:6px 26px 0;display:flex;gap:8px;flex-wrap:wrap"><button class="btn btn-primary btn-sm" onclick="window.print()">🖨 PDF interno do diagnóstico</button><button class="btn btn-outline btn-sm" onclick="const e=document.getElementById('an-detalhes');e.hidden=!e.hidden">Detalhes técnicos (cálculo e dados lidos)</button></div><div id="an-detalhes" hidden>` : '<div>');
 
     // 2) Taxas (barras) + dinheiro
     // Sem cálculo (faltam dados) a média vem da série; contrato de limite mostra o piso da faixa
