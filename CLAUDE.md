@@ -166,7 +166,11 @@ pago → aguardando_documentos (upload até 10 docs) → extraindo (Claude lê o
   ~/.claude/skills). Contrato de limite: veredito `incompleto`, Súmula 530 quando a taxa de cada saque não está provada.
   Citações do diagnóstico travadas no teste 14.
   **É USO INTERNO**: não entra no laudo nem no parecer que vão ao cliente (teste do laudo confere). PDF interno pelo
-  botão da tela, com tarja. O material do cliente terá formato próprio, diferente do Rastreia.
+  botão da tela, com tarja.
+- **Relatório para o cliente** (`services/revisao_cliente.js` + `services/pdf/revisao_cliente.js`, rota
+  `GET /:pedidoId/relatorio-cliente`): marca Recobro + Balladão (`public/img/logo-balladao.png`, recortado do timbre do
+  Balladão IA), linguagem simples; reescreve os achados para o cliente e NUNCA leva estratégia, força, defesa do banco
+  ou súmulas (teste do laudo confere). Contato: config `balladao_whatsapp` ou o WhatsApp do timbre (62) 98223-8316.
 - Opus 5.5 / Sonnet 5.5 recusam `tool_choice` forçado: `revisao_bancaria_ia.js` usa `auto` e confere o tool_use.
 
 ---

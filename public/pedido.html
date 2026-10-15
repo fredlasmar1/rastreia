@@ -253,6 +253,16 @@
     h += `<div style="font-size:11px;color:#6b7280;margin-top:8px">${esc(g.nota)}</div></details>`;
     return h;
   }
+  async function rbRelatorioCliente(btn) {
+    const t = btn.textContent; btn.disabled = true; btn.textContent = 'Gerando…';
+    const w = window.open('', '_blank');
+    try {
+      const r = await fetch(`/api/revisao-bancaria/${rbEstado.pedido.id}/relatorio-cliente`, { headers: { Authorization: `Bearer ${localStorage.getItem('rastreia_token')}` } });
+      if (!r.ok) { const j = await r.json().catch(() => ({})); if (w) w.close(); mostrarAlerta(j.erro || "Erro ao gerar o relatório", "error"); return; }
+      const url = URL.createObjectURL(await r.blob());
+      if (w) w.location = url; else location.href = url;
+    } finally { btn.disabled = false; btn.textContent = t; }
+  }
   // PDF interno: só o bloco do diagnóstico, com a tarja de uso interno
   function rbDiagImprimir() {
     const el = document.getElementById('rb-diag'); if (!el) return;
@@ -288,7 +298,7 @@
         <div style="font-size:13px;color:#374151;margin:4px 0 8px">A mensagem inclui o que a análise encontrou (taxa × média do Banco Central, economia estimada) e o link: Pix, boleto ou cartão em até 12x. Para parcelar em meses, use a seção "Cobrança em parcelas mensais" desta tela.</div>
         <div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn btn-sm btn-primary" onclick="rbCobrar(this)">📱 Copiar mensagem e abrir o WhatsApp</button><span id="rb-cob-msg" style="font-size:12px;align-self:center"></span></div></div>`;
     }
-    if (e.diagnostico) h += rbDiagnostico(e.diagnostico, e.etapa);
+    if (e.diagnostico) h += `<div style="margin:0 0 10px;display:flex;gap:8px;align-items:center;flex-wrap:wrap;border:1px solid #bbf7d0;background:#f0fdf4;border-radius:10px;padding:10px 12px"><div style="flex:1;min-width:220px"><b>📄 Relatório para o cliente</b><div style="font-size:12px;color:#4b5563">PDF com a marca Recobro + Balladão, em linguagem simples, sem a estratégia interna.</div></div><button class="btn btn-sm btn-primary" onclick="rbRelatorioCliente(this)">Gerar PDF do cliente</button></div>` + rbDiagnostico(e.diagnostico, e.etapa);
     const tx = e.taxa_media_bacen;
     if (e.etapa === 'calculando' && tx && tx.aguardando_taxa_manual) {
       h += `<div class="alert alert-warning" style="margin-top:12px;font-size:14px"><strong>O Banco Central não respondeu.</strong> ${esc(tx.erro || '')}<br>Informe a taxa média do mês da contratação (site do BACEN) para seguir; o laudo mostrará a origem "manual".

@@ -104,6 +104,22 @@ async function teste(nome, fn) { try { await fn(); ok++; console.log('  ✔', no
     const m = mensagemCliente({ ...pedido }, regG, 'https://x/relatorios/b.pdf?exp=1&sig=s', '62999990000');
     assert.ok(!/NaN|undefined|null/.test(m), m);
   });
+  await teste('Relatório do CLIENTE (Recobro + Balladão): linguagem simples, sem estratégia interna', async () => {
+    const RC = require('../services/revisao_cliente');
+    const c = RC.montarRelatorioCliente({ registro: { ...regG, etapa: 'conferencia_operador' }, pedido: { numero: 9998, cliente_nome: 'Richard (teste)' }, contato: '(62) 98223-8316' });
+    const pdf = await require('../services/pdf/revisao_cliente').gerarRelatorioCliente(c);
+    const arq = require('path').join(require('os').tmpdir(), 'relatorio-cliente-teste.pdf');
+    fs.writeFileSync(arq, pdf);
+    const txt = require('child_process').execFileSync('pdftotext', ['-layout', arq, '-']).toString();
+    for (const k of ['Análise do seu contrato bancário', 'ANÁLISE PRELIMINAR', 'O que encontramos', 'faixa de juros', 'cheque especial', 'O que fazer agora', 'Não cancele nenhum débito automático', 'O que precisamos de você', 'Próximos passos', '98223-8316'])
+      assert.ok(txt.includes(k), 'falta: ' + k);
+    for (const k of ['Súmula', 'REsp', 'alegar', 'Tema ', 'ALTO', 'MÉDIO', 'revogar', 'piso da proposta', 'Res. CMN', 'USO INTERNO'])
+      assert.ok(!txt.includes(k), 'vazou para o cliente: ' + k);
+    assert.ok(!/NaN|undefined|null/.test(txt), 'NaN/undefined/null');
+    const pags = Number((require('child_process').execFileSync('pdfinfo', [arq]).toString().match(/Pages:\s+(\d+)/) || [])[1]);
+    assert.ok(pags <= 2, `páginas demais (${pags}): rodapé abrindo página em branco?`);
+    console.log(`      ${arq}`);
+  });
   console.log(`\n${ok} passaram, ${falhas} falharam.`);
   process.exit(falhas ? 1 : 0);
 })();

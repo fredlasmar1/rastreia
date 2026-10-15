@@ -444,6 +444,27 @@ router.get('/:pedidoId/minuta/:tipo', autenticar, async (req, res) => {
   } catch (e) { console.error('[revisao-bancaria] minuta:', e); res.status(500).json({ erro: 'Erro ao gerar a minuta' }); }
 });
 
+// Relatório para o CLIENTE (PDF, marca Recobro + Balladão). O diagnóstico é interno;
+// services/revisao_cliente.js escolhe e reescreve só o que o cliente deve ver.
+router.get('/:pedidoId/relatorio-cliente', autenticar, async (req, res) => {
+  try {
+    const p = (await pool.query('SELECT * FROM pedidos WHERE id = $1 AND deletado_em IS NULL', [req.params.pedidoId])).rows[0];
+    if (!p || p.tipo !== revisao.TIPO) return res.status(404).json({ erro: 'Revisão não encontrada' });
+    const reg = await revisao.obter(p.id);
+    if (!reg || !reg.diagnostico) return res.status(400).json({ erro: 'O relatório do cliente sai depois do diagnóstico.' });
+    const ex = reg.dados_extraidos || {};
+    const dados = { ...(reg.dados_conferidos || {}) };
+    if (!dados.clausulas && ex.clausulas) dados.clausulas = ex.clausulas;
+    const contato = (await revisao.config('balladao_whatsapp', '')) || '(62) 98223-8316';
+    const conteudo = require('../services/revisao_cliente').montarRelatorioCliente({ registro: { ...reg, dados_conferidos: dados }, pedido: p, contato });
+    const pdf = await require('../services/pdf/revisao_cliente').gerarRelatorioCliente(conteudo);
+    await pool.query('INSERT INTO logs (pedido_id, usuario_id, acao, detalhes) VALUES ($1, $2, $3, $4)', [p.id, req.usuario.id, 'Revisão bancária: relatório do cliente gerado', conteudo.preliminar ? 'preliminar' : 'após aprovação']);
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `inline; filename="Analise-contrato-${p.numero}.pdf"`);
+    res.send(pdf);
+  } catch (e) { console.error('[revisao-bancaria] relatorio-cliente:', e); res.status(500).json({ erro: 'Erro ao gerar o relatório do cliente' }); }
+});
+
 // Mensagem de COBRANÇA da revisão: o que a análise achou + valor + link (Pix, boleto, cartão 12x)
 router.get('/:pedidoId/mensagem-pagamento', autenticar, async (req, res) => {
   try {
