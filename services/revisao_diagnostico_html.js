@@ -67,7 +67,7 @@ const CSS = `<style>
 .dgx .plano .quando{font-size:12px;font-weight:700;color:var(--s)}
 .dgx .cartas{background:#f0f9ff;border:1px solid #bae6fd;border-radius:12px;padding:10px 14px}
 .dgx .nao{background:#f0fdf4;border:1px solid #bbf7d0;border-radius:12px;padding:10px 14px}
-.dgx .docs label{display:flex;gap:8px;align-items:flex-start;padding:6px 0;border-bottom:1px dashed var(--l);font-size:13px}
+.dgx .docs label{display:flex;gap:8px;align-items:flex-start;padding:6px 0;border-bottom:1px dashed var(--l);font-size:13px;font-weight:400;text-transform:none;letter-spacing:normal;color:var(--t);margin:0}
 .dgx .msg{white-space:pre-wrap;font-size:13px;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:10px;padding:10px 12px}
 .dgx .duas{display:grid;grid-template-columns:1fr 1fr;gap:14px}
 .dgx .rodape{font-size:11px;color:var(--s);margin-top:16px}

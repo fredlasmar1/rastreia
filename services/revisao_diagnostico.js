@@ -233,7 +233,8 @@ function placar(g = {}, calc = {}) {
   const n = (k) => `${k} argumento${k > 1 ? 's' : ''} forte${k > 1 ? 's' : ''}`;
 
   let decisao;
-  if (nivel === 'inviavel') decisao = { codigo: 'nao', rotulo: 'NÃO VALE', porque: calc.veredito.motivo };
+  if (!nivel) decisao = { codigo: 'documentos', rotulo: 'FALTA CALCULAR', porque: `O cálculo desta revisão ainda não rodou: confira os dados e confirme para ver o veredito.${fortes.length ? ` Já há ${n(fortes.length)}.` : ''}` };
+  else if (nivel === 'inviavel') decisao = { codigo: 'nao', rotulo: 'NÃO VALE', porque: calc.veredito.motivo };
   else if (teto && teto.excedido) decisao = { codigo: 'entrar', rotulo: 'VALE ENTRAR', porque: `${teto.nome}: o contrato passou do limite da lei.` };
   else if (nivel === 'incompleto') decisao = { codigo: 'documentos', rotulo: 'FALTA DOCUMENTO', porque: fortes.length ? `Há ${n(fortes.length)}, mas o valor em jogo só sai com os documentos.` : 'Sem os documentos ainda não dá para dizer se vale.' };
   else if (nivel === 'forte') decisao = { codigo: 'entrar', rotulo: 'VALE ENTRAR', porque: 'Juros ou cobranças indevidas pesam no bolso: há base para revisão.' };

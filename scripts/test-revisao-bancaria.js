@@ -562,6 +562,10 @@ teste('Busca e apreensão: prazo de defesa vira o "fazer agora" e o maior risco;
   assert.ok(/Juros .* vale cerca de R\$/.test(g.placar.em_30s[0].texto), g.placar.em_30s[0].texto);
   assert.ok(!g.maior_prejuizo.some(x => /a média do mercado/.test(x)));   // juros é argumento, não risco
 });
+teste('Revisão sem cálculo ainda (conferência) ⇒ FALTA CALCULAR, nunca "vale negociar"', () => {
+  const g = diagGiro(); delete g.placar;
+  assert.strictEqual(DG.placar(g, null).decisao.rotulo, 'FALTA CALCULAR');
+});
 teste('Diagnóstico antigo (sem placar gravado) ganha placar na hora', () => {
   const g = diagGiro(); delete g.placar;
   const html = DH.renderizar(g, { veredito: { nivel: 'incompleto' } });
