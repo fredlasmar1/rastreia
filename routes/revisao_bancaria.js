@@ -15,6 +15,7 @@ const { pool } = require('../db');
 const { autenticar } = require('./auth');
 const revisao = require('../services/revisao_bancaria');
 const { assinar } = require('../services/link_relatorio');
+const diagHtml = require('../services/revisao_diagnostico_html');
 
 async function carregarPedido(id) {
   const r = await pool.query("SELECT id, numero, tipo, status, valor, mp_init_point, relatorio_url, alvo_nome, alvo_documento, alvo_tipo, token_publico, cliente_id, criado_em, pago_em, concluido_em FROM pedidos WHERE id = $1 AND deletado_em IS NULL", [id]);
@@ -79,7 +80,8 @@ const resumoAnalise = (a) => {
   if (!a) return a;
   const c = a.calculo;
   const leve = c ? { ...c, tabela_contratada: undefined, cenarios: Object.fromEntries(Object.entries(c.cenarios || {}).map(([k, v]) => [k, { ...v, tabela: undefined }])) } : null;
-  return { ...a, arquivos: (a.arquivos || []).map(f => ({ filename: f.filename, size_bytes: f.size_bytes })), calculo: leve };
+  return { ...a, arquivos: (a.arquivos || []).map(f => ({ filename: f.filename, size_bytes: f.size_bytes })), calculo: leve,
+    diagnostico_html: diagHtml.renderizar(a.diagnostico, c, { idMsg: 'dgx-msg' }) };
 };
 
 router.post('/analises', autenticar, (req, res, next) => { req.analiseId = crypto.randomUUID(); next(); }, (req, res) => {
@@ -295,6 +297,7 @@ router.get('/:pedidoId', autenticar, async (req, res) => {
       conferido: !!reg.dados_conferidos,
       taxa_media_bacen: reg.taxa_media_bacen, calculo: reg.calculo ? { ...reg.calculo, tabela_contratada: undefined } : null,
       teses: reg.teses, diagnostico: reg.diagnostico || null, veredito: reg.veredito, economia_estimada: reg.economia_estimada,
+      diagnostico_html: diagHtml.renderizar(reg.diagnostico, reg.calculo, { idMsg: 'rb-dgx-msg' }),
       parecer_ia: reg.parecer_ia, parecer_juridico: reg.parecer_juridico,
       revisor_id: reg.revisor_id, revisado_em: reg.revisado_em, versao_calculo: reg.versao_calculo,
       pode_revisar_juridico: !!u.pode_revisar_juridico
@@ -446,6 +449,31 @@ router.get('/:pedidoId/minuta/:tipo', autenticar, async (req, res) => {
 
 // Relatório para o CLIENTE (PDF, marca Recobro + Balladão). O diagnóstico é interno;
 // services/revisao_cliente.js escolhe e reescreve só o que o cliente deve ver.
+// PDF INTERNO do diagnóstico: página para imprimir (tudo aberto, com tarja). Nunca vai ao cliente.
+function enviarPaginaInterna(res, g, calc, titulo) {
+  const html = diagHtml.paginaImpressao(diagHtml.renderizar(g, calc), titulo)
+    .replace('</body>', '<script>window.addEventListener("load", () => setTimeout(() => window.print(), 300));</script></body>');
+  res.setHeader('Content-Type', 'text/html; charset=utf-8');
+  res.setHeader('Cache-Control', 'no-store');
+  res.send(html);
+}
+router.get('/analises/:id/diagnostico-interno', autenticar, async (req, res) => {
+  try {
+    const a = await analise.obter(req.params.id);
+    if (!a || !a.diagnostico) return res.status(404).json({ erro: 'Diagnóstico não encontrado' });
+    enviarPaginaInterna(res, a.diagnostico, a.calculo, `Diagnóstico interno — ${a.dados?.contratante?.nome || a.dados?.instituicao?.nome || 'análise rápida'}`);
+  } catch (e) { res.status(400).json({ erro: 'Análise inválida' }); }
+});
+router.get('/:pedidoId/diagnostico-interno', autenticar, async (req, res) => {
+  try {
+    const p = (await pool.query('SELECT id, numero, tipo, alvo_nome FROM pedidos WHERE id = $1 AND deletado_em IS NULL', [req.params.pedidoId])).rows[0];
+    if (!p || p.tipo !== revisao.TIPO) return res.status(404).json({ erro: 'Revisão não encontrada' });
+    const reg = await revisao.obter(p.id);
+    if (!reg || !reg.diagnostico) return res.status(404).json({ erro: 'Diagnóstico ainda não gerado' });
+    enviarPaginaInterna(res, reg.diagnostico, reg.calculo, `Revisão #${p.numero} — ${p.alvo_nome || ''} — diagnóstico interno`);
+  } catch (e) { console.error('[revisao-bancaria] diagnostico-interno:', e); res.status(500).json({ erro: 'Erro ao montar o diagnóstico' }); }
+});
+
 router.get('/:pedidoId/relatorio-cliente', autenticar, async (req, res) => {
   try {
     const p = (await pool.query('SELECT * FROM pedidos WHERE id = $1 AND deletado_em IS NULL', [req.params.pedidoId])).rows[0];

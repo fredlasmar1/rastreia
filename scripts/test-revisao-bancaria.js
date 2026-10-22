@@ -523,5 +523,66 @@ teste('CET: contrato desde 01/02/2021 cita a Res. 4.881; anterior, a 3.517', () 
   assert.ok(/3\.517/.test(sem('2019-05-10')));
 });
 
+console.log('\n17) Relatório interno: placar e HTML');
+const DH = require('../services/revisao_diagnostico_html');
+teste('GiroCaixa sem comprovantes ⇒ FALTA DOCUMENTO, sem número inventado, próximo passo com aviso do advogado', () => {
+  const g = diagGiro();
+  assert.strictEqual(g.placar.decisao.codigo, 'documentos');
+  assert.strictEqual(g.placar.em_jogo.length, 0);
+  assert.ok(/Demonstrativo|comprovante/i.test(g.placar.falta), g.placar.falta);
+  assert.ok(g.placar.proximo.confirmar_advogado && !/confirmar com o advogado/.test(g.placar.proximo.acao));
+  assert.deepStrictEqual(g.placar.em_30s.map(x => x.tipo), ['argumento', 'risco', 'nao_prometer']);
+  assert.ok(!/Consumidor/.test(g.placar.em_30s[2].texto));        // o CDC já está no rodapé
+});
+teste('Veículo com juros 1,6× a média ⇒ VALE ENTRAR e o dinheiro em jogo vem do cálculo', () => {
+  const d = contratoPan();
+  const calc = C.calcular(d, { taxaMediaBacenAM: 1.5, questionaveis: T.itensQuestionaveis(d) });
+  const g = DG.montarDiagnostico(d, calc, { ok: true, valor_am: 1.5 }, T.aplicarTeses(d, calc));
+  assert.strictEqual(g.placar.decisao.codigo, 'entrar');
+  const eco = g.placar.em_jogo.find(x => x.rotulo === 'Economia estimada');
+  perto(eco.valor, calc.economia_estimada, 1e-9, 'economia');
+  assert.ok(g.placar.em_jogo.some(x => x.de != null && x.de > x.valor), 'parcela hoje → revisada');
+});
+teste('Cheque especial acima de 8% ⇒ VALE ENTRAR pelo teto, e o resumo cita o teto', () => {
+  const d = { pfpj: 'PF', tipo_operacao: 'cheque_especial', operacao: { data_contratacao: '2023-03-01', taxa_juros_mensal_declarada: 12 } };
+  const calc = C.calcular(d, {});
+  const g = DG.montarDiagnostico(d, calc, null, T.aplicarTeses(d, calc));
+  assert.strictEqual(g.placar.decisao.codigo, 'entrar');
+  assert.ok(/8% a\.m\./.test(g.resumo.join(' ')));
+});
+teste('Busca e apreensão: prazo de defesa vira o "fazer agora" e o maior risco; melhor argumento é o que vale mais', () => {
+  const d = contratoPan();
+  const calc = C.calcular(d, { taxaMediaBacenAM: 1.5, questionaveis: T.itensQuestionaveis(d) });
+  const g = DG.montarDiagnostico(d, calc, { ok: true, valor_am: 1.5 }, T.aplicarTeses(d, calc));
+  assert.ok(/HOJE/.test(g.placar.proximo.acao) && /5 dias/.test(g.placar.proximo.acao));
+  assert.ok(/^Perdido o prazo/.test(g.placar.proximo.porque) && !/art\.$/.test(g.placar.proximo.porque));
+  assert.ok(/Busca e apreensão/.test(g.placar.em_30s.find(x => x.tipo === 'risco').texto));
+  const juros = g.achados.find(a => a.id === 'juros_acima_media');
+  perto(juros.impacto.valor, calc.cenarios.A.economia_total, 1e-9, 'impacto dos juros = cenário A');
+  assert.ok(/Juros .* vale cerca de R\$/.test(g.placar.em_30s[0].texto), g.placar.em_30s[0].texto);
+  assert.ok(!g.maior_prejuizo.some(x => /a média do mercado/.test(x)));   // juros é argumento, não risco
+});
+teste('Diagnóstico antigo (sem placar gravado) ganha placar na hora', () => {
+  const g = diagGiro(); delete g.placar;
+  const html = DH.renderizar(g, { veredito: { nivel: 'incompleto' } });
+  assert.ok(/FALTA DOCUMENTO/.test(html));
+});
+teste('HTML: tarja interna, ordem placar → argumentos → plano, sem undefined/NaN e com escape', () => {
+  const g = diagGiro();
+  g.achados[0].trecho = '<script>x</script>';
+  const html = DH.renderizar(g, null);
+  assert.ok(/USO INTERNO/.test(html));
+  const i = (t) => html.indexOf(t);
+  assert.ok(i('Vale a pena?') < i('Em 30 segundos') && i('Em 30 segundos') < i('Argumentos (') && i('Argumentos (') < i('Riscos para o cliente') && i('Riscos para o cliente') < i('>Plano<'));
+  assert.ok(!/undefined|NaN|\[object/.test(html));
+  assert.ok(!/<script>x/.test(html) && /&lt;script&gt;x/.test(html));
+  assert.ok(!/Direito de desist/.test(DH.renderizar({ ...g, linha_do_tempo: [{ evento: 'Direito de desistência', dias: 7 }] }, null)));
+});
+teste('Página do PDF interno abre todos os argumentos', () => {
+  const pag = DH.paginaImpressao(DH.renderizar(diagGiro(), null), 'Teste');
+  assert.ok(/Não enviar ao cliente/.test(pag));
+  assert.ok(!/<details class="arg"/.test(pag) && /<details open class="arg"/.test(pag));
+});
+
 console.log(`\n${ok} passaram, ${falhas} falharam.`);
 process.exit(falhas ? 1 : 0);
