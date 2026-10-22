@@ -159,6 +159,13 @@ pago → aguardando_documentos (upload até 10 docs) → extraindo (Claude lê o
 - CET real (TIR do recebido líquido × parcelas) × CET informado; pago a mais corrigido pelo IPCA (SGS 433),
   sem juros de mora (correm da citação).
 - Teses: toda Súmula/Tema citado precisa estar na lista conferida no STJ (teste 12 de test-revisao-bancaria.js).
+- **Tetos legais** (`services/revisao_tetos.js`, 22/10/2026, testes 15-16): linha com limite em lei se compara com o
+  TETO, não com a média — cheque especial PF/MEI 8% a.m. (Res. 4.765, art. 3º), cartão com juros+encargos ≤ valor
+  original desde 03/01/2024 (Lei 14.690, art. 28, § 1º), Pronampe Selic do mês (SGS 4189) + 6% a.a. (Lei 13.999,
+  art. 3º, I). Teto estourado ⇒ veredito forte e cenário A "pelo teto legal". FCO/FNE/FNO, Fies, rural, SFH e MCMV
+  são "reguladas": a média fica fora da razão e do veredito e o advogado confere a resolução do período.
+  Programa vem da IA (`classificacao.programa`) ou do nome do produto; operador corrige em "Programa oficial".
+  CET cita a Res. 4.881/2020 (a 3.517/2007 só para contratos antes de 01/02/2021).
 - **Diagnóstico estratégico** (`services/revisao_diagnostico.js`, coluna `revisao_analises.diagnostico`, 15/10/2026):
   sem IA, a partir das cláusulas que a IA lê (`dados_extraidos.clausulas`). Responde: resumo honesto, esta semana +
   linha do tempo de risco, achados com força e defesa do banco, o que NÃO é abuso, garantias, maior prejuízo, caminhos,

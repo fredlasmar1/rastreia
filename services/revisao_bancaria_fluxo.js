@@ -86,7 +86,8 @@ async function processarCalculo(pedidoId, usuarioId = null) {
 
   // 2) Cálculo (cenário B usa os itens que as teses marcam)
   const ipcaMensal = await bacen.buscarIPCA(String(d.operacao?.data_contratacao || '').slice(0, 7) || null);
-  const calc = calculo.calcular(d, { taxaMediaBacenAM: taxa.valor_am, questionaveis: teses.itensQuestionaveis(d), limiares: await limiares(), ipcaMensal });
+  const selicAA = await analise.selicSePronampe(d);
+  const calc = calculo.calcular(d, { taxaMediaBacenAM: taxa.valor_am, questionaveis: teses.itensQuestionaveis(d), limiares: await limiares(), ipcaMensal, selicAA });
   analise.limiteDeCredito(d, calc, taxa);
   // 3) Teses completas (com o cálculo) + diagnóstico estratégico (sem IA, USO INTERNO:
   //    não entra no laudo nem no parecer que vão ao cliente)
