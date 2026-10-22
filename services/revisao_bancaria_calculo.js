@@ -10,7 +10,7 @@
  * PMT = parcela, n = prazo em meses, i = taxa mensal (fração: 0.02 = 2%).
  * Testes: scripts/test-revisao-bancaria.js (node).
  */
-const VERSAO_CALCULO = 'rb-calc-1.4.0 (2026-10-14)';
+const VERSAO_CALCULO = 'rb-calc-1.5.0 (2026-10-22)';
 
 const EPS = 1e-12;
 
@@ -252,9 +252,18 @@ function calcular(dados = {}, opts = {}) {
     bacen: null, razao: null, tabela_contratada: [], cenarios: {}, alertas, faltando
   };
 
+  // Teto legal (cheque especial, cartão, Pronampe) ou linha regulada: o
+  // parâmetro passa a ser a norma, não a média de mercado (services/revisao_tetos.js)
+  const teto = require('./revisao_tetos').tetoLegal(dados, { efetivaAM, declAM, declAA, PV, PMT, n }, { selicAA: opts.selicAA });
+  resultado.teto = teto;
+  if (teto && teto.excedido) alertas.unshift(`${teto.nome}: ${teto.detalhe}`);
+  else if (teto && teto.regulada && teto.excedido == null) alertas.unshift(teto.detalhe);
+
   if (faltando.length || efetivaAM == null) {
     // Faltar dado não é contrato ruim: é análise que ainda não pode ser feita
     resultado.veredito = { nivel: 'incompleto', motivo: `Faltam dados para calcular: ${faltando.join(', ') || 'taxa'}.` };
+    // ...mas taxa acima do teto da lei já basta (ex.: cheque especial a 12% a.m. sem saldo nem prazo)
+    if (teto && teto.excedido) resultado.veredito = { nivel: 'forte', motivo: `${teto.nome}: ${teto.detalhe} Faltam dados para calcular o valor: ${faltando.join(', ') || 'taxa'}.` };
     resultado.economia_estimada = 0;
     return resultado;
   }
@@ -263,7 +272,7 @@ function calcular(dados = {}, opts = {}) {
   const tabContr = tabela(sistema, PV, efetivaAM, n);
   resultado.tabela_contratada = tabContr;
 
-  // CET real (Res. CMN 3.517/2007): taxa interna de retorno entre o que o
+  // CET real (Res. CMN 4.881/2020; antes de 01/02/2021, Res. 3.517/2007): taxa interna de retorno entre o que o
   // cliente EFETIVAMENTE recebeu (valor liberado − tarifas, seguros e IOF pagos
   // à parte) e as parcelas. Comparado com o CET declarado no contrato.
   const liberado = Number(op.valor_liberado) || 0;
@@ -287,12 +296,16 @@ function calcular(dados = {}, opts = {}) {
     resultado.cet = null;
   }
 
-  // 4) Cenários
-  const bacenAM = opts.taxaMediaBacenAM != null ? Number(opts.taxaMediaBacenAM) / 100 : null;
-  if (bacenAM != null) {
-    resultado.bacen = { am: bacenAM, aa: mensalParaAnual(bacenAM) };
-    resultado.razao = efetivaAM / bacenAM;
-  }
+  // 4) Cenários. Linha regulada: a média de mercado fica só de referência
+  // (resultado.bacen.ignorada) — não entra na razão, no cenário nem no veredito.
+  const mediaAM = opts.taxaMediaBacenAM != null ? Number(opts.taxaMediaBacenAM) / 100 : null;
+  const bacenAM = teto && teto.regulada ? null : mediaAM;
+  if (mediaAM != null) resultado.bacen = { am: mediaAM, aa: mensalParaAnual(mediaAM), ...(bacenAM == null ? { ignorada: true } : {}) };
+  if (bacenAM != null) resultado.razao = efetivaAM / bacenAM;
+  // Taxa revisada: a menor entre a média (linha livre) e o teto legal estourado
+  const tetoAM = teto && teto.excedido && teto.teto_am != null && teto.teto_am < efetivaAM ? teto.teto_am : null;
+  const revAM = [bacenAM != null && bacenAM < efetivaAM ? bacenAM : null, tetoAM].filter(x => x != null).reduce((a, b) => Math.min(a, b), Infinity);
+  const nomeA = revAM === tetoAM ? 'Juros pelo teto legal' : 'Juros pela taxa média do BACEN';
   const q = separarQuestionaveis(dados, opts.questionaveis || []);
   // IOF financiado cai na proporção do principal retirado (incidiu também sobre os itens)
   const iof = dados.iof || {};
@@ -302,17 +315,17 @@ function calcular(dados = {}, opts = {}) {
   const PVsemItens = PV - q.financiado - iofSobreItens;
 
   const cen = {};
-  if (bacenAM != null && bacenAM < efetivaAM) {
-    const t = tabela(sistema, PV, bacenAM, n);
-    cen.A = { nome: 'Juros pela taxa média do BACEN', taxa_am: bacenAM, principal: PV, ...comparar(tabContr, t, k), tabela: t };
+  if (Number.isFinite(revAM)) {
+    const t = tabela(sistema, PV, revAM, n);
+    cen.A = { nome: nomeA, taxa_am: revAM, principal: PV, ...comparar(tabContr, t, k), tabela: t };
   }
   if (q.itens.length) {
     const t = tabela(sistema, PVsemItens, efetivaAM, n);
     cen.B = { nome: 'Sem tarifas e seguros questionáveis', taxa_am: efetivaAM, principal: PVsemItens, itens_excluidos: q.itens, iof_excluido: iofSobreItens, ...comparar(tabContr, t, k, q.aVista), tabela: t };
   }
   if (cen.A && cen.B) {
-    const t = tabela(sistema, PVsemItens, bacenAM, n);
-    cen.C = { nome: 'Combinado: taxa BACEN + sem tarifas/seguros', taxa_am: bacenAM, principal: PVsemItens, ...comparar(tabContr, t, k, q.aVista), tabela: t };
+    const t = tabela(sistema, PVsemItens, revAM, n);
+    cen.C = { nome: `Combinado: ${revAM === tetoAM ? 'teto legal' : 'taxa BACEN'} + sem tarifas/seguros`, taxa_am: revAM, principal: PVsemItens, ...comparar(tabContr, t, k, q.aVista), tabela: t };
   }
   resultado.cenarios = cen;
   const melhor = cen.C || cen.A || cen.B || null;
@@ -352,10 +365,13 @@ function calcular(dados = {}, opts = {}) {
   }
   let nivel, motivo;
   if (prescrito) { nivel = 'inviavel'; motivo = `Contrato quitado há mais de ${L.prescricaoAnos} anos (prazo prescricional configurado).`; }
+  else if (teto && teto.excedido) { nivel = 'forte'; motivo = `${teto.nome}: ${teto.detalhe} Economia estimada: ${pct.toFixed(1)}% do valor financiado.`; }
   else if ((r != null && r >= L.razaoForte) || pct >= L.economiaFortePct) { nivel = 'forte'; }
   else if ((r != null && r >= L.razaoModerada) || pct >= L.economiaModeradaPct) { nivel = 'moderada'; }
   else { nivel = 'fraca'; }
-  if (!motivo) motivo = `Razão taxa contratada ÷ média BACEN: ${r != null ? r.toFixed(2) : 'sem BACEN'}; economia estimada: ${pct.toFixed(1)}% do valor financiado.`;
+  if (!motivo) motivo = teto && teto.regulada
+    ? `Linha regulada: a taxa se compara com o teto da norma do programa, não com a média do BACEN. Economia estimada: ${pct.toFixed(1)}% do valor financiado.`
+    : `Razão taxa contratada ÷ média BACEN: ${r != null ? r.toFixed(2) : 'sem BACEN'}; economia estimada: ${pct.toFixed(1)}% do valor financiado.`;
   resultado.veredito = { nivel, motivo, razao: r, economia_pct: pct };
   return resultado;
 }

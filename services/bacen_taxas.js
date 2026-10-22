@@ -148,6 +148,17 @@ async function buscarIPCA(desdeAnoMes) {
   } catch (e) { return null; }
 }
 
+// Selic do mês anualizada base 252 (SGS 4189, % a.a.) — teto do Pronampe.
+// Falha ⇒ null: o teto fica "conferir à mão", nunca estimado.
+async function buscarSelicAnual(anoMes) {
+  const m = String(anoMes || '').match(/^(\d{4})-(\d{2})$/);
+  if (!m) return null;
+  try {
+    const v = await valorSgsNoMes(4189, Number(m[1]), Number(m[2]));
+    return v != null ? { ok: true, serie: 4189, mes: anoMes, valor_aa: v } : null;
+  } catch (e) { return null; }
+}
+
 // Taxa informada pelo operador quando o BACEN falha — o laudo mostra a origem "manual".
 function taxaManual({ valorAm, mesReferencia, fonte, usuario }) {
   const v = Number(valorAm);
@@ -176,4 +187,4 @@ async function obterComCache(pedidoId, params) {
   return r;
 }
 
-module.exports = { buscarTaxaMedia, obterComCache, taxaManual, valorSgsNoMes, posicaoBancoOlinda, buscarIPCA };
+module.exports = { buscarTaxaMedia, obterComCache, taxaManual, valorSgsNoMes, posicaoBancoOlinda, buscarIPCA, buscarSelicAnual };

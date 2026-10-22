@@ -14,7 +14,8 @@
 // os precedentes qualificados do Portal de Dados Abertos do STJ (espelhados em
 // github.com/emidio-trancoso/advocacia-aberta, MIT): Súmulas 297, 382, 472, 539,
 // 541, 565, 566 e Temas 27, 28, 246/247, 618, 619, 620, 958 e 972.
-const VERSAO_TESES = 'rb-teses-1.3.0 (2026-10-14)';
+const VERSAO_TESES = 'rb-teses-1.4.0 (2026-10-22)';
+const tetos = require('./revisao_tetos');
 
 const pct = (x) => (x == null ? '—' : `${(x * 100).toFixed(2).replace('.', ',')}%`);
 const reTAC = /\b(tac|abertura de cr[eé]dito|tec|emiss[aã]o de (carn[eê]|boleto|ficha)|tarifa de emiss)/i;
@@ -33,6 +34,7 @@ const TESES = [
     fundamento: 'STJ, Tema 27 (REsp 1.061.530/RS, repetitivo): revisão dos juros remuneratórios admitida quando a abusividade fica cabalmente demonstrada — parâmetro usual: taxa substancialmente acima da média de mercado do BACEN para a operação e o mês; Súmula 382 STJ: juros acima de 12% a.a., por si só, não indicam abusividade.',
     explicacao_cliente: 'Comparamos a taxa do seu contrato com a taxa média que os bancos cobravam no mesmo mês para o mesmo tipo de operação.',
     regra(d, calc) {
+      if (calc?.teto?.regulada) return { resultado: 'verificar', detalhe: 'Linha com taxa fixada por lei ou pelo CMN: a média de mercado não serve de parâmetro. Veja a tese do teto legal.' };
       if (!calc || calc.razao == null) {
         // Diz o que faltou de verdade: a taxa do CONTRATO ou a média do BACEN
         if (calc && calc.taxa?.efetiva_am == null) {
@@ -48,6 +50,18 @@ const TESES = [
       if (r >= 1.5) return { resultado: 'aplicavel', detalhe, trecho_contrato: trecho };
       if (r >= 1.2) return { resultado: 'verificar', detalhe: detalhe + ' Acima da média, mas abaixo de 1,5×: depende do caso.', trecho_contrato: trecho };
       return { resultado: 'nao_aplicavel', detalhe };
+    }
+  },
+  {
+    id: 'teto_legal',
+    nome: 'Juros acima do teto legal',
+    fundamento: `${tetos.FUND_CHEQUE} ${tetos.FUND_CARTAO} ${tetos.FUND_PRONAMPE}`,
+    explicacao_cliente: 'Algumas linhas de crédito têm um limite de juros fixado em lei. Conferimos se o seu contrato passou desse limite.',
+    regra(d, calc) {
+      const t = calc?.teto;
+      if (!t) return { resultado: 'nao_aplicavel', detalhe: 'Linha sem teto legal de juros: o parâmetro é a média de mercado.' };
+      const r = t.excedido === true ? 'aplicavel' : t.excedido === false ? 'nao_aplicavel' : 'verificar';
+      return { resultado: r, detalhe: t.detalhe, fundamento: t.fundamento };
     }
   },
   {
@@ -146,15 +160,29 @@ const TESES = [
   {
     id: 'cet_informado',
     nome: 'Custo Efetivo Total (CET) informado errado',
-    fundamento: 'Res. CMN 3.517/2007: o CET deve ser informado antes da contratação, com todos os encargos e despesas; CDC arts. 6º, III, 46 e 52: informação clara e prévia sobre o custo total.',
+    fundamento: 'Res. CMN 4.881/2020, arts. 3º e 7º (contratos desde 01/02/2021; antes, Res. CMN 3.517/2007): o CET deve ser informado antes da contratação, com todos os encargos e despesas; CDC arts. 6º, III, 46 e 52: informação clara e prévia sobre o custo total.',
     explicacao_cliente: 'Calculamos o custo total real comparando o dinheiro que você recebeu com as parcelas que paga. Se ele sai maior que o CET escrito no contrato, o banco informou um custo menor do que o verdadeiro.',
     regra(d, calc) {
       const c = calc?.cet;
       if (!c || c.real_am == null) return { resultado: 'verificar', detalhe: 'Sem o valor liberado ao cliente: não dá para calcular o CET real.' };
       const real = `CET real ${pct(c.real_am)} a.m. (${pct(c.real_aa)} a.a.), considerando ${c.pagos_a_parte > 0 ? 'o valor liberado menos o que foi pago à parte' : 'o valor liberado'}`;
-      if (c.declarado_am == null) return { resultado: 'verificar', detalhe: `${real}. O CET não foi localizado no contrato — se de fato não consta, a falta de informação já é irregular (Res. CMN 3.517/2007).` };
+      if (c.declarado_am == null) return { resultado: 'verificar', detalhe: `${real}. O CET não foi localizado no contrato — se de fato não consta, a falta de informação já é irregular (${normaCET(d)}).` };
       if (c.real_maior_que_declarado) return { resultado: 'aplicavel', detalhe: `${real} × CET informado ${pct(c.declarado_am)} a.m. (+${c.diferenca_pp_am.toFixed(4).replace('.', ',')} p.p.).`, trecho_contrato: `CET informado: ${(c.declarado_am * 100).toFixed(2).replace('.', ',')}% a.m.` };
       return { resultado: 'nao_aplicavel', detalhe: `${real}, compatível com o CET informado (${pct(c.declarado_am)} a.m.).` };
+    }
+  },
+  {
+    id: 'honorarios_ccb',
+    nome: 'Honorários extrajudiciais acima de 10%',
+    fundamento: 'Lei 10.931/2004, art. 28, § 1º, IV: na Cédula de Crédito Bancário, os honorários advocatícios extrajudiciais não podem superar 10% do valor total devido.',
+    explicacao_cliente: 'Se o contrato manda pagar honorários de advogado na cobrança sem processo, eles não podem passar de 10% da dívida.',
+    regra(d) {
+      const h = Number(d.clausulas?.honorarios_extrajudiciais_percentual);
+      if (!(h > 0)) return { resultado: 'nao_aplicavel', detalhe: 'O contrato não fixa honorários extrajudiciais.' };
+      const ccb = d.tipo_operacao === 'ccb_capital_giro' || /c[eé]dula de cr[eé]dito banc|\bccb\b/i.test(d.operacao?.tipo || '');
+      const v = String(h).replace('.', ',');
+      if (h > 10) return { resultado: ccb ? 'aplicavel' : 'verificar', detalhe: `Honorários extrajudiciais de ${v}%, acima de 10%${ccb ? '' : ' — o limite é da CCB: conferir se o título é uma Cédula de Crédito Bancário'}.` };
+      return { resultado: 'nao_aplicavel', detalhe: `Honorários extrajudiciais de ${v}%, dentro do limite de 10%.` };
     }
   },
   {
@@ -180,6 +208,12 @@ const TESES = [
   }
 ];
 
+// CET: a Res. 4.881/2020 revogou a 3.517/2007 a partir de 01/02/2021
+function normaCET(d) {
+  const data = String(d?.operacao?.data_contratacao || '');
+  return data && data < '2021-02-01' ? 'Res. CMN 3.517/2007' : 'Res. CMN 4.881/2020';
+}
+
 const FUNDAMENTO_GERAL = 'Súmula 297 STJ: o CDC se aplica às instituições financeiras.';
 
 // Itens (tarifas/seguros) que as teses marcam como questionáveis → cenário B do cálculo
@@ -199,7 +233,7 @@ function aplicarTeses(dados, calc) {
   const lista = TESES.map(t => {
     const r = t.regra(dados, calc, previas) || {};
     previas[t.id] = r.resultado;
-    return { id: t.id, nome: t.nome, fundamento: t.fundamento, explicacao_cliente: t.explicacao_cliente, resultado: r.resultado || 'verificar', detalhe: r.detalhe || '', trecho_contrato: r.trecho_contrato || null };
+    return { id: t.id, nome: t.nome, fundamento: r.fundamento || t.fundamento, explicacao_cliente: t.explicacao_cliente, resultado: r.resultado || 'verificar', detalhe: r.detalhe || '', trecho_contrato: r.trecho_contrato || null };
   });
   return { versao: VERSAO_TESES, fundamento_geral: FUNDAMENTO_GERAL, teses: lista, aplicaveis: lista.filter(t => t.resultado === 'aplicavel').length };
 }

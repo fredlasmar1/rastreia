@@ -63,6 +63,9 @@ function caso(pedido, reg, revisor) {
     declAm: c.taxa?.declarada_am != null ? pct(c.taxa.declarada_am, 2) : null,
     bacenAm: c.bacen ? pct(c.bacen.am, 2) : null, bacenAa: c.bacen ? pct(c.bacen.aa, 2) : null,
     razao: c.razao != null ? c.razao.toFixed(2).replace('.', ',') : null,
+    // Teto legal estourado (cheque especial, cartão, Pronampe): o pedido limita os juros ao teto, não à média
+    teto: c.teto && c.teto.excedido ? { nome: c.teto.nome, fundamento: c.teto.fundamento, am: cp && /teto legal/.test(cp.nome || '') ? pct(cp.taxa_am, 2) : null } : null,
+    normaCet: String(op.data_contratacao || '') && String(op.data_contratacao) < '2021-02-01' ? 'Res. CMN 3.517/2007' : 'Res. CMN 4.881/2020',
     cet: c.cet && c.cet.real_am != null ? { real: pct(c.cet.real_am, 2), realAa: pct(c.cet.real_aa, 2), decl: c.cet.declarado_am != null ? pct(c.cet.declarado_am, 2) : null, maior: !!c.cet.real_maior_que_declarado, recebido: brl(c.cet.recebido_liquido) } : null,
     serie: tx.origem === 'manual' ? `informada manualmente (${esc(tx.fonte_manual || 'fonte a indicar')})` : (tx.serie_am ? `série SGS ${tx.serie_am}${tx.nome_serie ? ' – ' + tx.nome_serie : ''}` : '[série do BACEN]'),
     mesRef: mesBR(tx.mes_referencia),
@@ -106,7 +109,7 @@ function revisional(k) {
 <h2>I – Dos fatos</h2>
 <p>Em ${k.dataContr}, a parte autora celebrou com o réu contrato de ${k.tipo} nº ${esc(k.contrato)}, no valor financiado de ${k.financiado}, a ser pago em ${k.prazo} parcelas de ${k.parcela}, das quais ${k.pagas} já foram pagas${k.atrasado ? ' [descrever a situação de atraso]' : ''}.</p>
 <p>A partir dos próprios valores do contrato (valor financiado, parcela e prazo), a taxa de juros efetivamente praticada é de ${k.taxaAm} ao mês (${k.taxaAa} ao ano)${k.declAm ? `, enquanto o instrumento declara ${k.declAm} ao mês` : ''}. No mês da contratação, a taxa média de mercado divulgada pelo Banco Central do Brasil para a mesma modalidade era de ${k.bacenAm || '[taxa média]'} ao mês (${k.bacenAa || '[taxa anual]'} ao ano – ${k.serie}, referência ${k.mesRef})${k.razao ? `, ou seja, o contrato cobra ${k.razao} vez(es) a média` : ''}${k.olinda ? `; o réu ocupava o ${k.olinda}` : ''}.</p>
-${k.cet ? `<p>Considerando o valor efetivamente recebido pela parte autora (${k.cet.recebido}) e as parcelas pactuadas, o Custo Efetivo Total real da operação é de ${k.cet.real} ao mês (${k.cet.realAa} ao ano)${k.cet.decl ? (k.cet.maior ? `, superior ao CET de ${k.cet.decl} ao mês informado no contrato, em afronta à Res. CMN 3.517/2007 e ao art. 52 do CDC` : `, compatível com o CET informado (${k.cet.decl} ao mês)`) : ', sem que o contrato informe o CET, como exige a Res. CMN 3.517/2007'}.</p>` : ''}
+${k.cet ? `<p>Considerando o valor efetivamente recebido pela parte autora (${k.cet.recebido}) e as parcelas pactuadas, o Custo Efetivo Total real da operação é de ${k.cet.real} ao mês (${k.cet.realAa} ao ano)${k.cet.decl ? (k.cet.maior ? `, superior ao CET de ${k.cet.decl} ao mês informado no contrato, em afronta à ${k.normaCet} e ao art. 52 do CDC` : `, compatível com o CET informado (${k.cet.decl} ao mês)`) : ', sem que o contrato informe o CET, como exige a ${k.normaCet}'}.</p>` : ''}
 <p>O laudo técnico-financeiro anexo (doc. [__]) recalculou a operação e apurou:</p>
 ${tabelaCalculo(k)}
 
@@ -128,7 +131,7 @@ ${tesesTxt || '<p>[Descrever as teses aplicáveis ao caso.]</p>'}
 <p class="ni">a) a concessão da tutela de urgência nos termos do item III;</p>
 <p class="ni">b) a citação do réu para, querendo, contestar;</p>
 <p class="ni">c) a inversão do ônus da prova (CDC, art. 6º, VIII) e a exibição do contrato e da planilha de evolução da dívida;</p>
-<p class="ni">d) a procedência do pedido para revisar o contrato, ${k.bacenAm ? `limitando os juros remuneratórios à taxa média de mercado (${k.bacenAm} a.m.)` : 'limitando os juros à taxa média de mercado'}${k.teses.some(t => /seguro|tarifa|terceiros|tac/i.test(t.nome)) ? ' e afastando as tarifas e seguros indevidos' : ''}, recalculando-se as prestações;</p>
+<p class="ni">d) a procedência do pedido para revisar o contrato, ${k.teto ? `limitando os juros remuneratórios ao teto legal${k.teto.am ? ` (${k.teto.am} a.m.)` : ''}` : k.bacenAm ? `limitando os juros remuneratórios à taxa média de mercado (${k.bacenAm} a.m.)` : 'limitando os juros à taxa média de mercado'}${k.teses.some(t => /seguro|tarifa|terceiros|tac/i.test(t.nome)) ? ' e afastando as tarifas e seguros indevidos' : ''}, recalculando-se as prestações;</p>
 <p class="ni">e) a condenação do réu à restituição dos valores pagos a maior, em dobro ou, subsidiariamente, de forma simples, com correção e juros;</p>
 <p class="ni">f) a condenação do réu nas custas e honorários advocatícios;</p>
 <p class="ni">g) a produção de todas as provas admitidas, especialmente a pericial contábil.</p>

@@ -77,6 +77,7 @@ function montarDados(ex = {}) {
     pfpj: cl.pfpj || (doc.length === 14 ? 'PJ' : 'PF'),
     tipo_operacao: cl.tipo_operacao || 'outro',
     subtipo: cl.subtipo || null,
+    programa: cl.programa || null,
     situacao: Number(pg.parcelas_em_atraso) > 0 ? 'atrasado' : null,
     parcelas_pagas: pagas,
     parcelas_pagas_estimadas: doDoc == null && pagas != null,
@@ -128,6 +129,13 @@ function limiteDeCredito(d, calc, taxa) {
   calc.alertas.unshift(...sinais);
 }
 
+// Pronampe: o teto é Selic do mês da contratação + spread (Lei 13.999, art. 3º, I)
+async function selicSePronampe(d) {
+  if (require('./revisao_tetos').programaDoContrato(d) !== 'pronampe') return null;
+  const s = await bacen.buscarSelicAnual(String(d.operacao?.data_contratacao || '').slice(0, 7));
+  return s ? s.valor_aa : null;
+}
+
 // Cálculo + teses (sem IA). Devolve os campos para salvar.
 async function calcularAnalise(d, taxaAnterior) {
   const editouValor = (d.campos_editados || []).some(k => /valor_financiado_total/.test(k));
@@ -135,7 +143,8 @@ async function calcularAnalise(d, taxaAnterior) {
   const taxa = await taxaPara(d, taxaAnterior);
   const { limiares } = require('./revisao_bancaria_fluxo');
   const ipcaMensal = await bacen.buscarIPCA(String(d.operacao?.data_contratacao || '').slice(0, 7) || null);
-  const calc = calculo.calcular(d, { taxaMediaBacenAM: taxa && taxa.ok ? taxa.valor_am : null, questionaveis: teses.itensQuestionaveis(d), limiares: await limiares(), ipcaMensal });
+  const selicAA = await selicSePronampe(d);
+  const calc = calculo.calcular(d, { taxaMediaBacenAM: taxa && taxa.ok ? taxa.valor_am : null, questionaveis: teses.itensQuestionaveis(d), limiares: await limiares(), ipcaMensal, selicAA });
   if (!taxa || !taxa.ok) calc.alertas.unshift(`Taxa média do Banco Central indisponível${taxa?.erro ? ` (${taxa.erro})` : ''}: o veredito considera só tarifas e seguros. Informe a taxa para comparar os juros.`);
   if (d.parcelas_pagas_estimadas) calc.alertas.push('Parcelas pagas ESTIMADAS pela data do 1º vencimento: confirme com o cliente (extrato ou carnê).');
   limiteDeCredito(d, calc, taxa);
@@ -207,4 +216,4 @@ async function vincularAoPedido(analiseId, pedidoId, uploadsRoot, usuarioId) {
   return { ok: true };
 }
 
-module.exports = { obter, salvar, processar, recalcular, montarDados, estimarPagas, calcularAnalise, vincularAoPedido, faixaDoTrecho, limiteDeCredito, marcarLimite };
+module.exports = { obter, salvar, processar, recalcular, montarDados, estimarPagas, calcularAnalise, vincularAoPedido, faixaDoTrecho, limiteDeCredito, marcarLimite, selicSePronampe };

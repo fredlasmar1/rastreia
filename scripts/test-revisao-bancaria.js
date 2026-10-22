@@ -434,5 +434,94 @@ teste('Toda Súmula/Tema citado no diagnóstico está na lista conferida', () =>
   assert.deepStrictEqual(fora, [], 'citação não conferida: ' + fora.join(', '));
 });
 
+console.log('\n15) Tetos LEGAIS: a lei vence a média do BACEN');
+const TT = require('../services/revisao_tetos');
+const teseDe = (d, calc, id) => T.aplicarTeses(d, calc).teses.find(t => t.id === id);
+teste('Cheque especial PF a 12% a.m. em 2023: acima do teto de 8% ⇒ forte, mesmo sem saldo/prazo', () => {
+  const d = { pfpj: 'PF', tipo_operacao: 'cheque_especial', operacao: { data_contratacao: '2023-03-01', taxa_juros_mensal_declarada: 12 } };
+  const calc = C.calcular(d, { taxaMediaBacenAM: 7.43 });
+  assert.strictEqual(calc.teto.id, 'cheque_especial_8');
+  assert.strictEqual(calc.teto.excedido, true);
+  assert.strictEqual(calc.veredito.nivel, 'forte');
+  assert.strictEqual(teseDe(d, calc, 'teto_legal').resultado, 'aplicavel');
+  assert.ok(/Res\. CMN 4\.765\/2019, art\. 3º/.test(teseDe(d, calc, 'teto_legal').fundamento));
+});
+teste('Cheque especial PF a 7,5% a.m.: dentro do teto; PJ não tem teto', () => {
+  const pf = C.calcular({ pfpj: 'PF', tipo_operacao: 'cheque_especial', operacao: { data_contratacao: '2023-03-01', taxa_juros_mensal_declarada: 7.5 } }, {});
+  assert.strictEqual(pf.teto.excedido, false);
+  const pj = C.calcular({ pfpj: 'PJ', tipo_operacao: 'cheque_especial', operacao: { data_contratacao: '2023-03-01', taxa_juros_mensal_declarada: 12 } }, {});
+  assert.strictEqual(pj.teto, null);
+});
+teste('Cartão parcelado depois de 03/01/2024: juros acima do valor original ⇒ excesso e cenário pelo teto', () => {
+  // R$ 1.000 em 12x de R$ 190 ⇒ juros de R$ 1.280 > R$ 1.000
+  const d = { pfpj: 'PF', tipo_operacao: 'cartao_credito', subtipo: 'parcelado', parcelas_pagas: 3, operacao: { data_contratacao: '2024-06-10', valor_financiado_total: 1000, valor_parcela: 190, prazo_meses: 12 } };
+  const calc = C.calcular(d, { taxaMediaBacenAM: 25 });          // média alta: só o teto revisa
+  assert.strictEqual(calc.teto.excedido, true);
+  perto(calc.teto.excesso, 280, 1e-9, 'excesso');
+  assert.strictEqual(calc.cenarios.A.nome, 'Juros pelo teto legal');
+  perto(calc.cenarios.A.parcela_revisada, 2000 / 12, 1e-6, 'parcela no teto = 2·PV/n');
+  assert.strictEqual(calc.veredito.nivel, 'forte');
+});
+teste('Cartão: operação antes de 03/01/2024 não tem o teto', () => {
+  const calc = C.calcular({ tipo_operacao: 'cartao_credito', operacao: { data_contratacao: '2023-11-10', valor_financiado_total: 1000, valor_parcela: 190, prazo_meses: 12 } }, {});
+  assert.strictEqual(calc.teto, null);
+});
+teste('Pronampe: Selic 10,4% + 6% ⇒ teto ~17% a.a.; a média de capital de giro fica de fora', () => {
+  const d = { pfpj: 'PJ', tipo_operacao: 'ccb_capital_giro', programa: 'pronampe', operacao: { data_contratacao: '2024-05-10', valor_financiado_total: 100000, valor_parcela: 4000, prazo_meses: 36 } };
+  const calc = C.calcular(d, { taxaMediaBacenAM: 1.7, selicAA: 10.4 });
+  perto(calc.teto.teto_aa, 1.104 * 1.06 - 1, 1e-12, 'teto composto');
+  assert.strictEqual(calc.teto.excedido, true);                    // 4000 em 36x de 100k ⇒ ~2,3% a.m. ⇒ >17% a.a.
+  assert.strictEqual(calc.razao, null);
+  assert.ok(calc.bacen.ignorada);
+  assert.strictEqual(calc.cenarios.A.nome, 'Juros pelo teto legal');
+  assert.strictEqual(teseDe(d, calc, 'juros_abusivos').resultado, 'verificar');
+});
+teste('Pronampe pós-fixado: Selic + 7% a.a. passa do máximo; Selic + 5% não. Até 2020 o máximo é 1,25%', () => {
+  const base = (spread, data) => ({ tipo_operacao: 'ccb_capital_giro', programa: 'pronampe', operacao: { data_contratacao: data, indexador: 'selic', spread_anual: spread } });
+  assert.strictEqual(C.calcular(base(7, '2023-01-10'), {}).teto.excedido, true);
+  assert.strictEqual(C.calcular(base(5, '2023-01-10'), {}).teto.excedido, false);
+  assert.strictEqual(C.calcular(base(5, '2020-08-10'), {}).teto.excedido, true);
+});
+teste('Pronampe sem a Selic do mês: "verificar", nunca teto estimado', () => {
+  const calc = C.calcular({ tipo_operacao: 'ccb_capital_giro', operacao: { tipo: 'CCB Pronampe', data_contratacao: '2024-05-10', valor_financiado_total: 100000, valor_parcela: 4000, prazo_meses: 36 } }, { taxaMediaBacenAM: 1.7 });
+  assert.strictEqual(calc.teto.id, 'pronampe');                  // achado pelo nome do produto
+  assert.strictEqual(calc.teto.excedido, null);
+  assert.strictEqual(calc.teto.teto_aa, null);
+});
+teste('FCO: linha regulada sem teto automático — a média não decide o veredito', () => {
+  const d = { pfpj: 'PJ', tipo_operacao: 'ccb_capital_giro', programa: 'fco', operacao: { data_contratacao: '2024-05-10', valor_financiado_total: 100000, valor_parcela: 4000, prazo_meses: 36 } };
+  const calc = C.calcular(d, { taxaMediaBacenAM: 1.0 });           // 2,3× a média: sem a regra sairia "forte"
+  assert.strictEqual(calc.razao, null);
+  assert.ok(!calc.cenarios.A);
+  assert.strictEqual(calc.veredito.nivel, 'fraca');
+  assert.ok(/Linha regulada/.test(calc.veredito.motivo));
+  assert.strictEqual(teseDe(d, calc, 'teto_legal').resultado, 'verificar');
+});
+teste('Operador marcou "nenhum programa": o nome do produto não reativa o Pronampe', () => {
+  assert.strictEqual(TT.programaDoContrato({ operacao: { tipo: 'CCB Pronampe' }, campos_editados: ['programa'] }), null);
+  assert.strictEqual(TT.programaDoContrato({ operacao: { tipo: 'CCB Pronampe' } }), 'pronampe');
+});
+teste('Linha comum (veículo): sem teto, tese "não se aplica" e cenário A pela média como antes', () => {
+  const d = contratoPan();
+  const calc = C.calcular(d, { taxaMediaBacenAM: 1.5 });
+  assert.strictEqual(calc.teto, null);
+  assert.strictEqual(teseDe(d, calc, 'teto_legal').resultado, 'nao_aplicavel');
+  assert.strictEqual(calc.cenarios.A.nome, 'Juros pela taxa média do BACEN');
+});
+
+console.log('\n16) Roteiro da CCB e CET');
+teste('Honorários extrajudiciais de 20% em CCB ⇒ aplicável (Lei 10.931, art. 28, § 1º, IV); 10% ⇒ dentro', () => {
+  const d = (h) => ({ tipo_operacao: 'ccb_capital_giro', operacao: {}, clausulas: { honorarios_extrajudiciais_percentual: h } });
+  assert.strictEqual(teseDe(d(20), null, 'honorarios_ccb').resultado, 'aplicavel');
+  assert.strictEqual(teseDe(d(10), null, 'honorarios_ccb').resultado, 'nao_aplicavel');
+  assert.strictEqual(teseDe({ tipo_operacao: 'emprestimo_pessoal', operacao: {}, clausulas: { honorarios_extrajudiciais_percentual: 20 } }, null, 'honorarios_ccb').resultado, 'verificar');
+});
+teste('CET: contrato desde 01/02/2021 cita a Res. 4.881; anterior, a 3.517', () => {
+  const sem = (data) => teseDe({ operacao: { data_contratacao: data, valor_financiado_total: 10000, valor_liberado: 10000, valor_parcela: 1000, prazo_meses: 12 } },
+    C.calcular({ operacao: { data_contratacao: data, valor_financiado_total: 10000, valor_liberado: 10000, valor_parcela: 1000, prazo_meses: 12 } }, {}), 'cet_informado').detalhe;
+  assert.ok(/4\.881/.test(sem('2023-05-10')) && !/3\.517/.test(sem('2023-05-10')));
+  assert.ok(/3\.517/.test(sem('2019-05-10')));
+});
+
 console.log(`\n${ok} passaram, ${falhas} falharam.`);
 process.exit(falhas ? 1 : 0);

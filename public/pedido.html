@@ -104,6 +104,7 @@
       ['pfpj', 'Pessoa', 'select', ['PF', 'PJ']],
       ['tipo_operacao', 'Tipo de operação', 'select', ['', 'financiamento_veiculo', 'emprestimo_pessoal', 'consignado', 'renegociacao', 'ccb_capital_giro', 'conta_garantida', 'desconto_recebiveis', 'antecipacao_cartao', 'cartao_credito', 'cheque_especial', 'financiamento_bens', 'arrendamento_mercantil', 'vendor', 'compror', 'cambio', 'comercio_exterior', 'financiamento_imobiliario', 'outro']],
       ['subtipo', 'Subtipo (consignado, giro, desconto, leasing, câmbio)', 'select', ['', 'inss', 'publico', 'privado', 'parcelado', 'ate_365', 'rotativo', 'cheques', 'veiculo', 'outros', 'importacao', 'exportacao']],
+      ['programa', 'Programa oficial (Pronampe, FCO, Fies…)', 'select', ['', 'pronampe', 'fco', 'fne', 'fno', 'fies', 'rural', 'sfh', 'mcmv']],
       ['operacao.numero_contrato', 'Nº do contrato'], ['operacao.data_contratacao', 'Data da contratação', 'date'],
       ['operacao.data_primeiro_vencimento', '1º vencimento', 'date'],
       ['situacao', 'Situação', 'select', ['', 'em_dia', 'atrasado', 'busca_apreensao', 'executado', 'quitado']],
@@ -115,6 +116,7 @@
       ['operacao.sistema_amortizacao', 'Sistema', 'select', ['nao_informado', 'price', 'sac', 'outro']],
       ['operacao.taxa_juros_mensal_declarada', 'Taxa mensal declarada (%)', 'number'], ['operacao.taxa_juros_anual_declarada', 'Taxa anual declarada (%)', 'number'],
       ['operacao.cet_mensal', 'CET mensal (%)', 'number'], ['operacao.cet_anual', 'CET anual (%)', 'number'],
+      ['operacao.indexador', 'Indexador (pós-fixado)', 'select', ['', 'prefixado', 'selic', 'cdi', 'tr', 'ipca', 'outro']], ['operacao.spread_anual', 'Spread sobre o indexador (% a.a.)', 'number'],
       ['operacao.capitalizacao_expressa', 'Capitalização expressa?', 'bool'], ['operacao.clausula_capitalizacao_trecho', 'Trecho da capitalização', 'text'],
       ['iof.valor', 'IOF (R$)', 'number'], ['iof.financiado', 'IOF financiado?', 'bool']
     ]],
