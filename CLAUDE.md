@@ -174,6 +174,11 @@ pago → aguardando_documentos (upload até 10 docs) → extraindo (Claude lê o
   Citações do diagnóstico travadas no teste 14.
   **É USO INTERNO**: não entra no laudo nem no parecer que vão ao cliente (teste do laudo confere). PDF interno pelo
   botão da tela, com tarja.
+  **Relatório interno = HTML do servidor** (`services/revisao_diagnostico_html.js`, 22/10/2026): as duas telas recebem
+  `diagnostico_html` no JSON e o PDF interno é `GET .../diagnostico-interno` (página com tudo aberto). Ordem: placar
+  (vale a pena? quanto está em jogo? fazer agora) → em 30 segundos → argumentos com R$ de cada um (do cálculo) → riscos
+  → plano → cartas/não prometer → documentos e mensagem. `placar()` roda também em diagnóstico antigo. Busca e
+  apreensão/execução põem o prazo de defesa como "fazer agora". Testes da seção 17.
 - **Relatório para o cliente** (`services/revisao_cliente.js` + `services/pdf/revisao_cliente.js`, rota
   `GET /:pedidoId/relatorio-cliente`): marca Recobro + Balladão (`public/img/logo-balladao.png`, recortado do timbre do
   Balladão IA), linguagem simples; reescreve os achados para o cliente e NUNCA leva estratégia, força, defesa do banco
