@@ -81,7 +81,10 @@ const resumoAnalise = (a) => {
   const c = a.calculo;
   const leve = c ? { ...c, tabela_contratada: undefined, cenarios: Object.fromEntries(Object.entries(c.cenarios || {}).map(([k, v]) => [k, { ...v, tabela: undefined }])) } : null;
   return { ...a, arquivos: (a.arquivos || []).map(f => ({ filename: f.filename, size_bytes: f.size_bytes })), calculo: leve,
-    diagnostico_html: diagHtml.renderizar(a.diagnostico, c, { idMsg: 'dgx-msg' }) };
+    diagnostico_html: diagHtml.renderizar(a.diagnostico, c, { idMsg: 'dgx-msg' }),
+    placar: a.diagnostico ? (a.diagnostico.placar || require('../services/revisao_diagnostico').placar(a.diagnostico, c)) : null,
+    acao_equipe: require('../services/revisao_diagnostico').acaoDaEquipe({ veredito: a.veredito, calc: c, diag: a.diagnostico, dados: a.dados || {},
+      pedido: a.pedido_id ? { id: a.pedido_id, numero: a.pedido_numero, etapa: a.pedido_etapa } : null }) };
 };
 
 router.post('/analises', autenticar, (req, res, next) => { req.analiseId = crypto.randomUUID(); next(); }, (req, res) => {
@@ -120,6 +123,11 @@ router.get('/analises/:id', autenticar, async (req, res) => {
     if (a.status === 'lendo' && Date.now() - new Date(a.atualizado_em).getTime() > 10 * 60 * 1000) {
       await analise.salvar(a.id, { status: 'erro', erro: 'A leitura foi interrompida. Clique em "Ler de novo".' });
       a = await analise.obter(a.id);
+    }
+    // número e etapa da revisão aberta a partir desta análise (o botão mostrava "Revisão #" vazio)
+    if (a.pedido_id) {
+      const pr = (await pool.query('SELECT p.numero, rb.etapa FROM pedidos p LEFT JOIN revisao_bancaria rb ON rb.pedido_id = p.id WHERE p.id = $1', [a.pedido_id])).rows[0];
+      if (pr) { a.pedido_numero = pr.numero; a.pedido_etapa = pr.etapa; }
     }
     res.json(resumoAnalise(a));
   } catch (e) { res.status(400).json({ erro: 'Análise inválida' }); }
