@@ -175,6 +175,12 @@ pago → aguardando_documentos (upload até 10 docs) → extraindo (Claude lê o
   (cadeia — Súmula 286; tarifa de aditamento), programas (Pronampe garantia excessiva, FCO/FNE/FNO renegociação
   extraordinária, Fies, rural MP 1.376) e garantias (`garantidores`: fiança/aval sem cônjuge, fiador sem anuência).
   Itens com prazo (Fies 31/12/2026, MP 1.376 até 12/11/2026) somem sozinhos depois da data.
+- **Execução e pós-fixado** (rb-calc-1.7.0 / rb-roteiros-1.2.0, 23/10/2026, teste 23 — caso real Pronampe Prime × BB):
+  contrato com `indexador` selic/cdi/ipca/tr NÃO passa pela Price (a parcela é só capital); vale o spread contra o teto.
+  A IA lê `classificacao.situacao` (executado…), `prazo_meses`/`carencia_meses`, `honorarios_judiciais_percentual` e
+  `planilha_banco` (total cobrado, mora, multa, honra do fundo). Execução ⇒ placar "NEGOCIAR A EXECUÇÃO", ação
+  "negociar antes da penhora" e o card mostra o cobrado; teses: renegociação pós-honra (Lei 13.999, art. 5º, § 9º) e
+  honorários contratuais > 10% (CPC 827).
 - **Tetos legais** (`services/revisao_tetos.js`, 22/10/2026, testes 15-16): linha com limite em lei se compara com o
   TETO, não com a média — cheque especial PF/MEI 8% a.m. (Res. 4.765, art. 3º), cartão com juros+encargos ≤ valor
   original desde 03/01/2024 (Lei 14.690, art. 28, § 1º), Pronampe Selic do mês (SGS 4189) + 6% a.a. (Lei 13.999,

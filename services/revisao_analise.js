@@ -78,7 +78,7 @@ function montarDados(ex = {}) {
     tipo_operacao: cl.tipo_operacao || 'outro',
     subtipo: cl.subtipo || null,
     programa: cl.programa || null,
-    situacao: Number(pg.parcelas_em_atraso) > 0 ? 'atrasado' : null,
+    situacao: cl.situacao || (Number(pg.parcelas_em_atraso) > 0 ? 'atrasado' : null),
     parcelas_pagas: pagas,
     parcelas_pagas_estimadas: doDoc == null && pagas != null,
     parcelas_pagas_origem: doDoc != null ? (pg.documento_origem || 'documento') : (pagas != null ? 'estimativa' : null),
@@ -97,6 +97,7 @@ function montarDados(ex = {}) {
     consignado_info: ex.consignado_info || null,
     notificacao_mora: ex.notificacao_mora || null,
     garantidores: Array.isArray(ex.garantidores) ? ex.garantidores : [],
+    planilha_banco: ex.planilha_banco || null,
     clausulas: ex.clausulas || {},
     campos_editados: []
   };

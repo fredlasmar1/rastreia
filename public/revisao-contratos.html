@@ -924,6 +924,15 @@
           ${r.ja_pago_a_mais ? `<div>Já pago a mais: <b>${brl(r.ja_pago_a_mais)}</b></div>` : ''}
           ${r.otimista ? `<div style="color:#92400e">Até ${brl(r.otimista)} se o juiz também limitar os juros à média (não garantido)</div>` : ''}
         </div>`;
+    } else if (r.cobrado) {
+      const c = r.cobrado;
+      rec = `<div style="font-size:12px;color:#166534">Execução — o banco cobra</div><div style="font-size:30px;font-weight:900;color:#14532d;line-height:1.1">${brl(c.total)}</div>
+        <div style="font-size:12px;color:#166534">${c.data ? 'posição ' + esc(String(c.data).split('-').reverse().join('/')) : 'planilha do banco'}</div>
+        <div style="display:grid;gap:4px;margin-top:10px;font-size:13px">
+          ${c.parte_fundo ? `<div>Parte já paga pelo fundo ${esc(c.fundo || 'garantidor')}: <b>${brl(c.parte_fundo)}</b> <span style="color:#64748b">(base da renegociação com desconto)</span></div>` : ''}
+          ${c.mora_multa ? `<div>Juros de mora + multa: <b>${brl(c.mora_multa)}</b> <span style="color:#64748b">(primeiro alvo do acordo)</span></div>` : ''}
+          <div style="color:#475569">O contrato está dentro das regras: o ganho vem do acordo, não de devolução.</div>
+        </div>`;
     } else if (r.simulador) {
       const sm = r.simulador;
       rec = `<div style="font-size:13px;color:#0c4a6e;margin-bottom:8px">O valor exato só sai com ${esc(r.falta)}. <b>Simule com o que o cliente informar:</b></div>

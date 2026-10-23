@@ -219,6 +219,8 @@ function montarDiagnostico(d = {}, calc = {}, taxa = null, ts = null) {
     caminhos, documentos, mensagem_cliente: mensagem,
     nota: 'Diagnóstico preliminar gerado por regras; não é parecer jurídico. Precedentes marcados como "a conferir" e teses novas passam pelo advogado.'
   };
+  out.situacao_execucao = d.situacao === 'executado';
+  out.planilha = d.planilha_banco || null;
   out.placar = placar(out, calc);
   return out;
 }
@@ -244,6 +246,7 @@ function placar(g = {}, calc = {}) {
   else if (teto && teto.excedido) decisao = { codigo: 'entrar', rotulo: 'VALE ENTRAR', porque: `${teto.nome}: o contrato passou do limite da lei.` };
   else if (nivel === 'incompleto') decisao = { codigo: 'documentos', rotulo: 'FALTA DOCUMENTO', porque: fortes.length ? `Há ${n(fortes.length)}, mas o valor em jogo só sai com os documentos.` : 'Sem os documentos ainda não dá para dizer se vale.' };
   else if (nivel === 'forte') decisao = { codigo: 'entrar', rotulo: 'VALE ENTRAR', porque: 'Juros ou cobranças indevidas pesam no bolso: há base para revisão.' };
+  else if (g.situacao_execucao) decisao = { codigo: 'negociar', rotulo: 'NEGOCIAR A EXECUÇÃO', porque: 'Já há execução: a saída é acordo antes da penhora, com defesa só no que passar do devido.' };
   else if (nivel === 'moderada' || fortes.length) decisao = { codigo: 'negociar', rotulo: 'VALE NEGOCIAR', porque: 'Há pontos para baixar a dívida na conversa com o banco; ação só se ele não ceder.' };
   else decisao = { codigo: 'nao', rotulo: 'NÃO VALE A AÇÃO', porque: 'O contrato está dentro do que os tribunais costumam aceitar: não vender revisão, no máximo negociação.' };
 
@@ -256,6 +259,7 @@ function placar(g = {}, calc = {}) {
   const ic = calc.indebito_corrigido;
   if (ic && ic.nominal > 0) em_jogo.push({ rotulo: 'Já pago a mais (corrigido)', valor: ic.corrigido, nota: 'IPCA, sem juros de mora' });
   if (teto && teto.excesso > 0) em_jogo.push({ rotulo: 'Encargos acima do teto', valor: teto.excesso, nota: 'não podem ser cobrados' });
+  if (g.planilha && Number(g.planilha.total_cobrado) > 0) em_jogo.push({ rotulo: 'Cobrado pelo banco', valor: Number(g.planilha.total_cobrado), nota: g.planilha.data_posicao ? `posição ${String(g.planilha.data_posicao).split('-').reverse().join('/')}` : 'planilha do banco' });
   if (calc.cenario_otimista && calc.economia_otimista > 0) em_jogo.push({ rotulo: 'Se o juiz limitar os juros à média', valor: calc.economia_otimista, nota: 'NÃO garantido — taxa abaixo de 1,5× a média' });
   const falta = em_jogo.length ? null : (calc.veredito?.pedir_documentos?.[0] || (g.documentos || [])[0]?.doc || 'os documentos do contrato');
   const contexto = [];
@@ -324,6 +328,21 @@ function acaoDaEquipe({ veredito, calc = {}, diag = null, dados = {}, pedido = n
   const vi = calc.valor_incontroverso;
   const fx2 = (v) => 'R$ ' + fx(v);
 
+  if (dados.situacao === 'executado' && nivel !== 'forte' && nivel !== 'incompleto' && nivel) {
+    const pb = dados.planilha_banco || {};
+    const linhas = [`Olá! Analisamos o processo de cobrança de ${banco}.`,
+      Number(pb.total_cobrado) > 0 ? `O banco cobra ${fx2(Number(pb.total_cobrado))}. A conta segue o contrato, mas há espaço para negociar${Number(pb.valor_honrado_fundo) > 0 ? ': o fundo garantidor do governo já pagou parte ao banco, e a lei prevê renegociação com desconto nesse caso' : ''}.` : 'Há espaço para negociar antes que o processo avance.',
+      'Não assine nenhum acordo com o banco sem falar com a gente, e nos avise no mesmo dia se chegar oficial de justiça ou carta da Justiça.',
+      'Para preparar a proposta, precisamos do extrato da conta desde a contratação e da lista de bens da empresa e dos sócios. Pode mandar em PDF ou foto.'];
+    return { codigo: 'oferecer', titulo: 'Execução em curso: negociar antes da penhora', urgente,
+      passos: [
+        { texto: 'Conferir no processo se já houve citação: são 3 dias para pagar (honorários de 5%) e 15 para os embargos.', botao: null },
+        { texto: 'Mandar a mensagem abaixo e pedir ao advogado do banco uma proposta de acordo por escrito.', botao: 'mensagem' },
+        { texto: 'Cliente quer seguir: abrir a revisão (defesa e acordo).', botao: 'abrir_revisao' }
+      ],
+      mensagem: linhas.join('\n') };
+  }
+
   if (nivel === 'incompleto' || !nivel) {
     return { codigo: 'documentos', titulo: 'Pedir documentos ao cliente', urgente,
       passos: [
@@ -390,7 +409,13 @@ function abusividades(g = {}, calc = {}, dados = {}, ts = null) {
     ja_pago_a_mais: ic && ic.nominal > 0 ? ic.corrigido : (cp && cp.total_pago_a_mais > 0 ? cp.total_pago_a_mais : null),
     parcela_hoje: vi ? vi.parcela_contratada : null, parcela_revisada: vi ? vi.parcela_mensal : null,
     otimista: calc.cenario_otimista && calc.economia_otimista > 0 ? calc.economia_otimista : null,
-    falta: null, simulador: null
+    falta: null, simulador: null,
+    // execução: o que o banco cobra e quanto disso é do fundo garantidor (planilha do banco)
+    cobrado: dados.planilha_banco && Number(dados.planilha_banco.total_cobrado) > 0 ? {
+      total: Number(dados.planilha_banco.total_cobrado), data: dados.planilha_banco.data_posicao || null,
+      parte_fundo: Number(dados.planilha_banco.saldo_parte_fundo) || null, fundo: dados.planilha_banco.fundo_garantidor || null,
+      mora_multa: (Number(dados.planilha_banco.juros_mora) || 0) + (Number(dados.planilha_banco.multa) || 0) || null
+    } : null
   };
   const op = dados.operacao || {};
   if (op.estrutura === 'limite_de_credito' && !recuperar.total) {

@@ -25,7 +25,7 @@
  * anuiu à renegociação) — somadas ao roteiro do tipo quando o caso tem programa
  * ou garantidores.
  */
-const VERSAO_ROTEIROS = 'rb-roteiros-1.1.0 (2026-10-23)';
+const VERSAO_ROTEIROS = 'rb-roteiros-1.2.0 (2026-10-23)';
 const hojeISO = () => new Date().toISOString().slice(0, 10);
 const anosAtras = (n) => { const d = new Date(); d.setFullYear(d.getFullYear() - n); return d.toISOString().slice(0, 10); };
 
@@ -100,6 +100,21 @@ const COMUNS = [
     }
   }
 ];
+
+// Execução: honorários contratuais acima dos 10% do CPC
+COMUNS.push({
+  id: 'honorarios_judiciais_contratuais',
+  nome: 'Honorários de advogado acima de 10% na execução',
+  explicacao_cliente: 'O contrato prevê honorários maiores para o advogado do banco na cobrança judicial, mas na execução quem fixa é o juiz — em regra 10%, e só 5% se pagar em 3 dias.',
+  fundamento: 'CPC, art. 827: na execução por quantia certa, o juiz fixa, de plano, honorários de 10%, reduzidos à metade se o executado pagar em 3 dias (§ 1º).',
+  forca: 'media',
+  regra(d) {
+    const h = Number(d.clausulas?.honorarios_judiciais_percentual);
+    if (!(h > 10) || d.situacao !== 'executado') return naoSeAplica;
+    const total = Number(d.planilha_banco?.total_cobrado) || 0;
+    return { resultado: 'aplicavel', detalhe: `O contrato prevê ${String(h).replace('.', ',')}% na cobrança judicial.${total ? ` Sobre ${brl(total)}, cada ponto acima de 10% custa ${brl(total / 100)}.` : ''}`, valor: total ? total * (h - 10) / 100 : null, valor_base: total ? `${brl(total)} × (${String(h).replace('.', ',')}% − 10%) evitados` : null };
+  }
+});
 
 const ROTEIROS = {
   cheque_especial: [
@@ -292,6 +307,22 @@ const ROTEIROS = {
 // ── Programas oficiais: somados ao roteiro do tipo quando o contrato é de programa ──
 const PROGRAMAS = {
   pronampe: [
+    {
+      id: 'pronampe_renegociacao_pos_honra',
+      nome: 'Renegociação com desconto depois da honra do FGO',
+      explicacao_cliente: 'Quando o fundo do governo já pagou o banco, a lei manda o banco oferecer renegociação, inclusive com desconto.',
+      fundamento: 'Lei 13.999/2020, art. 5º, § 9º (red. Lei 14.995/2024): após a honra pelo FGO, os agentes financeiros deverão adotar estratégia de renegociação semelhante à de créditos próprios, inclusive com descontos, conforme o estatuto do Fundo; a parte honrada não recuperada é leiloada/cedida e, se não alienada, extinta (art. 5º, §§ 5º e 8º).',
+      forca: 'alta',
+      regra(d) {
+        const pb = d.planilha_banco || {};
+        const honrado = Number(pb.valor_honrado_fundo) > 0;
+        if (!honrado) return d.situacao === 'executado' || d.situacao === 'atrasado'
+          ? { resultado: 'verificar', detalhe: 'Contrato em atraso: confirmar se o FGO já honrou a dívida — se sim, o banco tem de renegociar com desconto.', valor: null, documento: 'Planilha de débito do banco (mostra a honra do FGO)' }
+          : naoSeAplica;
+        const parte = Number(pb.saldo_parte_fundo) > 0 ? ` A parte do fundo cobrada hoje é ${brl(pb.saldo_parte_fundo)}.` : '';
+        return { resultado: 'aplicavel', detalhe: `O FGO pagou ${brl(pb.valor_honrado_fundo)} ao banco${pb.data_honra_fundo ? ` em ${String(pb.data_honra_fundo).split('-').reverse().join('/')}` : ''}.${parte} Pedir proposta de renegociação com desconto por escrito.`, valor: null, valor_base: 'desconto conforme o estatuto do FGO (pedir a proposta ao banco)' };
+      }
+    },
     {
       id: 'pronampe_garantia_excessiva',
       nome: 'Garantia além da permitida no Pronampe',
