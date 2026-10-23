@@ -660,5 +660,31 @@ teste('Caso fraco ⇒ não vender, com retorno honesto e alternativa', () => {
   assert.ok(/portabilidade/.test(ae.mensagem) && !/undefined|NaN/.test(ae.mensagem));
 });
 
+console.log('\n20) Abusividades do banco e quanto dá para recuperar');
+teste('GiroCaixa: abusividades com cláusula, sem valor inventado, simulador com a média e a faixa', () => {
+  const g = diagGiro();
+  const ex = exGiro(); ex.clausulas = clausulasGiro(); ex.garantia = { tipo: 'aval' };
+  const d = AN.montarDados(ex); const calc = C.calcular(d, { taxaMediaBacenAM: 1.75 }); AN.limiteDeCredito(d, calc, { ok: true, valor_am: 1.75 });
+  const ab = DG.abusividades(g, calc, d);
+  assert.strictEqual(ab.linhas[0].id, 'taxa_em_faixa');
+  assert.strictEqual(ab.linhas[0].valor, null);
+  assert.ok(/simulador/.test(ab.linhas[0].valor_nota));
+  assert.ok(!ab.linhas.some(l => l.id === 'vencimento_cruzado'), 'risco não é abusividade');
+  assert.ok(!ab.linhas.some(l => l.id === 'honorarios_extra'), '10% está dentro do limite');
+  assert.strictEqual(ab.recuperar.total, null);
+  assert.deepStrictEqual([ab.recuperar.simulador.media_am, ab.recuperar.simulador.taxa_minima_am], [1.75, 2.26]);
+  assert.ok(ab.nao_e_abuso.length >= 2);
+});
+teste('Veículo com juros 1,58×: total recuperável, parcela hoje → revisada e valor por abusividade', () => {
+  const d = contratoPan();
+  const calc = C.calcular(d, { taxaMediaBacenAM: 1.5, questionaveis: T.itensQuestionaveis(d) });
+  const g = DG.montarDiagnostico(d, calc, { ok: true, valor_am: 1.5 }, T.aplicarTeses(d, calc));
+  const ab = DG.abusividades(g, calc, d);
+  perto(ab.recuperar.total, calc.economia_estimada, 1e-9, 'total');
+  assert.ok(ab.recuperar.parcela_hoje > ab.recuperar.parcela_revisada);
+  assert.strictEqual(ab.recuperar.simulador, null);
+  perto(ab.linhas.find(l => l.id === 'juros_acima_media').valor, calc.cenarios.A.economia_total, 1e-9, 'juros');
+});
+
 console.log(`\n${ok} passaram, ${falhas} falharam.`);
 process.exit(falhas ? 1 : 0);

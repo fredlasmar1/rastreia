@@ -83,6 +83,7 @@ const resumoAnalise = (a) => {
   return { ...a, arquivos: (a.arquivos || []).map(f => ({ filename: f.filename, size_bytes: f.size_bytes })), calculo: leve,
     diagnostico_html: diagHtml.renderizar(a.diagnostico, c, { idMsg: 'dgx-msg' }),
     placar: a.diagnostico ? (a.diagnostico.placar || require('../services/revisao_diagnostico').placar(a.diagnostico, c)) : null,
+    abusividades: a.diagnostico ? require('../services/revisao_diagnostico').abusividades(a.diagnostico, c, a.dados || {}) : null,
     acao_equipe: require('../services/revisao_diagnostico').acaoDaEquipe({ veredito: a.veredito, calc: c, diag: a.diagnostico, dados: a.dados || {},
       pedido: a.pedido_id ? { id: a.pedido_id, numero: a.pedido_numero, etapa: a.pedido_etapa } : null }) };
 };
