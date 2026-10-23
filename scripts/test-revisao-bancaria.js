@@ -622,5 +622,43 @@ teste('Só juros a 1,3× (sem tarifas): sem economia prometida, otimista = A, ve
   assert.strictEqual(calc.valor_incontroverso, null);
 });
 
+console.log('\n19) Próximo passo da EQUIPE na análise rápida');
+teste('GiroCaixa sem comprovantes ⇒ pedir documentos, com a mensagem do diagnóstico', () => {
+  const g = diagGiro();
+  const ae = DG.acaoDaEquipe({ veredito: 'incompleto', calc: { veredito: { nivel: 'incompleto' } }, diag: g, dados: { instituicao: { nome: 'CAIXA' } } });
+  assert.strictEqual(ae.codigo, 'documentos');
+  assert.deepStrictEqual(ae.passos.map(x => x.botao), ['mensagem', 'documentos']);
+  assert.strictEqual(ae.mensagem, g.mensagem_cliente);
+});
+teste('Análise que já virou revisão ⇒ o passo é abrir a revisão (com número e etapa)', () => {
+  const ae = DG.acaoDaEquipe({ veredito: 'incompleto', diag: diagGiro(), pedido: { id: 'x', numero: 128, etapa: 'conferencia_operador' } });
+  assert.strictEqual(ae.codigo, 'revisao');
+  assert.ok(/#128/.test(ae.titulo) && /conferência/.test(ae.titulo));
+  assert.strictEqual(ae.passos[0].botao, 'ver_revisao');
+});
+teste('Caso forte ⇒ vender: proposta com parcela e economia do cálculo, sem prometer', () => {
+  const d = contratoPan();
+  const calc = C.calcular(d, { taxaMediaBacenAM: 1.5, questionaveis: T.itensQuestionaveis(d) });
+  const g = DG.montarDiagnostico(d, calc, { ok: true, valor_am: 1.5 }, T.aplicarTeses(d, calc));
+  const ae = DG.acaoDaEquipe({ veredito: calc.veredito.nivel, calc, diag: g, dados: d });
+  assert.strictEqual(ae.codigo, 'vender');
+  assert.deepStrictEqual(ae.passos.map(x => x.botao), ['mensagem', 'abrir_revisao']);
+  assert.ok(ae.mensagem.includes('Banco Pan') && /estimativa/.test(ae.mensagem));
+  assert.ok(!/descaracteriza|Tema|Súmula|encargos de mora/i.test(ae.mensagem), 'juridiquês na mensagem: ' + ae.mensagem);
+  assert.ok(/serviços de terceiros/.test(ae.mensagem) && /prazo para se defender/.test(ae.mensagem));
+  assert.ok(/Encontramos: juros bem acima da média/.test(ae.mensagem), 'o ponto que mais vale vem primeiro');
+  assert.ok(ae.mensagem.includes(calc.valor_incontroverso.parcela_mensal.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })));
+  assert.ok(/Busca e apreensão/.test(ae.urgente));
+});
+teste('Caso fraco ⇒ não vender, com retorno honesto e alternativa', () => {
+  const d = { pfpj: 'PF', tipo_operacao: 'emprestimo_pessoal', instituicao: { nome: 'Banco X' }, operacao: { valor_financiado_total: 10000, valor_parcela: 520, prazo_meses: 24, data_contratacao: '2024-03-10' } };
+  const calc = C.calcular(d, { taxaMediaBacenAM: 3.0 });
+  const g = DG.montarDiagnostico(d, calc, { ok: true, valor_am: 3.0 }, T.aplicarTeses(d, calc));
+  const ae = DG.acaoDaEquipe({ veredito: calc.veredito.nivel, calc, diag: g, dados: d });
+  assert.strictEqual(calc.veredito.nivel, 'fraca');
+  assert.strictEqual(ae.codigo, 'nao_vender');
+  assert.ok(/portabilidade/.test(ae.mensagem) && !/undefined|NaN/.test(ae.mensagem));
+});
+
 console.log(`\n${ok} passaram, ${falhas} falharam.`);
 process.exit(falhas ? 1 : 0);

@@ -272,4 +272,83 @@ function placar(g = {}, calc = {}) {
   return { decisao, em_jogo, falta, contexto, proximo, em_30s, contagem: { fortes: fortes.length, medios: medios.length, fracos: achados.length - fortes.length - medios.length } };
 }
 
-module.exports = { montarDiagnostico, placar, cdc, VERSAO_DIAGNOSTICO };
+/**
+ * Próximo passo da EQUIPE (não do cliente) na análise rápida: uma decisão, os
+ * passos com o botão de cada um e a mensagem pronta para o cliente. Função
+ * pura; os números saem do cálculo, nunca da IA.
+ *   ctx = { veredito, calc, diag, dados, pedido: { id, numero, etapa } | null }
+ */
+const ETAPA_NOME = {
+  aguardando_documentos: 'aguardando documentos', extraindo: 'lendo o contrato', conferencia_operador: 'conferência dos dados',
+  calculando: 'cálculo', revisao_juridica: 'com o advogado', aprovado: 'aprovada', concluido: 'laudo entregue'
+};
+// Achado → frase que o cliente entende (sem juridiquês). Achado sem tradução não vai à mensagem.
+const PARA_CLIENTE = {
+  juros_acima_media: 'juros bem acima da média que os bancos cobravam',
+  tese_teto_legal: 'juros acima do limite que a lei permite',
+  taxa_em_faixa: 'o contrato não prova a taxa de cada empréstimo',
+  tese_avaliacao_registro_terceiros: 'cobrança de "serviços de terceiros" sem dizer qual serviço foi feito',
+  tese_seguro_venda_casada: 'seguro embutido sem você poder recusar',
+  tese_tac_tec: 'tarifa de abertura que não pode mais ser cobrada',
+  tese_taxa_maior_declarada: 'a taxa real é maior que a escrita no contrato',
+  tese_cet_informado: 'o custo total é maior que o informado',
+  tese_comissao_permanencia: 'encargos de atraso cobrados em duplicidade',
+  tese_honorarios_ccb: 'honorários de cobrança acima de 10%',
+  honorarios_extra: 'honorários de cobrança acima de 10%'
+};
+
+function acaoDaEquipe({ veredito, calc = {}, diag = null, dados = {}, pedido = null } = {}) {
+  calc = calc || {};
+  const nivel = calc.veredito?.nivel || veredito || null;
+  const banco = dados.instituicao?.nome || 'o banco';
+  const urgente = dados.situacao === 'busca_apreensao'
+    ? 'Busca e apreensão em curso: o prazo para defesa (5 dias para pagar e reaver o bem, 15 para contestar) corre da liminar. Ligar para o cliente hoje.'
+    : dados.situacao === 'executado' ? 'Execução em curso: 15 dias para os embargos a partir da juntada do mandado. Ligar para o cliente hoje.' : null;
+
+  if (pedido && pedido.id) {
+    return { codigo: 'revisao', titulo: `Já é a Revisão #${pedido.numero ?? ''}${pedido.etapa ? ` — ${ETAPA_NOME[pedido.etapa] || pedido.etapa}` : ''}`, urgente,
+      passos: [{ texto: pedido.etapa === 'conferencia_operador' ? 'Conferir os dados lidos e confirmar: o cálculo e o veredito saem em seguida.' : 'Continuar pela tela da revisão.', botao: 'ver_revisao' }],
+      mensagem: null };
+  }
+
+  const p = diag ? (diag.placar || placar(diag, calc)) : null;
+  const porValor = [...(diag?.achados || [])].sort((x, y) => (y.impacto?.valor || 0) - (x.impacto?.valor || 0));   // o que mais vale primeiro
+  const aplic = [...new Set(porValor.filter(a => a.forca !== 'baixa' && PARA_CLIENTE[a.id] && !(a.id === 'honorarios_extra' && a.forca !== 'alta')).map(a => PARA_CLIENTE[a.id]))];
+  const eco = Number(calc.economia_estimada) || 0;
+  const vi = calc.valor_incontroverso;
+  const fx2 = (v) => 'R$ ' + fx(v);
+
+  if (nivel === 'incompleto' || !nivel) {
+    return { codigo: 'documentos', titulo: 'Pedir documentos ao cliente', urgente,
+      passos: [
+        { texto: 'Mandar a mensagem abaixo (já explica o que trazer e o que não fazer no banco).', botao: 'mensagem' },
+        { texto: 'Quando os documentos chegarem, juntar aqui: o veredito e o valor saem na hora.', botao: 'documentos' }
+      ],
+      mensagem: diag?.mensagem_cliente || 'Olá! Analisamos o seu contrato. Para concluir, precisamos do contrato completo e do extrato das parcelas. Pode mandar em PDF ou foto. Obrigado!' };
+  }
+
+  if (nivel === 'forte' || nivel === 'moderada') {
+    const linhas = [`Olá! Analisamos o seu contrato com ${banco}.`];
+    if (aplic.length) linhas.push(`Encontramos: ${aplic.slice(0, 3).join('; ')}.`);
+    if (vi && vi.parcela_contratada > vi.parcela_mensal) linhas.push(`Pela nossa conta, a parcela de ${fx2(vi.parcela_contratada)} cairia para cerca de ${fx2(vi.parcela_mensal)}.`);
+    if (eco > 0) linhas.push(`A economia estimada é de ${fx2(eco)} (estimativa; o resultado depende da negociação ou da Justiça).`);
+    if (dados.situacao === 'busca_apreensao' || dados.situacao === 'executado') linhas.push('Como já há processo do banco contra você, o prazo para se defender é curto: precisamos conversar hoje.');
+    linhas.push('O próximo passo é a revisão completa, com laudo e parecer do advogado. Posso te passar o valor e como funciona?');
+    return { codigo: nivel === 'forte' ? 'vender' : 'oferecer', titulo: nivel === 'forte' ? 'Vender a revisão' : 'Oferecer a revisão (caso médio)', urgente,
+      passos: [
+        { texto: nivel === 'forte' ? 'Mandar a proposta abaixo ao cliente.' : 'Mandar a proposta abaixo — é um caso médio: não prometer mais do que o valor estimado.', botao: 'mensagem' },
+        { texto: 'Cliente topou: abrir a revisão e cobrar (a tela da revisão gera o link de pagamento).', botao: 'abrir_revisao' }
+      ],
+      mensagem: linhas.join('\n') };
+  }
+
+  // fraca / inviável: não vender ação
+  const naoVale = [`Olá! Analisamos o seu contrato com ${banco}.`,
+    nivel === 'inviavel' ? (calc.veredito?.motivo || 'Com os dados do contrato, não há como sustentar uma revisão.') : 'Os juros e as cobranças estão dentro do que o mercado pratica, e uma ação de revisão não compensaria o custo.',
+    'Se as parcelas estão pesando, dá para tentar uma renegociação direta ou levar a dívida para outro banco com juros menores (portabilidade). Se quiser, te orientamos nisso.'];
+  return { codigo: 'nao_vender', titulo: 'Não vender revisão — dar o retorno ao cliente', urgente,
+    passos: [{ texto: 'Mandar o retorno abaixo; se o cliente quiser, oferecer ajuda na renegociação.', botao: 'mensagem' }],
+    mensagem: naoVale.join('\n') };
+}
+
+module.exports = { montarDiagnostico, placar, acaoDaEquipe, cdc, VERSAO_DIAGNOSTICO };
