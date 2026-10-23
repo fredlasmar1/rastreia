@@ -10,7 +10,7 @@
  * PMT = parcela, n = prazo em meses, i = taxa mensal (fração: 0.02 = 2%).
  * Testes: scripts/test-revisao-bancaria.js (node).
  */
-const VERSAO_CALCULO = 'rb-calc-1.5.0 (2026-10-22)';
+const VERSAO_CALCULO = 'rb-calc-1.6.0 (2026-10-23)';
 
 const EPS = 1e-12;
 
@@ -328,10 +328,21 @@ function calcular(dados = {}, opts = {}) {
     cen.C = { nome: `Combinado: ${revAM === tetoAM ? 'teto legal' : 'taxa BACEN'} + sem tarifas/seguros`, taxa_am: revAM, principal: PVsemItens, ...comparar(tabContr, t, k, q.aVista), tabela: t };
   }
   resultado.cenarios = cen;
-  const melhor = cen.C || cen.A || cen.B || null;
+  // Honestidade: os juros só entram no cenário PRINCIPAL quando a tese se
+  // sustenta — teto legal estourado ou taxa ≥ razaoForte (1,5×) a média, o
+  // patamar que o STJ costuma exigir. Abaixo disso, A/C viram "cenário
+  // otimista" (aparece como "até R$ X se o juiz limitar os juros à média"),
+  // e a economia prometida fica só no que tem base (tarifas e seguros, B).
+  const jurosSustentam = tetoAM != null || (resultado.razao != null && resultado.razao >= L.razaoForte);
+  resultado.juros_revisaveis = jurosSustentam;
+  const chave = jurosSustentam ? (cen.C ? 'C' : cen.A ? 'A' : cen.B ? 'B' : null) : (cen.B ? 'B' : null);
+  const chaveOtimista = !jurosSustentam && resultado.razao != null && resultado.razao >= L.razaoModerada ? (cen.C ? 'C' : cen.A ? 'A' : null) : null;
+  const melhor = chave ? cen[chave] : null;
   const economia = melhor ? Math.max(0, melhor.economia_total) : 0;
   resultado.economia_estimada = economia;
-  resultado.cenario_principal = melhor ? (cen.C ? 'C' : cen.A ? 'A' : 'B') : null;
+  resultado.cenario_principal = chave;
+  resultado.cenario_otimista = chaveOtimista;
+  resultado.economia_otimista = chaveOtimista ? Math.max(0, cen[chaveOtimista].economia_total) : null;
   // Pago a mais CORRIGIDO (estimativa): cada diferença paga é corrigida pelo
   // IPCA desde o mês do pagamento (Súmulas 43 e 162 STJ por analogia; CC art. 389, par. único,
   // Lei 14.905/2024). Juros de mora ficam de fora — na repetição correm da

@@ -145,6 +145,13 @@ pago → aguardando_documentos (upload até 10 docs) → extraindo (Claude lê o
 
 - Módulo à PARTE do Rastreia: aba própria `/revisao-contratos.html`, fora do dashboard/lista/números do Rastreia; sem preço fixo (o operador digita `valor_customizado`, 0 = cortesia).
 - Valor incontroverso (CPC art. 330 §§2º-3º) = parcela revisada do cenário principal (`calculo.valor_incontroverso`).
+- **Cenário principal honesto** (rb-calc-1.6.0, 23/10/2026): juros pela média só entram no principal se a tese se
+  sustenta (teto legal estourado ou razão ≥ `razaoForte`, 1,5×). Abaixo disso o principal é B (tarifas/seguros) e
+  A/C viram `cenario_otimista` (razão ≥ 1,2×), mostrado como "até R$ X, não garantido" — laudo, tela, diagnóstico e
+  parecer IA (`aviso_juros`) seguem a mesma regra. Testes da seção 18.
+- **Laudo PDF**: 1ª página = viabilidade + parcela revisada / já pago a mais / economia; "o que encontramos" sai das
+  teses (o resumo da IA não vai mais ao topo); gráfico contrato × média × teto; cobrado × devido só do principal;
+  todos os cenários no anexo. Helvetica não tem →, Π, −, ≈: passar texto por `seguro()`.
 - Parcelas pagas: a IA conta em extrato/carnê (`dados_extraidos.pagamentos`); sem documento, estimativa pela data (marcada).
 - Clientes da revisão: tabela `clientes` com `nicho = 'revisao_bancaria'` (aba Clientes; busca na janela de abrir revisão).
 - Situação do serviço: 6 passos (pagamento → contrato → conferência → cálculo → advogado → laudo), quadro na aba,
