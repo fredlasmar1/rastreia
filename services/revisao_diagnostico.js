@@ -351,4 +351,50 @@ function acaoDaEquipe({ veredito, calc = {}, diag = null, dados = {}, pedido = n
     mensagem: naoVale.join('\n') };
 }
 
-module.exports = { montarDiagnostico, placar, acaoDaEquipe, cdc, VERSAO_DIAGNOSTICO };
+/**
+ * Abusividades do banco + quanto dá para recuperar — o que o dono quer ver
+ * primeiro. Cada linha: o que o banco fez, cláusula, força e o valor (do
+ * cálculo) ou por que ainda não tem valor. Contrato de limite sem comprovante
+ * ganha os parâmetros do simulador (o valor depende do saque).
+ */
+const SEM_VALOR = {
+  taxa_em_faixa: 'Depende do valor e da taxa de cada saque — use o simulador',
+  perda_redutor: 'Aparece no extrato, se a taxa subiu depois de um atraso',
+  mora_sobre_juros: 'Só sobre as parcelas pagas em atraso',
+  debito_rotativo: 'Juros de cheque especial cobrados no extrato',
+  aval_limite_aumentado: 'Protege o patrimônio dos avalistas',
+  tese_taxa_maior_declarada: 'Entra no recálculo da parcela',
+  tese_cet_informado: 'Falta o valor que caiu na conta',
+  tese_encargos_mora: 'Defesa: afasta a mora na busca e apreensão',
+  tese_comissao_permanencia: 'Abate os encargos de atraso cobrados juntos',
+  tese_superendividamento: 'Repactuação de todas as dívidas'
+};
+const SO_RISCO = new Set(['vencimento_cruzado']);
+function abusividades(g = {}, calc = {}, dados = {}) {
+  calc = calc || {};
+  const linhas = (g.achados || []).filter(a => !SO_RISCO.has(a.id) && !(a.id === 'honorarios_extra' && a.forca !== 'alta')).map(a => ({
+    id: a.id, forca: a.forca, titulo: a.titulo, porque: a.porque, clausula: a.clausula || null,
+    valor: a.impacto?.valor > 0 ? a.impacto.valor : null, valor_grupo: a.impacto?.grupo || null,
+    valor_nota: a.impacto?.valor > 0 ? (a.impacto.nota || null) : (SEM_VALOR[a.id] || null)
+  }));
+  const cp = calc.cenario_principal && calc.cenarios ? calc.cenarios[calc.cenario_principal] : null;
+  const vi = calc.valor_incontroverso, ic = calc.indebito_corrigido;
+  const recuperar = {
+    total: Number(calc.economia_estimada) > 0 ? Number(calc.economia_estimada) : null,
+    ja_pago_a_mais: ic && ic.nominal > 0 ? ic.corrigido : (cp && cp.total_pago_a_mais > 0 ? cp.total_pago_a_mais : null),
+    parcela_hoje: vi ? vi.parcela_contratada : null, parcela_revisada: vi ? vi.parcela_mensal : null,
+    otimista: calc.cenario_otimista && calc.economia_otimista > 0 ? calc.economia_otimista : null,
+    falta: null, simulador: null
+  };
+  const op = dados.operacao || {};
+  if (op.estrutura === 'limite_de_credito' && !recuperar.total) {
+    const media = calc.limite?.media_bacen_am ?? null;
+    if (media) recuperar.simulador = { media_am: media, taxa_minima_am: op.taxa_minima_mensal ?? null, taxa_maxima_am: op.taxa_maxima_mensal ?? null, limite: op.limite_credito ?? null };
+    recuperar.falta = 'o comprovante de cada saque (valor, taxa e prazo)';
+  } else if (!recuperar.total) {
+    recuperar.falta = (g.placar && g.placar.falta) || null;
+  }
+  return { linhas, nao_e_abuso: (g.nao_e_abuso || []).map(x => x.titulo), recuperar };
+}
+
+module.exports = { montarDiagnostico, placar, acaoDaEquipe, abusividades, cdc, VERSAO_DIAGNOSTICO };

@@ -67,6 +67,7 @@
     /* Diagnóstico estratégico */
     .dg { padding: 20px 26px 4px; }
     .an-dobra { border-top: 1px solid var(--rc-linha); }
+    @media (max-width: 900px) { .an-ab { grid-template-columns: 1fr !important; } }
     .an-dobra > summary { cursor: pointer; padding: 14px 26px; font-weight: 800; color: var(--rc-tinta); font-size: 14px; list-style: none; }
     .an-dobra > summary::-webkit-details-marker { display: none; }
     .an-dobra > summary::before { content: '▸ '; color: var(--rc-suave); }
@@ -826,6 +827,7 @@
         <span class="rc-pill" style="background:${v[1]};color:${v[2]}">${esc(v[0])}</span>
         ${Number(a.economia_estimada) > 0 ? `<span style="margin-left:auto;font-weight:800;color:#0f172a">Economia estimada ${brl(a.economia_estimada)}</span>` : ''}
       </div>
+      ${anAbusos(a)}
       ${ae.urgente ? `<div style="background:#fee2e2;color:#991b1b;border-radius:10px;padding:8px 12px;font-weight:700;font-size:13px;margin-bottom:10px">⏰ ${esc(ae.urgente)}</div>` : ''}
       <div style="border:2px solid ${aeB};background:${aeF};border-radius:16px;padding:16px 18px">
         <div style="font-size:11px;font-weight:800;letter-spacing:.08em;color:${aeT}">PRÓXIMO PASSO DA EQUIPE</div>
@@ -833,7 +835,7 @@
         <ol style="margin:0;padding-left:20px;display:grid;gap:10px">${(ae.passos || []).map(x => `<li style="font-size:14px;color:#0f172a"><div style="margin-bottom:6px">${esc(x.texto)}</div>${botao(x.botao)}</li>`).join('')}</ol>
         ${ae.mensagem ? `<details style="margin-top:12px"><summary style="cursor:pointer;font-size:13px;color:${aeT};font-weight:700">Ver a mensagem para o cliente</summary><div id="an-msg" style="white-space:pre-wrap;font-size:13px;background:#fff;border:1px solid #e2e8f0;border-radius:10px;padding:10px 12px;margin-top:6px">${esc(ae.mensagem)}</div></details>` : ''}
       </div>
-      ${pl ? `<div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:10px">${fato('Melhor argumento', '#16a34a', arg && arg.texto)}${fato('Em jogo', '#0369a1', jogo)}${fato('Maior risco do cliente', '#dc2626', risco && risco.texto)}</div>` : ''}
+      ${pl && risco ? `<div style="margin-top:10px;font-size:13px;color:#7f1d1d;background:#fef2f2;border-radius:10px;padding:8px 12px"><b>Maior risco do cliente:</b> ${esc(risco.texto)}</div>` : ''}
     </div>` + arquivos
       + (a.diagnostico_html ? `<details class="an-dobra"><summary>Análise completa — argumentos, riscos, plano e documentos</summary><div class="dg">${a.diagnostico_html}</div><div class="no-print" style="padding:0 26px 10px"><button class="btn btn-outline btn-sm" onclick="dgImprimir(this)">🖨 PDF interno do diagnóstico</button></div></details>` : '')
       + `<details class="an-dobra"><summary>Números e dados lidos pela IA — corrigir e recalcular</summary><div id="an-detalhes">`;
@@ -906,6 +908,65 @@
       <div class="an-nota">Preliminar: a IA só leu o contrato; taxas, cenários e economia são calculados pelo sistema. O laudo final passa pela conferência do operador e pela assinatura do advogado.</div>
     </div>`;
     box.innerHTML = h;
+    anSimular();
+  }
+
+  // Abusividades do banco + quanto dá para recuperar (services/revisao_diagnostico.js → abusividades)
+  const FORCA_AB = { alta: ['FORTE', '#fee2e2', '#991b1b'], media: ['MÉDIO', '#fef3c7', '#92400e'], baixa: ['FRACO', '#f1f5f9', '#475569'] };
+  function anAbusos(a) {
+    const ab = a.abusividades; if (!ab) return '';
+    const r = ab.recuperar || {};
+    let rec;
+    if (r.total) {
+      rec = `<div style="font-size:30px;font-weight:900;color:#14532d;line-height:1.1">${brl(r.total)}</div><div style="font-size:12px;color:#166534">economia estimada no contrato</div>
+        <div style="display:grid;gap:4px;margin-top:10px;font-size:13px">
+          ${r.parcela_hoje ? `<div>Parcela: <s style="color:#64748b">${brl(r.parcela_hoje)}</s> → <b>${brl(r.parcela_revisada)}</b></div>` : ''}
+          ${r.ja_pago_a_mais ? `<div>Já pago a mais: <b>${brl(r.ja_pago_a_mais)}</b></div>` : ''}
+          ${r.otimista ? `<div style="color:#92400e">Até ${brl(r.otimista)} se o juiz também limitar os juros à média (não garantido)</div>` : ''}
+        </div>`;
+    } else if (r.simulador) {
+      const sm = r.simulador;
+      rec = `<div style="font-size:13px;color:#0c4a6e;margin-bottom:8px">O valor exato só sai com ${esc(r.falta)}. <b>Simule com o que o cliente informar:</b></div>
+        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px">
+          <label style="font-size:11px;color:#475569">Valor sacado (R$)<input id="sim-pv" inputmode="decimal" value="${sm.limite ? String(sm.limite).replace('.', ',') : '100000'}" oninput="anSimular()" style="width:100%"></label>
+          <label style="font-size:11px;color:#475569">Prazo (meses)<input id="sim-n" inputmode="numeric" value="36" oninput="anSimular()" style="width:100%"></label>
+          <label style="font-size:11px;color:#475569">Taxa do saque (% a.m.)<input id="sim-i" inputmode="decimal" value="${sm.taxa_minima_am != null ? String(sm.taxa_minima_am).replace('.', ',') : ''}" oninput="anSimular()" style="width:100%"></label>
+        </div>
+        <div id="sim-out" data-media="${sm.media_am}" style="margin-top:10px"></div>`;
+    } else {
+      rec = `<div style="font-size:20px;font-weight:800;color:#0369a1">Ainda não calculável</div><div style="font-size:13px;color:#475569">${r.falta ? 'Falta: ' + esc(r.falta) : 'Corrija os dados lidos e recalcule.'}</div>`;
+    }
+    const linhas = ab.linhas.length ? ab.linhas.map(l => { const f = FORCA_AB[l.forca] || FORCA_AB.baixa; return `<tr style="border-top:1px solid #e2e8f0;vertical-align:top">
+        <td style="padding:8px 6px"><span class="rc-pill" style="background:${f[1]};color:${f[2]}">${f[0]}</span></td>
+        <td style="padding:8px 6px"><b style="color:#0f172a">${esc(l.titulo)}</b><div style="font-size:12px;color:#475569;margin-top:2px">${esc(l.porque)}</div>${l.clausula ? `<div style="font-size:11px;color:#64748b;margin-top:2px">${esc(l.clausula)}</div>` : ''}</td>
+        <td style="padding:8px 6px;text-align:right">${l.valor ? `<b style="color:#14532d;white-space:nowrap">${brl(l.valor)}</b>${l.valor_grupo ? '<div style="font-size:11px;color:#64748b">tarifas + seguros juntos</div>' : ''}` : `<span style="font-size:12px;color:#64748b;display:inline-block;max-width:190px">${esc(l.valor_nota || '—')}</span>`}</td></tr>`; }).join('')
+      : '<tr><td style="padding:10px;color:#64748b">Nenhuma abusividade encontrada no contrato.</td></tr>';
+    return `<div style="display:grid;grid-template-columns:minmax(0,1.6fr) minmax(0,1fr);gap:12px;margin-bottom:12px" class="an-ab">
+      <div style="border:1px solid #e2e8f0;border-radius:16px;padding:14px 16px;background:#fff">
+        <div style="font-size:11px;font-weight:800;letter-spacing:.08em;color:#991b1b">ABUSIVIDADES DO BANCO (${ab.linhas.length})</div>
+        <table style="width:100%;border-collapse:collapse;margin-top:6px">${linhas}</table>
+        ${ab.nao_e_abuso.length ? `<div style="font-size:12px;color:#64748b;margin-top:8px"><b>Não é abuso (não prometer):</b> ${ab.nao_e_abuso.map(esc).join(' · ')}</div>` : ''}
+      </div>
+      <div style="border:2px solid #16a34a;border-radius:16px;padding:14px 16px;background:#f0fdf4">
+        <div style="font-size:11px;font-weight:800;letter-spacing:.08em;color:#14532d;margin-bottom:6px">QUANTO DÁ PARA RECUPERAR</div>${rec}
+      </div>
+    </div>`;
+  }
+  // Simulador (contrato de limite): Price com a taxa do saque × Price com a média do BACEN.
+  // Premissas digitadas pela equipe; o valor do laudo continua saindo do cálculo no servidor.
+  function anSimular() {
+    const out = document.getElementById('sim-out'); if (!out) return;
+    const num = (id) => Number(String(document.getElementById(id).value || '').replace(/\./g, '').replace(',', '.'));
+    const pv = num('sim-pv'), n = Math.round(num('sim-n')), i = num('sim-i') / 100, m = Number(out.dataset.media) / 100;
+    const pmt = (t) => (t === 0 ? pv / n : pv * t / (1 - Math.pow(1 + t, -n)));
+    if (!(pv > 0 && n > 0 && i > 0 && m > 0)) { out.innerHTML = '<div style="font-size:12px;color:#64748b">Preencha valor, prazo e taxa.</div>'; return; }
+    const p1 = pmt(i), p0 = pmt(m), dif = p1 - p0;
+    out.innerHTML = dif <= 0
+      ? `<div style="font-size:13px;color:#475569">Com ${pct(i)} a.m. o saque fica na média do mercado (${pct(m)} a.m.) ou abaixo: sem diferença a recuperar pelos juros.</div>`
+      : `<div style="font-size:28px;font-weight:900;color:#14532d;line-height:1.1">${brl(dif * n)}</div>
+         <div style="font-size:12px;color:#166534">a mais em ${n} meses, se o banco não provar a taxa (vale a média de ${pct(m)} a.m.)</div>
+         <div style="font-size:13px;margin-top:6px">Parcela: <s style="color:#64748b">${brl(p1)}</s> → <b>${brl(p0)}</b> (${brl(dif)} por mês)</div>
+         <div style="font-size:11px;color:#92400e;margin-top:4px">Simulação com os dados digitados — confirmar com o comprovante do saque.</div>`;
   }
 
   async function anMsgCopiar(btn) {
