@@ -824,7 +824,7 @@
     let h = `<div style="padding:18px 26px 6px">
       <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;font-size:13px;color:#475569;margin-bottom:10px">
         <b style="color:#0f172a;font-size:15px">${esc(d.instituicao?.nome || 'Banco não identificado')}</b><span>· ${esc(TIPO_OP[d.tipo_operacao] || 'Contrato bancário')} · ${d.pfpj === 'PJ' ? 'empresa' : 'pessoa física'}</span>
-        <span class="rc-pill" style="background:${v[1]};color:${v[2]}">${esc(v[0])}</span>
+        ${d.situacao === 'executado' && ['fraca', 'moderada'].includes(a.veredito) ? '<span class="rc-pill" style="background:#fee2e2;color:#991b1b">EM EXECUÇÃO</span>' : `<span class="rc-pill" style="background:${v[1]};color:${v[2]}">${esc(v[0])}</span>`}
         ${Number(a.economia_estimada) > 0 ? `<span style="margin-left:auto;font-weight:800;color:#0f172a">Economia estimada ${brl(a.economia_estimada)}</span>` : ''}
       </div>
       ${anAbusos(a)}

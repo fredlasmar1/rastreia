@@ -257,7 +257,8 @@ const ROTEIROS = {
       forca: 'media',
       regra(d) {
         if (d.situacao !== 'executado') return naoSeAplica;
-        return { resultado: 'verificar', detalhe: 'Execução em curso: conferir se a planilha do banco discrimina juros, encargos e períodos; se cobrar a mais, o banco devolve em dobro.', valor: null, documento: 'Planilha de cálculo juntada na execução' };
+        const temPlanilha = d.planilha_banco && Number(d.planilha_banco.total_cobrado) > 0;
+        return { resultado: 'verificar', detalhe: temPlanilha ? 'A planilha do banco veio: conferir se cada encargo bate com o contrato; se cobrar a mais, o banco devolve em dobro.' : 'Execução em curso: conferir se a planilha do banco discrimina juros, encargos e períodos; se cobrar a mais, o banco devolve em dobro.', valor: null, documento: temPlanilha ? null : 'Planilha de cálculo juntada na execução' };
       }
     }
   ],
