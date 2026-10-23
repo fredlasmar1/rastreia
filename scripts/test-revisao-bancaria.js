@@ -748,7 +748,7 @@ teste('Roteiro entra nas teses e o valor chega à tabela de abusividades', () =>
   perto(l.valor, 80, 1e-9, '400 × (1 − 8/10)');
 });
 teste('Toda Súmula/Tema dos roteiros foi conferido (379 e 72 em 23/10/2026; Temas 618, 619, 972)', () => {
-  const OK = { sumulas: [72, 286, 332, 379], temas: [618, 619, 972] };
+  const OK = { sumulas: [72, 286, 332, 379], temas: [618, 619, 972] };   // + CPC art. 827 e Lei 13.999 (lei)
   const txt = [...RT.COMUNS, ...Object.values(RT.ROTEIROS).flat(), ...Object.values(RT.PROGRAMAS).flat(), ...RT.GARANTIAS].map(v => v.fundamento).join(' ');
   const sum = [...txt.matchAll(/Súmulas? (\d+)/g)].map(m => Number(m[1]));
   const tem = [...txt.matchAll(/Temas? ([\d, e]+)/g)].flatMap(m => m[1].split(/,| e /).map(x => Number(x.trim())).filter(Boolean));
@@ -793,6 +793,60 @@ teste('Imóvel em atraso com alienação fiduciária ⇒ conferir intimação do
 teste('Rural: composição da MP 1.376 aparece só dentro do prazo', () => {
   const r = item({ tipo_operacao: 'outro', programa: 'rural', operacao: {} }, 'rural_composicao_mp1376');
   if (hoje <= '2026-11-12') assert.ok(r && /12\/11\/2026/.test(r.detalhe)); else assert.strictEqual(r, undefined);
+});
+
+console.log('\n23) Caso real: Pronampe pós-fixado em execução, com honra do FGO (Prime × BB, 23/10/2026)');
+const exPrime = () => ({
+  classificacao: { tipo_operacao: 'ccb_capital_giro', pfpj: 'PJ', programa: 'pronampe', situacao: 'executado' },
+  instituicao: { nome: 'Banco do Brasil S.A.' },
+  operacao: { tipo: 'Cédula de Crédito Bancário — Pronampe', data_contratacao: '2022-07-29', valor_financiado_total: 150000, valor_parcela: 4054.05, prazo_meses: 37, carencia_meses: 12, indexador: 'selic', spread_anual: 6, capitalizacao_expressa: true },
+  garantia: { tipo: 'aval' }, garantidores: [{ nome: 'Avalista', tipo: 'aval', casado: false }],
+  encargos_mora: { juros_mora: 1, multa_percentual: 2 },
+  clausulas: { honorarios_extrajudiciais_percentual: 10, honorarios_judiciais_percentual: 20 },
+  planilha_banco: { data_posicao: '2026-10-07', total_cobrado: 293629.79, juros_mora: 18078.30, multa: 830.09, valor_honrado_fundo: 181732.43, data_honra_fundo: '2024-02-22', saldo_parte_fundo: 251295.35, fundo_garantidor: 'FGO' }
+});
+const casoPrime = () => {
+  const d = AN.montarDados(exPrime());
+  const calc = C.calcular(d, { taxaMediaBacenAM: 1.7, selicAA: 13.65 });
+  const ts = T.aplicarTeses(d, calc);
+  const g = DG.montarDiagnostico(d, calc, { ok: true, valor_am: 1.7 }, ts);
+  return { d, calc, ts, g };
+};
+teste('Pós-fixado não cai em "faltam dados": spread de 6% dentro do teto, sem Price', () => {
+  const { calc } = casoPrime();
+  assert.notStrictEqual(calc.veredito.nivel, 'incompleto');
+  assert.ok(calc.pos_fixado && calc.pos_fixado.indexador === 'selic');
+  assert.strictEqual(calc.teto.excedido, false);
+  assert.strictEqual(calc.razao, null);
+  assert.deepStrictEqual(calc.tabela_contratada, []);
+});
+teste('Situação e planilha do banco chegam aos dados', () => {
+  const { d } = casoPrime();
+  assert.strictEqual(d.situacao, 'executado');
+  assert.strictEqual(d.planilha_banco.total_cobrado, 293629.79);
+});
+teste('Teses: renegociação pós-honra do FGO (art. 5º, § 9º) e honorários de 20% na execução (CPC 827)', () => {
+  const { ts } = casoPrime();
+  const r = ts.teses.find(t => t.id === 'pronampe_renegociacao_pos_honra');
+  assert.strictEqual(r.resultado, 'aplicavel'); assert.ok(/181\.732,43/.test(r.detalhe));
+  const h = ts.teses.find(t => t.id === 'honorarios_judiciais_contratuais');
+  perto(h.valor, 293629.79 * 0.10, 0.01, '10 pontos acima dos 10% do CPC');
+});
+teste('Placar: NEGOCIAR A EXECUÇÃO; em jogo mostra o cobrado; ação da equipe é negociar antes da penhora', () => {
+  const { d, calc, g } = casoPrime();
+  assert.strictEqual(g.placar.decisao.rotulo, 'NEGOCIAR A EXECUÇÃO');
+  assert.ok(g.placar.em_jogo.some(x => x.rotulo === 'Cobrado pelo banco' && x.valor === 293629.79));
+  const ae = DG.acaoDaEquipe({ veredito: calc.veredito.nivel, calc, diag: g, dados: d });
+  assert.ok(/penhora/.test(ae.titulo) && /fundo garantidor/.test(ae.mensagem) && /15 para os embargos/.test(ae.passos[0].texto));
+  assert.ok(/Execução em curso/.test(ae.urgente));
+});
+teste('Quanto dá para recuperar: cobrado, parte do fundo e mora+multa (sem simulador nem número inventado)', () => {
+  const { d, calc, g, ts } = casoPrime();
+  const ab = DG.abusividades(g, calc, d, ts);
+  assert.strictEqual(ab.recuperar.total, null);
+  assert.strictEqual(ab.recuperar.cobrado.total, 293629.79);
+  assert.strictEqual(ab.recuperar.cobrado.parte_fundo, 251295.35);
+  perto(ab.recuperar.cobrado.mora_multa, 18908.39, 0.001, 'mora + multa');
 });
 
 console.log(`\n${ok} passaram, ${falhas} falharam.`);

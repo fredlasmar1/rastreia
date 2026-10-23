@@ -10,7 +10,7 @@
  * PMT = parcela, n = prazo em meses, i = taxa mensal (fração: 0.02 = 2%).
  * Testes: scripts/test-revisao-bancaria.js (node).
  */
-const VERSAO_CALCULO = 'rb-calc-1.6.0 (2026-10-23)';
+const VERSAO_CALCULO = 'rb-calc-1.7.0 (2026-10-23)';
 
 const EPS = 1e-12;
 
@@ -258,6 +258,21 @@ function calcular(dados = {}, opts = {}) {
   resultado.teto = teto;
   if (teto && teto.excedido) alertas.unshift(`${teto.nome}: ${teto.detalhe}`);
   else if (teto && teto.regulada && teto.excedido == null) alertas.unshift(teto.detalhe);
+
+  // Pós-fixado (Selic/CDI/IPCA/TR + spread, ex.: Pronampe): a parcela do contrato é só
+  // amortização de capital e os encargos seguem o índice — a "taxa implícita" da Price
+  // não existe. O parâmetro é o spread contra o teto (revisao_tetos) e a planilha do banco.
+  if (['selic', 'cdi', 'ipca', 'tr'].includes(op.indexador)) {
+    const sp = op.spread_anual != null ? `${String(op.spread_anual).replace('.', ',')}% a.a.` : 'spread não informado';
+    resultado.pos_fixado = { indexador: op.indexador, spread_anual: op.spread_anual ?? null };
+    resultado.taxa.implicita_am = null; resultado.taxa.implicita_aa = null;
+    resultado.faltando = [];
+    resultado.economia_estimada = 0;
+    const base = `Contrato pós-fixado (${op.indexador.toUpperCase()} + ${sp}): os juros seguem o índice, sem taxa fixa para comparar com a média de mercado.`;
+    if (teto && teto.excedido) resultado.veredito = { nivel: 'forte', motivo: `${teto.nome}: ${teto.detalhe}` };
+    else resultado.veredito = { nivel: 'fraca', motivo: `${base}${teto && teto.excedido === false ? ` ${teto.detalhe}` : ''} O resultado vem das demais verificações (tarifas, encargos, garantias, programa).` };
+    return resultado;
+  }
 
   if (faltando.length || efetivaAM == null) {
     // Faltar dado não é contrato ruim: é análise que ainda não pode ser feita

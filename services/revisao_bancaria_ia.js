@@ -43,6 +43,7 @@ const TOOL_EXTRACAO = {
           tipo_operacao: { type: ['string', 'null'], enum: ['financiamento_veiculo', 'emprestimo_pessoal', 'consignado', 'renegociacao', 'ccb_capital_giro', 'conta_garantida', 'desconto_recebiveis', 'antecipacao_cartao', 'cartao_credito', 'cheque_especial', 'financiamento_bens', 'arrendamento_mercantil', 'vendor', 'compror', 'cambio', 'comercio_exterior', 'financiamento_imobiliario', 'outro', null] },
           subtipo: { type: ['string', 'null'], enum: ['inss', 'publico', 'privado', 'parcelado', 'ate_365', 'rotativo', 'cheques', 'veiculo', 'outros', 'importacao', 'exportacao', null], description: 'Consignado: inss/publico/privado; cartão: parcelado; capital de giro: ate_365 ou rotativo; desconto: cheques; leasing: veiculo/outros; comércio exterior: importacao/exportacao.' },
           pfpj: { type: ['string', 'null'], enum: ['PF', 'PJ', null] },
+          situacao: { type: ['string', 'null'], enum: ['em_dia', 'atrasado', 'executado', 'busca_apreensao', 'quitado', null], description: 'executado se os documentos trazem ação de execução, monitória ou cobrança judicial; busca_apreensao se ação de busca e apreensão; atrasado se só mostram parcelas vencidas.' },
           programa: { type: ['string', 'null'], enum: ['pronampe', 'fco', 'fne', 'fno', 'fies', 'rural', 'sfh', 'mcmv', null], description: 'Linha de programa oficial, só se o contrato disser (Pronampe, FCO/FNE/FNO, Fies, cédula/crédito rural, SFH, Minha Casa Minha Vida). null para crédito comum.' }
         }
       },
@@ -52,7 +53,9 @@ const TOOL_EXTRACAO = {
         type: 'object',
         properties: {
           tipo: s, numero_contrato: s, data_contratacao: s, data_primeiro_vencimento: s,
-          valor_liberado: n, valor_financiado_total: n, prazo_meses: n, valor_parcela: n,
+          valor_liberado: n, valor_financiado_total: n, valor_parcela: n,
+          prazo_meses: { type: ['number', 'null'], description: 'Número de parcelas/meses do contrato (ex.: "37 parcelas" ⇒ 37), sem contar a carência.' },
+          carencia_meses: { type: ['number', 'null'], description: 'Meses entre a liberação e a 1ª parcela, se houver carência.' },
           sistema_amortizacao: { type: ['string', 'null'], enum: ['price', 'sac', 'outro', 'nao_informado', null] },
           taxa_juros_mensal_declarada: n, taxa_juros_anual_declarada: n, cet_mensal: n, cet_anual: n,
           indexador: { type: ['string', 'null'], enum: ['prefixado', 'selic', 'cdi', 'tr', 'ipca', 'outro', null], description: 'Pós-fixado: o índice a que a taxa está atrelada (ex.: "Selic + 6% a.a." ⇒ selic). Taxa fixa ⇒ prefixado.' },
@@ -78,6 +81,7 @@ const TOOL_EXTRACAO = {
           compensacao_ampla: { type: ['object', 'null'], description: 'Banco pode compensar/debitar a dívida em qualquer conta, aplicação ou crédito do devedor.', properties: { presente: b, clausula: s, trecho: s } },
           juros_mora_sobre_juros: { type: ['object', 'null'], description: 'Juros de mora incidindo sobre juros remuneratórios/compensatórios no atraso.', properties: { presente: b, clausula: s, trecho: s } },
           honorarios_extrajudiciais_percentual: n,
+          honorarios_judiciais_percentual: { type: ['number', 'null'], description: 'Honorários previstos no contrato para a cobrança JUDICIAL, em %.' },
           avalistas_quantidade: n,
           aval_com_anuencia_conjuge: b,
           renuncia_beneficio_ordem: b,
@@ -128,6 +132,18 @@ const TOOL_EXTRACAO = {
           cliente_pediu_emprestimo: { type: ['boolean', 'null'], description: 'true só se os documentos mostrarem que o cliente pediu empréstimo comum.' }
         }
       },
+      planilha_banco: {
+        type: ['object', 'null'], description: 'Só se vier a planilha/demonstrativo de débito do banco (comum em execução): copie os totais exatamente.',
+        properties: {
+          data_posicao: s, total_cobrado: n, juros_mora: n, multa: n, honorarios: n,
+          valor_pago_pelo_cliente: { type: ['number', 'null'], description: 'Soma das amortizações/pagamentos que a planilha mostra.' },
+          vencimento_antecipado_em: s,
+          fundo_garantidor: { type: ['string', 'null'], description: 'FGO, FGI, FAMPE, FGM… se a planilha mostrar honra.' },
+          valor_honrado_fundo: { type: ['number', 'null'], description: 'Valor que o fundo garantidor pagou ao banco (linha "HONRA").' },
+          data_honra_fundo: s,
+          saldo_parte_fundo: { type: ['number', 'null'], description: 'Saldo atual cobrado referente ao valor honrado pelo fundo.' }
+        }
+      },
       notificacao_mora: {
         type: ['object', 'null'], description: 'Só se vierem documentos de ação de busca e apreensão.',
         properties: { enviada: { type: ['boolean', 'null'], description: 'true se o processo traz a notificação de mora enviada ao devedor; false se o processo foi juntado e ela não está lá.' }, data: s, com_ar: b }
@@ -156,7 +172,7 @@ const TOOL_EXTRACAO = {
   }
 };
 
-const SYSTEM_EXTRACAO = 'Você é um analista de contratos bancários brasileiros. Sua tarefa é EXTRAIR dados do contrato exatamente como estão escritos, sem calcular, sem opinar e sem completar lacunas. Se um campo não estiver no documento, use null e registre em alertas_leitura. Transcreva em "trecho" a frase exata do contrato que sustenta cada tarifa, seguro, cláusula de capitalização e encargo de mora. Valores em reais como número (1234.56). Taxas em percentual como número (2.19 para 2,19%). Datas no formato AAAA-MM-DD. Identifique a página de onde tirou cada dado. Se houver extrato, carnê, boletos pagos ou demonstrativo, preencha pagamentos com o que os documentos comprovam (quantas parcelas pagas, a última, em atraso); sem esses documentos, deixe pagamentos nulo — nunca estime pela data. Se o contrato só abre um LIMITE de crédito (estrutura = limite_de_credito), NÃO coloque o limite em valor_financiado_total; registre-o em limite_credito, a faixa de juros em taxa_minima_mensal/taxa_maxima_mensal, e liste em operacoes_do_limite cada empréstimo que os demonstrativos/extratos mostrarem; se houver um demonstrativo de operação, preencha os campos de operacao (valor, prazo, parcela, taxa, datas) com a operação MAIS RECENTE do demonstrativo. Preencha clausulas com as cláusulas que pesam na estratégia (redutor de taxa perdido, débito no cheque especial, garantia de dívidas futuras, vencimento antecipado, fundo garantidor, quitação antecipada, canal de renegociação, compensação, juros de mora sobre juros, prazos que disparam bloqueio/vencimento), sempre com o número da cláusula e o trecho. Em classificacao, diga o tipo da operação (veículo, empréstimo pessoal, consignado, capital de giro etc.), se o contratante é pessoa física (PF) ou jurídica (PJ) e, só se o contrato disser, o programa oficial (Pronampe, FCO, Fies, crédito rural, SFH, Minha Casa Minha Vida). Taxa pós-fixada: registre o índice em indexador e o acréscimo em spread_anual. Se vierem extratos, faturas, holerites ou extrato do INSS, preencha lancamentos (cada cobrança do banco, com a categoria), faturas_cartao e consignado_info com o que os documentos MOSTRAM; se vier o processo de busca e apreensão, preencha notificacao_mora. Liste em garantidores cada avalista/fiador, dizendo se é casado e se o cônjuge assinou. Responda sempre em português do Brasil usando a ferramenta.';
+const SYSTEM_EXTRACAO = 'Você é um analista de contratos bancários brasileiros. Sua tarefa é EXTRAIR dados do contrato exatamente como estão escritos, sem calcular, sem opinar e sem completar lacunas. Se um campo não estiver no documento, use null e registre em alertas_leitura. Transcreva em "trecho" a frase exata do contrato que sustenta cada tarifa, seguro, cláusula de capitalização e encargo de mora. Valores em reais como número (1234.56). Taxas em percentual como número (2.19 para 2,19%). Datas no formato AAAA-MM-DD. Identifique a página de onde tirou cada dado. Se houver extrato, carnê, boletos pagos ou demonstrativo, preencha pagamentos com o que os documentos comprovam (quantas parcelas pagas, a última, em atraso); sem esses documentos, deixe pagamentos nulo — nunca estime pela data. Se o contrato só abre um LIMITE de crédito (estrutura = limite_de_credito), NÃO coloque o limite em valor_financiado_total; registre-o em limite_credito, a faixa de juros em taxa_minima_mensal/taxa_maxima_mensal, e liste em operacoes_do_limite cada empréstimo que os demonstrativos/extratos mostrarem; se houver um demonstrativo de operação, preencha os campos de operacao (valor, prazo, parcela, taxa, datas) com a operação MAIS RECENTE do demonstrativo. Preencha clausulas com as cláusulas que pesam na estratégia (redutor de taxa perdido, débito no cheque especial, garantia de dívidas futuras, vencimento antecipado, fundo garantidor, quitação antecipada, canal de renegociação, compensação, juros de mora sobre juros, prazos que disparam bloqueio/vencimento), sempre com o número da cláusula e o trecho. Em classificacao, diga o tipo da operação (veículo, empréstimo pessoal, consignado, capital de giro etc.), se o contratante é pessoa física (PF) ou jurídica (PJ) e, só se o contrato disser, o programa oficial (Pronampe, FCO, Fies, crédito rural, SFH, Minha Casa Minha Vida). Taxa pós-fixada: registre o índice em indexador e o acréscimo em spread_anual. Se vierem extratos, faturas, holerites ou extrato do INSS, preencha lancamentos (cada cobrança do banco, com a categoria), faturas_cartao e consignado_info com o que os documentos MOSTRAM; se vier o processo de busca e apreensão, preencha notificacao_mora. Liste em garantidores cada avalista/fiador, dizendo se é casado e se o cônjuge assinou. Em classificacao.situacao, diga se já há execução ou cobrança judicial. Se vier a planilha de débito do banco, preencha planilha_banco (total cobrado, mora, multa, honra do fundo garantidor). Em contrato pós-fixado (ex.: Taxa Selic + 6% a.a.), preencha indexador e spread_anual e deixe as taxas mensal/anual nulas. Responda sempre em português do Brasil usando a ferramenta.';
 
 function bloco(doc) {
   const data = fs.readFileSync(doc.filepath).toString('base64');
