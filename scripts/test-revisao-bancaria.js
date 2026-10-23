@@ -748,12 +748,51 @@ teste('Roteiro entra nas teses e o valor chega à tabela de abusividades', () =>
   perto(l.valor, 80, 1e-9, '400 × (1 − 8/10)');
 });
 teste('Toda Súmula/Tema dos roteiros foi conferido (379 e 72 em 23/10/2026; Temas 618, 619, 972)', () => {
-  const OK = { sumulas: [72, 379], temas: [618, 619, 972] };
-  const txt = [...RT.COMUNS, ...Object.values(RT.ROTEIROS).flat()].map(v => v.fundamento).join(' ');
+  const OK = { sumulas: [72, 286, 332, 379], temas: [618, 619, 972] };
+  const txt = [...RT.COMUNS, ...Object.values(RT.ROTEIROS).flat(), ...Object.values(RT.PROGRAMAS).flat(), ...RT.GARANTIAS].map(v => v.fundamento).join(' ');
   const sum = [...txt.matchAll(/Súmulas? (\d+)/g)].map(m => Number(m[1]));
   const tem = [...txt.matchAll(/Temas? ([\d, e]+)/g)].flatMap(m => m[1].split(/,| e /).map(x => Number(x.trim())).filter(Boolean));
   const fora = [...sum.filter(n => !OK.sumulas.includes(n)).map(n => 'Súmula ' + n), ...tem.filter(n => !OK.temas.includes(n)).map(n => 'Tema ' + n)];
   assert.deepStrictEqual(fora, [], 'citação não conferida: ' + fora.join(', '));
+});
+
+console.log('\n22) Roteiros fase 2: imóvel, renegociação, programas e garantias');
+const hoje = new Date().toISOString().slice(0, 10);
+teste('Fiança de pessoa casada sem o cônjuge ⇒ fiança ineficaz (Súmula 332); aval nas mesmas condições ⇒ verificar', () => {
+  const d = { tipo_operacao: 'emprestimo_pessoal', operacao: {}, garantidores: [{ nome: 'João', tipo: 'fianca', casado: true, conjuge_assinou: false }, { nome: 'Ana', tipo: 'aval', casado: true, conjuge_assinou: false }] };
+  assert.strictEqual(item(d, 'fianca_sem_conjuge').resultado, 'aplicavel');
+  assert.ok(/João/.test(item(d, 'fianca_sem_conjuge').detalhe));
+  assert.strictEqual(item(d, 'aval_sem_conjuge').resultado, 'verificar');
+});
+teste('Sem garantidores, as verificações de garantia nem aparecem', () => {
+  assert.ok(!RT.aplicarRoteiro({ tipo_operacao: 'emprestimo_pessoal', operacao: {} }).itens.some(x => /conjuge|fiador/.test(x.id)));
+});
+teste('Renegociação: pede os contratos de origem (Súmula 286) e devolve a tarifa de aditamento (PF)', () => {
+  const d = { pfpj: 'PF', tipo_operacao: 'renegociacao', operacao: {}, tarifas: [{ nome: 'Tarifa de renegociação', valor: 350 }] };
+  assert.strictEqual(RT.roteiroDo(d), 'renegociacao');
+  assert.ok(/contratos de origem/.test(item(d, 'renegociacao_cadeia').documento));
+  perto(item(d, 'tarifa_aditamento').valor, 350, 1e-9, 'tarifa');
+});
+teste('Pronampe com alienação fiduciária ⇒ garantia excessiva (Lei 13.999, art. 4º, § 2º)', () => {
+  const d = { tipo_operacao: 'ccb_capital_giro', programa: 'pronampe', operacao: { data_contratacao: '2023-01-10' }, garantia: { tipo: 'alienacao_fiduciaria' } };
+  assert.strictEqual(item(d, 'pronampe_garantia_excessiva').resultado, 'aplicavel');
+});
+teste('FCO de 2015 ⇒ direito à renegociação extraordinária; FCO de 2024 ⇒ ainda não', () => {
+  assert.strictEqual(item({ tipo_operacao: 'ccb_capital_giro', programa: 'fco', operacao: { data_contratacao: '2015-03-01' } }, 'fundo_renegociacao_extraordinaria').resultado, 'aplicavel');
+  assert.strictEqual(item({ tipo_operacao: 'ccb_capital_giro', programa: 'fco', operacao: { data_contratacao: '2024-03-01' } }, 'fundo_renegociacao_extraordinaria'), undefined);
+});
+teste('Fies de 2009 com capitalização mensal ⇒ abuso; Fies de 2019 em atraso ⇒ renegociação 2026 (se dentro do prazo)', () => {
+  assert.strictEqual(item({ tipo_operacao: 'outro', programa: 'fies', operacao: { data_contratacao: '2009-02-01', capitalizacao_expressa: true } }, 'fies_capitalizacao_antiga').resultado, 'aplicavel');
+  const r = item({ tipo_operacao: 'outro', programa: 'fies', situacao: 'atrasado', operacao: { data_contratacao: '2019-02-01' } }, 'fies_renegociacao_2026');
+  if (hoje <= '2026-12-31') assert.strictEqual(r.resultado, 'aplicavel'); else assert.strictEqual(r, undefined);
+});
+teste('Imóvel em atraso com alienação fiduciária ⇒ conferir intimação do cartório (Lei 9.514, art. 26)', () => {
+  const d = { tipo_operacao: 'financiamento_imobiliario', situacao: 'atrasado', garantia: { tipo: 'alienacao_fiduciaria' }, operacao: {} };
+  assert.ok(/registro de imóveis/.test(item(d, 'imovel_intimacao_purgar').documento));
+});
+teste('Rural: composição da MP 1.376 aparece só dentro do prazo', () => {
+  const r = item({ tipo_operacao: 'outro', programa: 'rural', operacao: {} }, 'rural_composicao_mp1376');
+  if (hoje <= '2026-11-12') assert.ok(r && /12\/11\/2026/.test(r.detalhe)); else assert.strictEqual(r, undefined);
 });
 
 console.log(`\n${ok} passaram, ${falhas} falharam.`);

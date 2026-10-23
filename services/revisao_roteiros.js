@@ -16,11 +16,18 @@
  * As 'aplicavel'/'verificar' entram na lista de teses — e dali na tela, no
  * diagnóstico, no laudo e nas minutas.
  *
- * Citações conferidas: Súmula 379 e Súmula 72 (arquivocidadao.stj.jus.br,
+ * Citações conferidas: Súmulas 379, 72, 332 e 286 (STJ, fontes oficiais,
  * 23/10/2026); Temas 618/619 e 972 (lista do teste 12); Res. CMN 4.765, 4.549 e
- * 3.919 e Lei 10.820 no acervo normativos-bcb / Planalto.
+ * 3.919 e Leis 10.820, 13.999, 7.827 e 10.260 no acervo do escritório / Planalto.
+ *
+ * Fase 2 (23/10/2026): imóvel, renegociação em cadeia, programas (Pronampe,
+ * FCO/FNE/FNO, Fies, rural) e garantias (fiança/aval sem o cônjuge, fiador que não
+ * anuiu à renegociação) — somadas ao roteiro do tipo quando o caso tem programa
+ * ou garantidores.
  */
-const VERSAO_ROTEIROS = 'rb-roteiros-1.0.0 (2026-10-23)';
+const VERSAO_ROTEIROS = 'rb-roteiros-1.1.0 (2026-10-23)';
+const hojeISO = () => new Date().toISOString().slice(0, 10);
+const anosAtras = (n) => { const d = new Date(); d.setFullYear(d.getFullYear() - n); return d.toISOString().slice(0, 10); };
 
 const soma = (xs) => xs.reduce((s, x) => s + (Number(x) || 0), 0);
 const brl = (v) => 'R$ ' + Number(v).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -36,7 +43,9 @@ function roteiroDo(d = {}) {
   if (t === 'cheque_especial' || t === 'conta_garantida') return 'cheque_especial';
   if (t === 'cartao_credito') return 'cartao';
   if (t === 'consignado') return 'consignado';
-  if (t === 'emprestimo_pessoal' || t === 'renegociacao') return 'pessoal';
+  if (t === 'renegociacao') return 'renegociacao';
+  if (t === 'financiamento_imobiliario') return 'imovel';
+  if (t === 'emprestimo_pessoal') return 'pessoal';
   if (t === 'financiamento_veiculo' || t === 'arrendamento_mercantil' || t === 'financiamento_bens') return 'veiculo';
   if (t === 'ccb_capital_giro' || t === 'desconto_recebiveis' || t === 'antecipacao_cartao') return 'ccb';
   return 'geral';
@@ -238,8 +247,162 @@ const ROTEIROS = {
     }
   ],
   pessoal: [],
-  geral: []
+  geral: [],
+  imovel: [
+    {
+      id: 'imovel_intimacao_purgar',
+      nome: 'Consolidação do imóvel sem intimação pessoal para pagar o atraso',
+      explicacao_cliente: 'Antes de tomar o imóvel, o banco tem de intimar o comprador, pelo cartório, para pagar o atraso. Sem isso, o leilão pode ser anulado.',
+      fundamento: 'Lei 9.514/1997, art. 26: a consolidação da propriedade exige a intimação do devedor pelo oficial do registro de imóveis para purgar a mora em 15 dias.',
+      forca: 'alta',
+      regra(d) {
+        if (d.garantia?.tipo !== 'alienacao_fiduciaria' || !['atrasado', 'executado'].includes(d.situacao)) return naoSeAplica;
+        return { resultado: 'verificar', detalhe: 'Contrato em atraso com o imóvel em garantia: conferir se houve a intimação do cartório e os prazos do leilão.', valor: null, documento: 'Matrícula atualizada do imóvel e a intimação do cartório de registro de imóveis' };
+      }
+    }
+  ],
+  renegociacao: [
+    {
+      id: 'renegociacao_cadeia',
+      nome: 'Dívidas antigas embutidas na renegociação',
+      explicacao_cliente: 'Renegociar não apaga o que foi cobrado errado antes: dá para revisar os contratos antigos que viraram esta dívida.',
+      fundamento: 'Súmula 286 STJ: a renegociação de contrato bancário ou a confissão da dívida não impede a discussão sobre eventuais ilegalidades dos contratos anteriores.',
+      forca: 'alta',
+      regra() {
+        return { resultado: 'verificar', detalhe: 'A revisão volta até o primeiro contrato: juros, tarifas e encargos de atraso que entraram no saldo renegociado podem sair.', valor: null, documento: 'Todos os contratos de origem e o extrato que mostra a quitação deles pela renegociação' };
+      }
+    },
+    {
+      id: 'tarifa_aditamento',
+      nome: 'Tarifa cobrada para renegociar ou aditar o contrato',
+      explicacao_cliente: 'Para pessoa física, o banco não pode cobrar tarifa para aditar contrato de adesão nem na quitação antecipada.',
+      fundamento: 'Res. CMN 3.919/2010, art. 5º, § 1º: vedada a cobrança de tarifa de aditamento em contrato de adesão e na liquidação antecipada (pessoa natural).',
+      forca: 'alta',
+      regra(d) {
+        if (!ehPF(d)) return naoSeAplica;
+        const re = /aditamento|aditivo|renegocia|repactua/i;
+        const t = [...(d.tarifas || []).filter(x => re.test(x.nome || '') && Number(x.valor) > 0).map(x => x.valor), ...desc(d, re, 'tarifa').map(l => l.valor)];
+        if (!t.length) return naoSeAplica;
+        return { resultado: 'aplicavel', detalhe: `Tarifa de renegociação/aditamento: ${brl(soma(t))}.`, valor: soma(t), valor_base: 'valor da tarifa cobrada' };
+      }
+    }
+  ]
 };
+
+// ── Programas oficiais: somados ao roteiro do tipo quando o contrato é de programa ──
+const PROGRAMAS = {
+  pronampe: [
+    {
+      id: 'pronampe_garantia_excessiva',
+      nome: 'Garantia além da permitida no Pronampe',
+      explicacao_cliente: 'No Pronampe, o banco só pode exigir a garantia pessoal do próprio empresário; imóvel, veículo ou aval de terceiros podem ser liberados.',
+      fundamento: 'Lei 13.999/2020, art. 4º, § 2º: no Pronampe, a garantia exigida se limita à garantia pessoal do proponente, no valor do empréstimo mais encargos (salvo empresa com menos de 1 ano).',
+      forca: 'alta',
+      regra(d) {
+        const real = ['alienacao_fiduciaria', 'hipoteca'].includes(d.garantia?.tipo);
+        const terceiros = (d.garantidores || []).filter(g => g.socio_da_empresa === false);
+        if (!real && !terceiros.length) return naoSeAplica;
+        return { resultado: 'aplicavel', detalhe: real ? 'O contrato tem garantia real (bem do cliente) além da pessoal.' : `${terceiros.length} garantidor(es) que não são sócios da empresa.`, valor: null, valor_base: 'libera os bens e os garantidores em excesso' };
+      }
+    }
+  ],
+  fundo_constitucional: [
+    {
+      id: 'fundo_renegociacao_extraordinaria',
+      nome: 'Renegociação extraordinária com desconto não oferecida',
+      explicacao_cliente: 'Dívidas antigas de FCO, FNE e FNO têm direito a renegociação com desconto. O pedido protocolado já suspende a cobrança.',
+      fundamento: 'Lei 7.827/1989, arts. 15-E e 15-G (com a Lei 14.166/2021): renegociação extraordinária de operações contratadas há 7 anos ou mais; o protocolo suspende a cobrança, as execuções e a prescrição; pedido até 29/04/2028 (Dec. 12.445/2025).',
+      forca: 'alta',
+      regra(d) {
+        const data = String(d.operacao?.data_contratacao || '');
+        if (!data) return { resultado: 'verificar', detalhe: 'Falta a data da contratação original para saber se a operação tem 7 anos ou mais.', valor: null, documento: 'Ficha completa da operação (o banco entrega em até 30 dias)' };
+        if (data > anosAtras(7)) return naoSeAplica;
+        return { resultado: 'aplicavel', detalhe: 'Operação com 7 anos ou mais: cabe pedir a renegociação extraordinária (desconto por rebate/bônus) antes de qualquer ação.', valor: null, valor_base: 'desconto fixado na lei sobre o saldo atualizado sem multa e mora', documento: 'Ficha completa da operação (o banco entrega em até 30 dias)' };
+      }
+    }
+  ],
+  fies: [
+    {
+      id: 'fies_capitalizacao_antiga',
+      nome: 'Juros sobre juros mensais em Fies antigo',
+      explicacao_cliente: 'No Fies, o juro composto mensal só passou a valer para contratos de 2011 em diante. Antes disso, a cobrança é indevida.',
+      fundamento: 'Lei 10.260/2001, art. 5º, II: a capitalização mensal de juros no Fies só passou a ser admitida com a Lei 12.431/2011 (MP 517/2010); STJ, REsp 1.155.684/RN (repetitivo).',
+      forca: 'alta',
+      regra(d, calc) {
+        const data = String(d.operacao?.data_contratacao || '');
+        if (!data || data >= '2010-12-31') return naoSeAplica;
+        const mensal = d.operacao?.capitalizacao_expressa === true || calc?.taxa?.capitalizacao_por_duodecuplo === true;
+        if (!mensal) return { resultado: 'verificar', detalhe: 'Contrato anterior a 2011: conferir no extrato se os juros foram capitalizados mês a mês.', valor: null, documento: 'Extrato da evolução do financiamento (agente financeiro)' };
+        return { resultado: 'aplicavel', detalhe: 'Contrato anterior a 2011 com juros capitalizados mês a mês.', valor: null, valor_base: 'recálculo do saldo com juros simples no período anterior a 2011', documento: 'Extrato da evolução do financiamento (agente financeiro)' };
+      }
+    },
+    {
+      id: 'fies_renegociacao_2026',
+      nome: 'Renegociação do Fies com 100% de desconto nos encargos de atraso',
+      explicacao_cliente: 'Até 31/12/2026, contratos do Fies (2018 em diante) em atraso podem ser renegociados em até 180 parcelas, sem os encargos do atraso.',
+      fundamento: 'Res. CG-Fies 64/2025, arts. 1º a 5º: adesão até 31/12/2026, entrada + até 180 parcelas e 100% de desconto dos encargos moratórios (inadimplência de mais de 90 dias em 31/07/2025).',
+      forca: 'alta',
+      regra(d) {
+        if (String(d.operacao?.data_contratacao || '') < '2018-01-01' || hojeISO() > '2026-12-31') return naoSeAplica;
+        return { resultado: d.situacao === 'atrasado' ? 'aplicavel' : 'verificar', detalhe: d.situacao === 'atrasado' ? 'Contrato em atraso: aderir antes de 31/12/2026.' : 'Vale se o contrato estava com mais de 90 dias de atraso em 31/07/2025.', valor: null, valor_base: 'encargos de atraso perdoados', documento: 'Extrato do Fies com a data do 1º atraso' };
+      }
+    }
+  ],
+  rural: [
+    {
+      id: 'rural_composicao_mp1376',
+      nome: 'Composição de dívidas rurais (MP 1.376/2026) — prazo curto',
+      explicacao_cliente: 'Produtor com perdas de safra pode trocar a dívida por uma nova, com juros de 6% a 12% ao ano e até 8 anos para pagar. O prazo para contratar é curto.',
+      fundamento: 'MP 1.376/2026, arts. 1º a 5º: perdas de 30% em duas ou mais safras (2019–2025) com laudo; encargos de 6%, 9% ou 12% a.a.; até 8 anos; contratação em até 120 dias de 15/07/2026 (conferir a vigência da MP).',
+      forca: 'alta',
+      regra() {
+        if (hojeISO() > '2026-11-12') return naoSeAplica;
+        return { resultado: 'verificar', detalhe: 'Prazo para contratar até 12/11/2026: checar com o cliente se houve perda de safra com laudo.', valor: null, valor_base: 'troca de encargos de mercado por 6% a 12% a.a.', documento: 'Laudos de perda de safra (2019–2025)' };
+      }
+    }
+  ]
+};
+PROGRAMAS.fco = PROGRAMAS.fne = PROGRAMAS.fno = PROGRAMAS.fundo_constitucional;
+
+// ── Garantias: somadas quando o contrato tem garantidores ──
+const GARANTIAS = [
+  {
+    id: 'fianca_sem_conjuge',
+    nome: 'Fiança sem a assinatura do cônjuge',
+    explicacao_cliente: 'Fiança dada por pessoa casada sem a assinatura do marido ou da esposa não vale: o fiador fica livre.',
+    fundamento: 'Súmula 332 STJ: a fiança prestada sem autorização de um dos cônjuges implica a ineficácia total da garantia; CC, art. 1.647, III.',
+    forca: 'alta',
+    regra(d) {
+      const g = (d.garantidores || []).filter(x => x.tipo === 'fianca' && x.casado === true && x.conjuge_assinou === false);
+      if (!g.length) return naoSeAplica;
+      return { resultado: 'aplicavel', detalhe: `Fiador(es) casado(s) sem a assinatura do cônjuge: ${g.map(x => x.nome || 'fiador').join(', ')}.`, valor: null, valor_base: 'libera o fiador da dívida inteira' };
+    }
+  },
+  {
+    id: 'aval_sem_conjuge',
+    nome: 'Aval sem a assinatura do cônjuge',
+    explicacao_cliente: 'Aval de pessoa casada sem a assinatura do cônjuge pode ser questionado para proteger os bens do casal.',
+    fundamento: 'CC, art. 1.647, III: aval de pessoa casada exige autorização do cônjuge (há decisões que dispensam em títulos regidos por lei própria, como a CCB — avaliar caso a caso).',
+    forca: 'media',
+    regra(d) {
+      const g = (d.garantidores || []).filter(x => x.tipo === 'aval' && x.casado === true && x.conjuge_assinou === false);
+      if (!g.length) return naoSeAplica;
+      return { resultado: 'verificar', detalhe: `Avalista(s) casado(s) sem a assinatura do cônjuge: ${g.map(x => x.nome || 'avalista').join(', ')}.`, valor: null, documento: 'Certidão de casamento do avalista' };
+    }
+  },
+  {
+    id: 'fiador_nao_anuiu',
+    nome: 'Prazo novo dado ao devedor sem o consentimento do fiador',
+    explicacao_cliente: 'Se o banco deu prazo novo ou renegociou sem o fiador assinar, o fiador fica liberado.',
+    fundamento: 'CC, art. 838, I: o fiador fica desobrigado se, sem seu consentimento, o credor conceder moratória ao devedor.',
+    forca: 'alta',
+    regra(d) {
+      const g = (d.garantidores || []).filter(x => x.tipo === 'fianca' && x.assinou_renegociacao === false);
+      if (!g.length) return naoSeAplica;
+      return { resultado: 'aplicavel', detalhe: `Fiador(es) que não assinaram a renegociação: ${g.map(x => x.nome || 'fiador').join(', ')}.`, valor: null, valor_base: 'libera o fiador' };
+    }
+  }
+];
 
 /**
  * aplicarRoteiro(d, calc) → { roteiro, versao, itens: [...] } (só aplicável/verificar)
@@ -247,7 +410,8 @@ const ROTEIROS = {
  */
 function aplicarRoteiro(d = {}, calc = null) {
   const r = roteiroDo(d);
-  const lista = [...(ROTEIROS[r] || []), ...COMUNS];
+  const prog = require('./revisao_tetos').programaDoContrato(d);
+  const lista = [...(ROTEIROS[r] || []), ...((prog && PROGRAMAS[prog]) || []), ...((d.garantidores || []).length ? GARANTIAS : []), ...COMUNS];
   const itens = [];
   for (const v of lista) {
     let out;
@@ -263,4 +427,4 @@ function aplicarRoteiro(d = {}, calc = null) {
   return { roteiro: r, versao: VERSAO_ROTEIROS, itens };
 }
 
-module.exports = { VERSAO_ROTEIROS, ROTEIROS, COMUNS, roteiroDo, aplicarRoteiro };
+module.exports = { VERSAO_ROTEIROS, ROTEIROS, PROGRAMAS, GARANTIAS, COMUNS, roteiroDo, aplicarRoteiro };
