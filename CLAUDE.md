@@ -171,7 +171,10 @@ pago → aguardando_documentos (upload até 10 docs) → extraindo (Claude lê o
   A IA lê `lancamentos` (extrato/INSS/holerite, por categoria), `faturas_cartao`, `consignado_info` e
   `notificacao_mora`; o roteiro calcula o VALOR (ex.: juros do mês × (1 − 8/taxa)). Itens entram em
   `teses.teses` com `origem: 'roteiro'`, `valor`, `valor_base` e `documento` (o que pedir quando falta) — e dali vão
-  para tela, diagnóstico, laudo e minutas. Fase 2: imóvel, FCO, Pronampe, rural, Fies, renegociação, garantias.
+  para tela, diagnóstico, laudo e minutas. Fase 2 (rb-roteiros-1.1.0): imóvel (intimação da Lei 9.514), renegociação
+  (cadeia — Súmula 286; tarifa de aditamento), programas (Pronampe garantia excessiva, FCO/FNE/FNO renegociação
+  extraordinária, Fies, rural MP 1.376) e garantias (`garantidores`: fiança/aval sem cônjuge, fiador sem anuência).
+  Itens com prazo (Fies 31/12/2026, MP 1.376 até 12/11/2026) somem sozinhos depois da data.
 - **Tetos legais** (`services/revisao_tetos.js`, 22/10/2026, testes 15-16): linha com limite em lei se compara com o
   TETO, não com a média — cheque especial PF/MEI 8% a.m. (Res. 4.765, art. 3º), cartão com juros+encargos ≤ valor
   original desde 03/01/2024 (Lei 14.690, art. 28, § 1º), Pronampe Selic do mês (SGS 4189) + 6% a.a. (Lei 13.999,

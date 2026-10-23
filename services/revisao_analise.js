@@ -96,6 +96,7 @@ function montarDados(ex = {}) {
     faturas_cartao: Array.isArray(ex.faturas_cartao) ? ex.faturas_cartao : [],
     consignado_info: ex.consignado_info || null,
     notificacao_mora: ex.notificacao_mora || null,
+    garantidores: Array.isArray(ex.garantidores) ? ex.garantidores : [],
     clausulas: ex.clausulas || {},
     campos_editados: []
   };
