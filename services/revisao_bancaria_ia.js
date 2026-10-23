@@ -91,6 +91,38 @@ const TOOL_EXTRACAO = {
         items: { type: 'object', properties: { data: s, numero: s, valor_liberado: n, taxa_mensal: n, cet_mensal: n, prazo_meses: n, valor_parcela: n, saldo_devedor: n, fgm: b, documento: s } }
       },
       garantia: { type: 'object', properties: { tipo: { type: ['string', 'null'], enum: ['alienacao_fiduciaria', 'consignacao', 'aval', 'nenhuma', 'outro', null] }, bem_descricao: s } },
+      lancamentos: {
+        type: 'array', description: 'Só se vierem EXTRATOS de conta, extrato do INSS ou holerites: cada cobrança do banco ligada a este crédito (não liste depósitos nem compras). Copie o valor e a descrição exatamente como aparecem; não some nem estime.',
+        items: { type: 'object', properties: {
+          data: s, descricao: s, valor: n,
+          categoria: { type: ['string', 'null'], enum: ['juros_cheque_especial', 'iof', 'tarifa', 'seguro', 'multa', 'juros_mora', 'parcela', 'desconto_rmc', 'honorarios', 'outro', null] },
+          taxa_am: { type: ['number', 'null'], description: 'Taxa do mês, em % a.m., se o extrato informar (comum no cheque especial).' },
+          documento: s } }
+      },
+      faturas_cartao: {
+        type: 'array', description: 'Só se vierem FATURAS de cartão: uma linha por fatura.',
+        items: { type: 'object', properties: {
+          mes: { type: ['string', 'null'], description: 'AAAA-MM do vencimento.' },
+          no_rotativo: { type: ['boolean', 'null'], description: 'true se o saldo não pago foi para o crédito rotativo nesta fatura.' },
+          juros_rotativo: n,
+          valor_original_divida: { type: ['number', 'null'], description: 'Valor original da dívida informado na fatura (rotativo/parcelamento).' },
+          juros_encargos_acumulados: { type: ['number', 'null'], description: 'Total de juros e encargos já cobrados dessa dívida, se a fatura informar.' },
+          taxa_rotativo_am: n, taxa_parcelado_am: n } }
+      },
+      consignado_info: {
+        type: ['object', 'null'], description: 'Só para consignado ou cartão consignado.',
+        properties: {
+          tipo_vinculo: { type: ['string', 'null'], enum: ['inss', 'clt', 'publico', null] },
+          remuneracao: { type: ['number', 'null'], description: 'Benefício ou remuneração mensal (base da margem).' },
+          soma_descontos_consignados: { type: ['number', 'null'], description: 'Soma de TODOS os descontos consignados do mês (empréstimos + cartões).' },
+          cartao_rmc_rcc: { type: ['boolean', 'null'], description: 'true se há cartão de crédito consignado (RMC) ou cartão benefício (RCC).' },
+          cliente_pediu_emprestimo: { type: ['boolean', 'null'], description: 'true só se os documentos mostrarem que o cliente pediu empréstimo comum.' }
+        }
+      },
+      notificacao_mora: {
+        type: ['object', 'null'], description: 'Só se vierem documentos de ação de busca e apreensão.',
+        properties: { enviada: { type: ['boolean', 'null'], description: 'true se o processo traz a notificação de mora enviada ao devedor; false se o processo foi juntado e ela não está lá.' }, data: s, com_ar: b }
+      },
       tarifas: { type: 'array', items: { type: 'object', properties: { nome: s, valor: n, financiada: b, trecho: s } } },
       seguros: { type: 'array', items: { type: 'object', properties: { tipo: s, valor: n, financiado: b, seguradora: s, havia_opcao_recusar: b, trecho: s } } },
       iof: { type: 'object', properties: { valor: n, financiado: b } },
@@ -115,7 +147,7 @@ const TOOL_EXTRACAO = {
   }
 };
 
-const SYSTEM_EXTRACAO = 'Você é um analista de contratos bancários brasileiros. Sua tarefa é EXTRAIR dados do contrato exatamente como estão escritos, sem calcular, sem opinar e sem completar lacunas. Se um campo não estiver no documento, use null e registre em alertas_leitura. Transcreva em "trecho" a frase exata do contrato que sustenta cada tarifa, seguro, cláusula de capitalização e encargo de mora. Valores em reais como número (1234.56). Taxas em percentual como número (2.19 para 2,19%). Datas no formato AAAA-MM-DD. Identifique a página de onde tirou cada dado. Se houver extrato, carnê, boletos pagos ou demonstrativo, preencha pagamentos com o que os documentos comprovam (quantas parcelas pagas, a última, em atraso); sem esses documentos, deixe pagamentos nulo — nunca estime pela data. Se o contrato só abre um LIMITE de crédito (estrutura = limite_de_credito), NÃO coloque o limite em valor_financiado_total; registre-o em limite_credito, a faixa de juros em taxa_minima_mensal/taxa_maxima_mensal, e liste em operacoes_do_limite cada empréstimo que os demonstrativos/extratos mostrarem; se houver um demonstrativo de operação, preencha os campos de operacao (valor, prazo, parcela, taxa, datas) com a operação MAIS RECENTE do demonstrativo. Preencha clausulas com as cláusulas que pesam na estratégia (redutor de taxa perdido, débito no cheque especial, garantia de dívidas futuras, vencimento antecipado, fundo garantidor, quitação antecipada, canal de renegociação, compensação, juros de mora sobre juros, prazos que disparam bloqueio/vencimento), sempre com o número da cláusula e o trecho. Em classificacao, diga o tipo da operação (veículo, empréstimo pessoal, consignado, capital de giro etc.), se o contratante é pessoa física (PF) ou jurídica (PJ) e, só se o contrato disser, o programa oficial (Pronampe, FCO, Fies, crédito rural, SFH, Minha Casa Minha Vida). Taxa pós-fixada: registre o índice em indexador e o acréscimo em spread_anual. Responda sempre em português do Brasil usando a ferramenta.';
+const SYSTEM_EXTRACAO = 'Você é um analista de contratos bancários brasileiros. Sua tarefa é EXTRAIR dados do contrato exatamente como estão escritos, sem calcular, sem opinar e sem completar lacunas. Se um campo não estiver no documento, use null e registre em alertas_leitura. Transcreva em "trecho" a frase exata do contrato que sustenta cada tarifa, seguro, cláusula de capitalização e encargo de mora. Valores em reais como número (1234.56). Taxas em percentual como número (2.19 para 2,19%). Datas no formato AAAA-MM-DD. Identifique a página de onde tirou cada dado. Se houver extrato, carnê, boletos pagos ou demonstrativo, preencha pagamentos com o que os documentos comprovam (quantas parcelas pagas, a última, em atraso); sem esses documentos, deixe pagamentos nulo — nunca estime pela data. Se o contrato só abre um LIMITE de crédito (estrutura = limite_de_credito), NÃO coloque o limite em valor_financiado_total; registre-o em limite_credito, a faixa de juros em taxa_minima_mensal/taxa_maxima_mensal, e liste em operacoes_do_limite cada empréstimo que os demonstrativos/extratos mostrarem; se houver um demonstrativo de operação, preencha os campos de operacao (valor, prazo, parcela, taxa, datas) com a operação MAIS RECENTE do demonstrativo. Preencha clausulas com as cláusulas que pesam na estratégia (redutor de taxa perdido, débito no cheque especial, garantia de dívidas futuras, vencimento antecipado, fundo garantidor, quitação antecipada, canal de renegociação, compensação, juros de mora sobre juros, prazos que disparam bloqueio/vencimento), sempre com o número da cláusula e o trecho. Em classificacao, diga o tipo da operação (veículo, empréstimo pessoal, consignado, capital de giro etc.), se o contratante é pessoa física (PF) ou jurídica (PJ) e, só se o contrato disser, o programa oficial (Pronampe, FCO, Fies, crédito rural, SFH, Minha Casa Minha Vida). Taxa pós-fixada: registre o índice em indexador e o acréscimo em spread_anual. Se vierem extratos, faturas, holerites ou extrato do INSS, preencha lancamentos (cada cobrança do banco, com a categoria), faturas_cartao e consignado_info com o que os documentos MOSTRAM; se vier o processo de busca e apreensão, preencha notificacao_mora. Responda sempre em português do Brasil usando a ferramenta.';
 
 function bloco(doc) {
   const data = fs.readFileSync(doc.filepath).toString('base64');

@@ -235,7 +235,11 @@ function aplicarTeses(dados, calc) {
     previas[t.id] = r.resultado;
     return { id: t.id, nome: t.nome, fundamento: r.fundamento || t.fundamento, explicacao_cliente: t.explicacao_cliente, resultado: r.resultado || 'verificar', detalhe: r.detalhe || '', trecho_contrato: r.trecho_contrato || null };
   });
-  return { versao: VERSAO_TESES, fundamento_geral: FUNDAMENTO_GERAL, teses: lista, aplicaveis: lista.filter(t => t.resultado === 'aplicavel').length };
+  // Roteiro do TIPO de contrato (services/revisao_roteiros.js): pontos específicos do produto
+  // e os que dependem de extrato/fatura, já com o valor calculado
+  const rot = require('./revisao_roteiros').aplicarRoteiro(dados, calc);
+  lista.push(...rot.itens);
+  return { versao: VERSAO_TESES, versao_roteiros: rot.versao, roteiro: rot.roteiro, fundamento_geral: FUNDAMENTO_GERAL, teses: lista, aplicaveis: lista.filter(t => t.resultado === 'aplicavel').length };
 }
 
 module.exports = { VERSAO_TESES, TESES, FUNDAMENTO_GERAL, itensQuestionaveis, aplicarTeses };

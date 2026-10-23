@@ -185,7 +185,8 @@ function render(doc, pedido, dados, score, checklist, produto) {
   const aplicaveis = teses.filter(x => x.resultado === 'aplicavel');
   const eA = calc.cenarios && calc.cenarios.A ? calc.cenarios.A.economia_total : null;
   const eB = calc.cenarios && calc.cenarios.B ? calc.cenarios.B.economia_total : null;
-  const valorDe = (id) => (['juros_abusivos', 'teto_legal'].includes(id) && calc.juros_revisaveis && eA > 0 ? eA
+  const valorRot = Object.fromEntries(teses.filter(x => x.origem === 'roteiro' && x.valor > 0).map(x => [x.id, x.valor]));
+  const valorDe = (id) => (valorRot[id] ? valorRot[id] : ['juros_abusivos', 'teto_legal'].includes(id) && calc.juros_revisaveis && eA > 0 ? eA
     : ['tac_tec', 'avaliacao_registro_terceiros', 'seguro_venda_casada'].includes(id) && eB > 0 ? eB : null);
   if (aplicaveis.length) {
     y = secao(doc, 'O QUE ENCONTRAMOS', y + 4);

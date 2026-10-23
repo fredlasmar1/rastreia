@@ -111,7 +111,13 @@ function montarDiagnostico(d = {}, calc = {}, taxa = null, ts = null) {
   // Teses automáticas aplicáveis (tarifas, seguros, comissão de permanência…)
   for (const t of (ts?.teses || [])) {
     if (t.resultado !== 'aplicavel' || ['juros_abusivos', 'capitalizacao'].includes(t.id)) continue;
-    achados.push({ id: 'tese_' + t.id, forca: c.aplica === false ? 'media' : 'alta', titulo: t.nome, trecho: t.trecho_contrato || null, porque: t.detalhe, base: t.fundamento, defesa_banco: null, depende_cdc: null });
+    achados.push({ id: 'tese_' + t.id, forca: t.forca || (c.aplica === false ? 'media' : 'alta'), titulo: t.nome, trecho: t.trecho_contrato || null, porque: t.detalhe, base: t.fundamento, defesa_banco: null, depende_cdc: null,
+      ...(t.valor > 0 ? { impacto: { valor: t.valor, nota: t.valor_base || null } } : {}), nota_valor: t.documento ? `Falta: ${t.documento}` : (t.valor_base || null) });
+  }
+  // Roteiro: o que ainda depende de documento vira pedido ao cliente (sem repetir)
+  for (const t of (ts?.teses || [])) {
+    if (t.origem !== 'roteiro' || t.resultado !== 'verificar' || !t.documento) continue;
+    if (!documentos.some(x => x.doc === t.documento)) documentos.push({ doc: t.documento, onde: 'Cliente / banco', destrava: t.nome });
   }
 
   // ── Garantias e exposição ────────────────────────────────────────────────
@@ -370,12 +376,12 @@ const SEM_VALOR = {
   tese_superendividamento: 'Repactuação de todas as dívidas'
 };
 const SO_RISCO = new Set(['vencimento_cruzado']);
-function abusividades(g = {}, calc = {}, dados = {}) {
+function abusividades(g = {}, calc = {}, dados = {}, ts = null) {
   calc = calc || {};
   const linhas = (g.achados || []).filter(a => !SO_RISCO.has(a.id) && !(a.id === 'honorarios_extra' && a.forca !== 'alta')).map(a => ({
     id: a.id, forca: a.forca, titulo: a.titulo, porque: a.porque, clausula: a.clausula || null,
     valor: a.impacto?.valor > 0 ? a.impacto.valor : null, valor_grupo: a.impacto?.grupo || null,
-    valor_nota: a.impacto?.valor > 0 ? (a.impacto.nota || null) : (SEM_VALOR[a.id] || null)
+    valor_nota: a.impacto?.valor > 0 ? (a.impacto.nota || null) : (a.nota_valor || SEM_VALOR[a.id] || null)
   }));
   const cp = calc.cenario_principal && calc.cenarios ? calc.cenarios[calc.cenario_principal] : null;
   const vi = calc.valor_incontroverso, ic = calc.indebito_corrigido;
@@ -394,7 +400,10 @@ function abusividades(g = {}, calc = {}, dados = {}) {
   } else if (!recuperar.total) {
     recuperar.falta = (g.placar && g.placar.falta) || null;
   }
-  return { linhas, nao_e_abuso: (g.nao_e_abuso || []).map(x => x.titulo), recuperar };
+  // Pontos do roteiro que só se confirmam com documento (ex.: faturas, extrato do INSS)
+  const conferir = (ts && ts.teses ? ts.teses : []).filter(t => t.origem === 'roteiro' && t.resultado === 'verificar')
+    .map(t => ({ nome: t.nome, detalhe: t.detalhe, documento: t.documento || null }));
+  return { linhas, conferir, nao_e_abuso: (g.nao_e_abuso || []).map(x => x.titulo), recuperar };
 }
 
 module.exports = { montarDiagnostico, placar, acaoDaEquipe, abusividades, cdc, VERSAO_DIAGNOSTICO };

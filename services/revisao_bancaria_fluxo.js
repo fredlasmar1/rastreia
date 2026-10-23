@@ -71,6 +71,7 @@ async function processarCalculo(pedidoId, usuarioId = null) {
   const d = { ...reg.dados_conferidos };
   if (!d.clausulas && ex.clausulas) d.clausulas = ex.clausulas;
   if (!d.operacoes_do_limite && Array.isArray(ex.operacoes_do_limite)) d.operacoes_do_limite = ex.operacoes_do_limite;
+  for (const k of ['lancamentos', 'faturas_cartao', 'consignado_info', 'notificacao_mora']) if (d[k] == null && ex[k] != null) d[k] = ex[k];
   const analise = require('./revisao_analise');
   if (d.operacao && !d.operacao.estrutura) d.operacao = analise.marcarLimite({ ...d.operacao });
 

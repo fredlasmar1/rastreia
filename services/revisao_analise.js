@@ -91,6 +91,11 @@ function montarDados(ex = {}) {
     iof: ex.iof || {},
     encargos_mora: ex.encargos_mora || {},
     operacoes_do_limite: Array.isArray(ex.operacoes_do_limite) ? ex.operacoes_do_limite : [],
+    // do extrato/fatura/INSS/processo: os roteiros por tipo calculam o valor a partir daqui
+    lancamentos: Array.isArray(ex.lancamentos) ? ex.lancamentos : [],
+    faturas_cartao: Array.isArray(ex.faturas_cartao) ? ex.faturas_cartao : [],
+    consignado_info: ex.consignado_info || null,
+    notificacao_mora: ex.notificacao_mora || null,
     clausulas: ex.clausulas || {},
     campos_editados: []
   };
