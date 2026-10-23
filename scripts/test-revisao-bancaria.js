@@ -293,7 +293,7 @@ teste('Fator do IPCA começa no mês seguinte ao pagamento', () => {
 teste('Corrigido = soma das diferenças pagas × fator de cada mês', () => {
   const d = contratoPan(); d.operacao.data_primeiro_vencimento = '2025-01-10'; d.parcelas_pagas = 3;
   const ipca = {}; for (let m = 1; m <= 12; m++) ipca[`2025-${String(m).padStart(2, '0')}`] = 0.5;
-  const calc = C.calcular(d, { taxaMediaBacenAM: 2.08, questionaveis: [], ipcaMensal: ipca });
+  const calc = C.calcular(d, { taxaMediaBacenAM: 1.5, questionaveis: [], ipcaMensal: ipca });   // 1,58× a média: juros revisáveis
   const ic = calc.indebito_corrigido, cp = calc.cenarios[calc.cenario_principal];
   perto(ic.nominal, cp.total_pago_a_mais, 1e-6, 'nominal = pago a mais');
   const dif = cp.parcela_contratada - cp.parcela_revisada;
@@ -586,6 +586,40 @@ teste('Página do PDF interno abre todos os argumentos', () => {
   const pag = DH.paginaImpressao(DH.renderizar(diagGiro(), null), 'Teste');
   assert.ok(/Não enviar ao cliente/.test(pag));
   assert.ok(!/<details class="arg"/.test(pag) && /<details open class="arg"/.test(pag));
+});
+
+console.log('\n18) Honestidade do cenário principal: juros só com tese que se sustenta');
+teste('Juros 1,14× a média + tarifas/seguro: principal = B; a redução dos juros é só referência', () => {
+  const d = contratoPan();
+  const calc = C.calcular(d, { taxaMediaBacenAM: 2.08, questionaveis: T.itensQuestionaveis(d) });
+  assert.strictEqual(calc.juros_revisaveis, false);
+  assert.strictEqual(calc.cenario_principal, 'B');
+  assert.strictEqual(calc.cenario_otimista, null);                  // 1,14× < 1,2×: nem otimista
+  perto(calc.economia_estimada, calc.cenarios.B.economia_total, 1e-9, 'economia = B');
+});
+teste('Juros 1,3× a média: principal = B e o C vira "cenário otimista"', () => {
+  const d = contratoPan();
+  const calc = C.calcular(d, { taxaMediaBacenAM: 1.82, questionaveis: T.itensQuestionaveis(d) });
+  assert.ok(calc.razao >= 1.2 && calc.razao < 1.5, String(calc.razao));
+  assert.strictEqual(calc.cenario_principal, 'B');
+  assert.strictEqual(calc.cenario_otimista, 'C');
+  assert.ok(calc.economia_otimista > calc.economia_estimada);
+});
+teste('Juros 1,58× a média: tese se sustenta ⇒ principal = C, sem otimista', () => {
+  const d = contratoPan();
+  const calc = C.calcular(d, { taxaMediaBacenAM: 1.5, questionaveis: T.itensQuestionaveis(d) });
+  assert.strictEqual(calc.juros_revisaveis, true);
+  assert.strictEqual(calc.cenario_principal, 'C');
+  assert.strictEqual(calc.cenario_otimista, null);
+});
+teste('Só juros a 1,3× (sem tarifas): sem economia prometida, otimista = A, veredito moderada', () => {
+  const calc = C.calcular({ operacao: { valor_financiado_total: 30000, valor_parcela: 1300, prazo_meses: 36, data_contratacao: '2024-02-10' } }, { taxaMediaBacenAM: 1.95 });
+  assert.ok(calc.razao >= 1.2 && calc.razao < 1.5, String(calc.razao));
+  assert.strictEqual(calc.cenario_principal, null);
+  assert.strictEqual(calc.economia_estimada, 0);
+  assert.strictEqual(calc.cenario_otimista, 'A');
+  assert.strictEqual(calc.veredito.nivel, 'moderada');
+  assert.strictEqual(calc.valor_incontroverso, null);
 });
 
 console.log(`\n${ok} passaram, ${falhas} falharam.`);

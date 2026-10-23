@@ -805,7 +805,7 @@
     // 1) Banner do veredito
     let h = `<div class="an-banner" style="background:${v[1]};color:${v[2]}">
       <div><div class="rot">Veredito preliminar</div><div class="ver">${v[0]}</div><div class="mot">${esc(c.veredito?.motivo || v[4])}${c.veredito?.economia_pct != null ? ` Economia de ${c.veredito.economia_pct.toFixed(1).replace('.', ',')}% do valor financiado.` : ''}</div></div>
-      <div class="eco"><div class="rot">Economia estimada</div><div class="val">${brl(a.economia_estimada)}</div><div class="det">${cp ? `${esc(cp.nome)}` : 'sem cenário de revisão'}</div></div>
+      <div class="eco"><div class="rot">Economia estimada</div><div class="val">${brl(a.economia_estimada)}</div><div class="det">${cp ? `${esc(cp.nome)}` : 'sem cenário de revisão'}${c.cenario_otimista && c.economia_otimista > 0 ? `<br>até ${brl(c.economia_otimista)} se o juiz limitar os juros à média (não garantido)` : ''}</div></div>
     </div>` + arquivos + (a.diagnostico_html ? `<div class="dg">${a.diagnostico_html}</div>` : '') + (a.diagnostico ? `<div class="no-print" style="padding:6px 26px 0;display:flex;gap:8px;flex-wrap:wrap"><button class="btn btn-primary btn-sm" onclick="dgImprimir(this)">🖨 PDF interno do diagnóstico</button><button class="btn btn-outline btn-sm" onclick="const e=document.getElementById('an-detalhes');e.hidden=!e.hidden">Detalhes técnicos (cálculo e dados lidos)</button></div><div id="an-detalhes" hidden>` : '<div>');
 
     // 2) Taxas (barras) + dinheiro

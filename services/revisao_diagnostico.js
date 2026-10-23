@@ -250,6 +250,7 @@ function placar(g = {}, calc = {}) {
   const ic = calc.indebito_corrigido;
   if (ic && ic.nominal > 0) em_jogo.push({ rotulo: 'Já pago a mais (corrigido)', valor: ic.corrigido, nota: 'IPCA, sem juros de mora' });
   if (teto && teto.excesso > 0) em_jogo.push({ rotulo: 'Encargos acima do teto', valor: teto.excesso, nota: 'não podem ser cobrados' });
+  if (calc.cenario_otimista && calc.economia_otimista > 0) em_jogo.push({ rotulo: 'Se o juiz limitar os juros à média', valor: calc.economia_otimista, nota: 'NÃO garantido — taxa abaixo de 1,5× a média' });
   const falta = em_jogo.length ? null : (calc.veredito?.pedir_documentos?.[0] || (g.documentos || [])[0]?.doc || 'os documentos do contrato');
   const contexto = [];
   if (!em_jogo.length && calc.limite && calc.limite.razao_piso != null) contexto.push(`Até a taxa mínima do contrato já é ${vezes(calc.limite.razao_piso)} a média do Banco Central.`);

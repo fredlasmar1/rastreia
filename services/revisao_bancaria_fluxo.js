@@ -49,7 +49,10 @@ function casoParaParecer(dados, taxa, calc, ts) {
       cet_real_am: calc.cet && calc.cet.real_am != null ? pct(calc.cet.real_am, 4) : null,
       cet_informado_am: calc.cet && calc.cet.declarado_am != null ? pct(calc.cet.declarado_am, 4) : null,
       pago_a_mais_corrigido_ipca: calc.indebito_corrigido && calc.indebito_corrigido.nominal > 0 ? brl(calc.indebito_corrigido.corrigido) : null,
-      valor_incontroverso_mensal: calc.valor_incontroverso ? brl(calc.valor_incontroverso.parcela_mensal) : null, economia_pct_valor_financiado: calc.veredito?.economia_pct != null ? `${calc.veredito.economia_pct.toFixed(1).replace('.', ',')}%` : null
+      valor_incontroverso_mensal: calc.valor_incontroverso ? brl(calc.valor_incontroverso.parcela_mensal) : null,
+      juros_revisaveis: !!calc.juros_revisaveis,
+      economia_otimista_nao_garantida: calc.cenario_otimista ? brl(calc.economia_otimista) : null,
+      aviso_juros: calc.juros_revisaveis ? null : 'Os juros NÃO sustentam revisão (abaixo de 1,5× a média e sem teto legal): não diga ao cliente que os juros são abusivos; a economia estimada vem só de tarifas e seguros.', economia_pct_valor_financiado: calc.veredito?.economia_pct != null ? `${calc.veredito.economia_pct.toFixed(1).replace('.', ',')}%` : null
     },
     veredito: calc.veredito, cenario_principal: calc.cenario_principal, cenarios: cen, alertas: calc.alertas,
     teses: ts.teses.map(t => ({ nome: t.nome, resultado: t.resultado, detalhe: t.detalhe, trecho_contrato: t.trecho_contrato, fundamento: t.fundamento }))
