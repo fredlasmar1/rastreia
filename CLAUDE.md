@@ -166,6 +166,12 @@ pago → aguardando_documentos (upload até 10 docs) → extraindo (Claude lê o
 - CET real (TIR do recebido líquido × parcelas) × CET informado; pago a mais corrigido pelo IPCA (SGS 433),
   sem juros de mora (correm da citação).
 - Teses: toda Súmula/Tema citado precisa estar na lista conferida no STJ (teste 12 de test-revisao-bancaria.js).
+- **Roteiros por tipo** (`services/revisao_roteiros.js`, 23/10/2026, teste 21): abusividades específicas de cada produto
+  (cheque especial, cartão, consignado, veículo, CCB + comuns) vindas da skill parecer-credito-bancario do escritório.
+  A IA lê `lancamentos` (extrato/INSS/holerite, por categoria), `faturas_cartao`, `consignado_info` e
+  `notificacao_mora`; o roteiro calcula o VALOR (ex.: juros do mês × (1 − 8/taxa)). Itens entram em
+  `teses.teses` com `origem: 'roteiro'`, `valor`, `valor_base` e `documento` (o que pedir quando falta) — e dali vão
+  para tela, diagnóstico, laudo e minutas. Fase 2: imóvel, FCO, Pronampe, rural, Fies, renegociação, garantias.
 - **Tetos legais** (`services/revisao_tetos.js`, 22/10/2026, testes 15-16): linha com limite em lei se compara com o
   TETO, não com a média — cheque especial PF/MEI 8% a.m. (Res. 4.765, art. 3º), cartão com juros+encargos ≤ valor
   original desde 03/01/2024 (Lei 14.690, art. 28, § 1º), Pronampe Selic do mês (SGS 4189) + 6% a.a. (Lei 13.999,

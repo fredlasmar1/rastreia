@@ -686,5 +686,75 @@ teste('Veículo com juros 1,58×: total recuperável, parcela hoje → revisada 
   perto(ab.linhas.find(l => l.id === 'juros_acima_media').valor, calc.cenarios.A.economia_total, 1e-9, 'juros');
 });
 
+console.log('\n21) Roteiros por tipo de contrato (skill do escritório) — abusividade + valor');
+const RT = require('../services/revisao_roteiros');
+const item = (d, id, calc = null) => RT.aplicarRoteiro(d, calc).itens.find(x => x.id === id);
+teste('Cheque especial PF: juros do mês acima de 8% no extrato ⇒ excesso = juros × (1 − 8/taxa)', () => {
+  const d = { pfpj: 'PF', tipo_operacao: 'cheque_especial', operacao: { data_contratacao: '2019-05-01' },
+    lancamentos: [{ data: '2024-03-05', categoria: 'juros_cheque_especial', valor: 300, taxa_am: 12 }, { data: '2024-04-05', categoria: 'juros_cheque_especial', valor: 200, taxa_am: 7.9 }] };
+  const it = item(d, 'cheque_juros_acima_8_extrato');
+  assert.strictEqual(it.resultado, 'aplicavel');
+  perto(it.valor, 300 * (1 - 8 / 12), 0.01, 'excesso');
+});
+teste('Cheque especial: tarifa pelo limite disponível no extrato ⇒ devolver a soma', () => {
+  const d = { pfpj: 'PF', tipo_operacao: 'cheque_especial', operacao: {}, lancamentos: [{ categoria: 'tarifa', descricao: 'TARIFA DISPONIBILIZACAO LIMITE', valor: 12.5 }, { categoria: 'tarifa', descricao: 'TAR DISPONIBILIZ LIMITE', valor: 12.5 }] };
+  perto(item(d, 'tarifa_disponibilizacao_limite').valor, 25, 1e-9, 'soma');
+});
+teste('Cheque especial sem extrato ⇒ "verificar" pedindo o extrato (sem número inventado)', () => {
+  const it = item({ pfpj: 'PF', tipo_operacao: 'cheque_especial', operacao: {} }, 'cheque_juros_acima_8_extrato');
+  assert.strictEqual(it.resultado, 'verificar'); assert.strictEqual(it.valor, null); assert.ok(/Extrato/.test(it.documento));
+});
+teste('Cartão: juros e encargos acima do valor original na fatura (desde 2024) ⇒ excesso', () => {
+  const d = { tipo_operacao: 'cartao_credito', operacao: {}, faturas_cartao: [
+    { mes: '2024-05', valor_original_divida: 2000, juros_encargos_acumulados: 1800 },
+    { mes: '2024-08', valor_original_divida: 2000, juros_encargos_acumulados: 2600 },
+    { mes: '2023-11', valor_original_divida: 900, juros_encargos_acumulados: 2000 } ] };
+  const it = item(d, 'cartao_teto_100_faturas');
+  perto(it.valor, 600, 1e-9, 'só a dívida de 2024 e o maior excesso dela');
+});
+teste('Cartão: 3 faturas seguidas no rotativo ⇒ abuso (Res. 4.549, art. 1º), valor depende da taxa do parcelado', () => {
+  const d = { tipo_operacao: 'cartao_credito', operacao: {}, faturas_cartao: [{ mes: '2024-01', no_rotativo: true, juros_rotativo: 100 }, { mes: '2024-02', no_rotativo: true, juros_rotativo: 120 }, { mes: '2024-03', no_rotativo: true, juros_rotativo: 130 }] };
+  const it = item(d, 'cartao_rotativo_mais_de_um_mes');
+  assert.strictEqual(it.resultado, 'aplicavel'); assert.strictEqual(it.valor, null); assert.ok(/250/.test(it.valor_base));
+});
+teste('Consignado INSS: descontos acima de 45% do benefício ⇒ excesso por mês', () => {
+  const d = { tipo_operacao: 'consignado', operacao: {}, consignado_info: { tipo_vinculo: 'inss', remuneracao: 2000, soma_descontos_consignados: 1100 } };
+  const it = item(d, 'consignado_margem');
+  perto(it.valor, 200, 1e-9, '1100 − 45% de 2000'); assert.ok(/POR MÊS/.test(it.valor_base));
+});
+teste('Consignado: pediu empréstimo e veio cartão RMC ⇒ devolver os descontos do cartão', () => {
+  const d = { tipo_operacao: 'consignado', operacao: {}, consignado_info: { tipo_vinculo: 'inss', cartao_rmc_rcc: true, cliente_pediu_emprestimo: true }, lancamentos: [{ categoria: 'desconto_rmc', valor: 70 }, { categoria: 'desconto_rmc', valor: 70 }] };
+  const it = item(d, 'consignado_cartao_rmc');
+  assert.strictEqual(it.resultado, 'aplicavel'); perto(it.valor, 140, 1e-9, 'descontos');
+});
+teste('Veículo: pré-gravame e busca e apreensão sem notificação no processo', () => {
+  const d = { tipo_operacao: 'financiamento_veiculo', situacao: 'busca_apreensao', operacao: { data_contratacao: '2022-01-10' }, tarifas: [{ nome: 'Registro de pré-gravame', valor: 180 }], notificacao_mora: { enviada: false } };
+  perto(item(d, 'veiculo_pre_gravame').valor, 180, 1e-9, 'pré-gravame');
+  assert.strictEqual(item(d, 'veiculo_mora_sem_notificacao').resultado, 'aplicavel');
+});
+teste('Qualquer contrato: juros de mora de 2% a.m. com extrato ⇒ metade dos juros de mora é excesso (Súmula 379)', () => {
+  const d = { tipo_operacao: 'emprestimo_pessoal', operacao: {}, encargos_mora: { juros_mora: 2 }, lancamentos: [{ categoria: 'juros_mora', valor: 90 }, { categoria: 'juros_mora', valor: 30 }] };
+  perto(item(d, 'mora_acima_1').valor, 60, 1e-9, 'excesso');
+});
+teste('Roteiro entra nas teses e o valor chega à tabela de abusividades', () => {
+  const d = { pfpj: 'PF', tipo_operacao: 'cheque_especial', operacao: { data_contratacao: '2021-01-01', taxa_juros_mensal_declarada: 7.5 },
+    lancamentos: [{ data: '2024-03-05', categoria: 'juros_cheque_especial', valor: 400, taxa_am: 10 }] };
+  const calc = C.calcular(d, {});
+  const ts = T.aplicarTeses(d, calc);
+  assert.strictEqual(ts.roteiro, 'cheque_especial');
+  const g = DG.montarDiagnostico(d, calc, null, ts);
+  const ab = DG.abusividades(g, calc, d, ts);
+  const l = ab.linhas.find(x => x.id === 'tese_cheque_juros_acima_8_extrato');
+  perto(l.valor, 80, 1e-9, '400 × (1 − 8/10)');
+});
+teste('Toda Súmula/Tema dos roteiros foi conferido (379 e 72 em 23/10/2026; Temas 618, 619, 972)', () => {
+  const OK = { sumulas: [72, 379], temas: [618, 619, 972] };
+  const txt = [...RT.COMUNS, ...Object.values(RT.ROTEIROS).flat()].map(v => v.fundamento).join(' ');
+  const sum = [...txt.matchAll(/Súmulas? (\d+)/g)].map(m => Number(m[1]));
+  const tem = [...txt.matchAll(/Temas? ([\d, e]+)/g)].flatMap(m => m[1].split(/,| e /).map(x => Number(x.trim())).filter(Boolean));
+  const fora = [...sum.filter(n => !OK.sumulas.includes(n)).map(n => 'Súmula ' + n), ...tem.filter(n => !OK.temas.includes(n)).map(n => 'Tema ' + n)];
+  assert.deepStrictEqual(fora, [], 'citação não conferida: ' + fora.join(', '));
+});
+
 console.log(`\n${ok} passaram, ${falhas} falharam.`);
 process.exit(falhas ? 1 : 0);
